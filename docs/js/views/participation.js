@@ -6,7 +6,7 @@ import { DB, Mutations } from '../db.js';
 import { computeScores, tierForScore } from '../calc.js';
 import { el, fmt, toast, clear } from '../util.js';
 import { CATEGORY_ORDER } from '../config.js';
-import { loadImage, extractLines, consensusMatch } from '../ocr.js';
+import { loadImage, extractLines, consensusMatch, buildAnchor, detectByAnchor } from '../ocr.js';
 import { page, card, btn, tierBadge, classBadge } from './ui.js';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -167,9 +167,24 @@ function checkinPanel(content) {
   async function pick(file) {
     if (!file || !file.type.startsWith('image/')) return;
     try { curImg = await loadImage(file); } catch { return toast('이미지를 열 수 없습니다', 'error'); }
-    crop = cropFromMemory();         // auto-apply remembered region (image fractions)
-    drop.style.display = 'none'; buildPreview();
-    runOcr();                        // auto-run (remembered crop if set, else full image)
+    crop = null; drop.style.display = 'none'; buildPreview();
+    // 1) OpenCV anchor auto-detect (handles different window size/position).
+    //    Timeout-guarded so a slow/unavailable OpenCV never blocks the check-in.
+    if (DB.state.ocrAnchor) {
+      progress.textContent = '패널 자동 탐지 중…';
+      try {
+        const det = await Promise.race([
+          detectByAnchor(curImg, DB.state.ocrAnchor, (p) => { progress.textContent = p.stage; }),
+          new Promise((r) => setTimeout(() => r('timeout'), 15000)),
+        ]);
+        if (det === 'timeout') { progress.textContent = '자동 탐지 지연 — 기억된 영역으로 진행'; }
+        else if (det && det.score >= 0.5) { crop = det; toast(`패널 자동 감지 (신뢰 ${Math.round(det.score * 100)}%)`); }
+      } catch (e) { console.warn('auto-detect failed', e); }
+    }
+    // 2) fall back to remembered fractions
+    if (!crop) crop = cropFromMemory();
+    buildControls(); drawMemoryBox();
+    runOcr();
   }
   function cropFromMemory() {
     const rc = DB.state.ocrCrop;
@@ -186,9 +201,9 @@ function checkinPanel(content) {
     selBox = el('div.crop-box', { style: { display: 'none' } });
     const stage = el('div.crop-stage', {}, [imgEl, selBox]);
     previewWrap.appendChild(el('div.ocr-hint', {
-      html: DB.state.ocrCrop
-        ? '✅ 기억된 영역을 자동 적용했습니다. 영역을 다시 드래그하면 갱신됩니다.'
-        : '💡 닉네임이 모두 보이도록 클랜 명단 영역을 드래그하세요. “이 영역 기억”을 누르면 다음부터 자동 적용됩니다.' }));
+      html: (DB.state.ocrAnchor || DB.state.ocrCrop)
+        ? '✅ 패널 영역을 자동으로 잡았습니다(창 크기·위치 달라도 인식). 빗나가면 다시 드래그 후 “이 영역 기억”.'
+        : '💡 명단 영역을 드래그한 뒤 “이 영역 기억”을 누르면, 이후 스크린샷에서 패널을 자동 감지합니다(OpenCV).' }));
     previewWrap.appendChild(stage);
     imgEl.onload = drawMemoryBox;
     buildControls();
@@ -216,11 +231,12 @@ function checkinPanel(content) {
     clear(controls); controls.style.display = 'flex';
     controls.appendChild(btn('🔍 선택영역 인식', () => runOcr(), { kind: 'primary' }));
     controls.appendChild(btn('전체 영역', () => { crop = null; if (selBox) selBox.style.display = 'none'; runOcr(); }, { kind: 'ghost' }));
-    if (crop) controls.appendChild(btn('📌 이 영역 기억', () => {
+    if (crop) controls.appendChild(btn('📌 이 영역 기억(자동감지)', () => {
       DB.state.ocrCrop = { x: crop.x / curImg.naturalWidth, y: crop.y / curImg.naturalHeight, w: crop.w / curImg.naturalWidth, h: crop.h / curImg.naturalHeight };
-      DB.commit(); toast('영역을 기억했습니다 — 다음 스크린샷부터 자동 적용');
+      try { DB.state.ocrAnchor = buildAnchor(curImg, crop); } catch (e) { console.warn(e); DB.state.ocrAnchor = null; }
+      DB.commit(); toast('영역+앵커 기억 — 다음부터 패널 자동 감지');
     }, { kind: 'ghost' }));
-    if (DB.state.ocrCrop) controls.appendChild(btn('기억 해제', () => { DB.state.ocrCrop = null; DB.commit(); toast('영역 기억을 해제했습니다'); }, { kind: 'ghost' }));
+    if (DB.state.ocrCrop || DB.state.ocrAnchor) controls.appendChild(btn('기억 해제', () => { DB.state.ocrCrop = null; DB.state.ocrAnchor = null; DB.commit(); toast('영역 기억을 해제했습니다'); }, { kind: 'ghost' }));
     controls.appendChild(btn('다른 스크린샷', () => fileInput.click(), { kind: 'ghost' }));
   }
 

@@ -20,6 +20,81 @@ export function loadImage(file) {
     img.src = url;
   });
 }
+function loadImageSrc(src) {
+  return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+}
+
+// ── OpenCV.js (lazy) panel auto-detection via template matching ──────
+const OPENCV_CDN = 'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js';
+let _cvPromise = null;
+export function loadOpenCV(onProgress = () => {}) {
+  if (_cvPromise) return _cvPromise;
+  _cvPromise = new Promise((res, rej) => {
+    if (window.cv && window.cv.Mat) return res(window.cv);
+    onProgress({ stage: '패널 감지 엔진 로딩(최초 1회 ~10MB)', progress: 0.05 });
+    const s = document.createElement('script');
+    s.src = OPENCV_CDN;
+    s.onload = () => {
+      // @techstark's `cv` is a thenable that ALSO populates `.Mat` once the WASM
+      // runtime is ready — poll for cv.Mat (calling cv.then() never resolves here).
+      const wait = () => { if (window.cv && window.cv.Mat) res(window.cv); else setTimeout(wait, 80); };
+      wait();
+    };
+    s.onerror = () => rej(new Error('OpenCV 로드 실패'));
+    document.head.appendChild(s);
+  });
+  return _cvPromise;
+}
+
+/** Build an anchor from a panel crop: the top strip (invariant chrome:
+ *  title bar / column headers) used to locate the panel in future screenshots. */
+export function buildAnchor(img, crop) {
+  const stripH = Math.max(18, Math.round(crop.h * 0.16));
+  const c = document.createElement('canvas');
+  c.width = Math.round(crop.w); c.height = stripH;
+  c.getContext('2d').drawImage(img, crop.x, crop.y, crop.w, stripH, 0, 0, c.width, c.height);
+  return { tplDataUrl: c.toDataURL('image/png'), relW: crop.w, relH: crop.h, refImgW: img.naturalWidth };
+}
+
+/** Locate the panel in `img` via multi-scale template match of the stored anchor.
+ *  Returns {x,y,w,h,score} in source px, or null if not confidently found. */
+export async function detectByAnchor(img, anchor, onProgress = () => {}) {
+  let cv;
+  try { cv = await loadOpenCV(onProgress); } catch (e) { console.warn(e); return null; }
+  onProgress({ stage: '패널 위치 탐지 중', progress: 0.5 });
+  const tplEl = await loadImageSrc(anchor.tplDataUrl);
+  const toGray = (el, w, h) => {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    c.getContext('2d').drawImage(el, 0, 0, w, h);
+    const m = cv.imread(c); const g = new cv.Mat(); cv.cvtColor(m, g, cv.COLOR_RGBA2GRAY); m.delete(); return g;
+  };
+  // matchTemplate on a downscaled working image (full-width templates are huge → slow)
+  const WORK_W = 760;
+  const ws = Math.min(1, WORK_W / img.naturalWidth);
+  const imgG = toGray(img, Math.round(img.naturalWidth * ws), Math.round(img.naturalHeight * ws));
+  const expect = img.naturalWidth / (anchor.refImgW || img.naturalWidth); // full-res size ratio
+  let best = { score: -1 };
+  for (const k of [0.8, 0.9, 1.0, 1.1, 1.2]) {
+    const sFull = expect * k;                       // template scale in full-res image
+    const tw = Math.round(tplEl.naturalWidth * sFull * ws), th = Math.round(tplEl.naturalHeight * sFull * ws);
+    if (tw < 8 || th < 8 || tw > imgG.cols || th > imgG.rows) continue;
+    const tg = toGray(tplEl, tw, th);
+    const res = new cv.Mat();
+    cv.matchTemplate(imgG, tg, res, cv.TM_CCOEFF_NORMED);
+    const mm = cv.minMaxLoc(res);
+    if (mm.maxVal > best.score) best = { score: mm.maxVal, sFull, x: mm.maxLoc.x / ws, y: mm.maxLoc.y / ws };
+    tg.delete(); res.delete();
+  }
+  imgG.delete();
+  if (best.score < 0.45) return null;
+  const x = Math.max(0, best.x), y = Math.max(0, best.y);
+  return {
+    x, y,
+    w: Math.min(anchor.relW * best.sFull, img.naturalWidth - x),
+    h: Math.min(anchor.relH * best.sFull, img.naturalHeight - y),
+    score: +best.score.toFixed(2),
+  };
+}
 
 /**
  * Preprocess for OCR: optional crop → grayscale → min/max contrast normalize → upscale.
