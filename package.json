@@ -1,0 +1,14 @@
+{
+  "name": "clan-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed": "node scripts/build-seed.mjs",
+    "check": "node scripts/check-imports.mjs",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "jsdom": "^29.1.1"
+  }
+}
