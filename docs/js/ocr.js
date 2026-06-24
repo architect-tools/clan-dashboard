@@ -5,8 +5,10 @@
 import { matchName, normName } from './util.js';
 
 const TESSERACT_CDN = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
-const MAX_SIDE = 3400;   // cap upscaled canvas to keep memory sane
-const SCALE = 2.4;       // upscale factor (small game-UI text needs enlarging)
+const MAX_SIDE = 3400;     // cap upscaled canvas to keep memory sane
+const SCALE = 2.4;         // default upscale factor (whole-image mode)
+const TARGET_CELL_H = 96;  // slot mode: normalize each cell to ~this text height
+                           // (resolution-independent — no fixed-pixel assumptions)
 
 /** Load a File/Blob into an HTMLImageElement. */
 export function loadImage(file) {
@@ -109,7 +111,10 @@ export async function extractSlots(img, region, { rows, cols, nameLeftPct = 0.22
         x: reg.x + c * colW + colW * nameLeftPct, y: reg.y + r * rowH + rowH * 0.08,
         w: colW * (1 - nameLeftPct - 0.02), h: rowH * 0.84,
       };
-      const { dataUrl } = preprocess(img, rect, 3.4); // upscale tiny cells
+      // scale each cell to a target text height → consistent OCR input regardless
+      // of the source screenshot resolution (no fixed-pixel width/height).
+      const scale = Math.min(6, Math.max(1, TARGET_CELL_H / Math.max(8, rect.h)));
+      const { dataUrl } = preprocess(img, rect, scale);
       const { data } = await worker.recognize(dataUrl);
       const text = (data.text || '').trim().replace(/\s+/g, ' ');
       cells.push({ text, row: r, col: c, rect });
