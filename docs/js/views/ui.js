@@ -59,7 +59,8 @@ export function table(cols, rows, { onRow, empty = '데이터 없음' } = {}) {
   if (!rows.length) { wrap.appendChild(el('div.empty', { text: empty })); return wrap; }
   const t = el('table.tbl');
   t.appendChild(el('thead', {}, el('tr', {}, cols.map((c) =>
-    el('th', { style: { textAlign: c.align || 'left', width: c.width || '' }, text: c.label })))));
+    el('th', { style: { textAlign: c.align || 'left', width: c.width || '' } },
+      c.label instanceof Node ? [c.label] : [String(c.label ?? '')])))));
   const tb = el('tbody');
   rows.forEach((r, i) => {
     const tr = el('tr', onRow ? { onclick: () => onRow(r, i) } : {});
