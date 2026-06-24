@@ -23,7 +23,11 @@ export function renderDiamond() {
     statCard('운영진 합계', fmt(t.staffSum), { sub: pct(s.settings.staffRatio) }),
     statCard('투력 합계', fmt(t.powerSum), { sub: `상위 ${s.powerRanks.length}명` }),
     statCard('참여도 합계', fmt(t.partSum), { sub: pct(s.settings.participationRatio) }),
-    statCard('남는 다이아', fmt(t.remaining), { icon: res.verification.status === '정상' ? '✅' : '⚠️', color: res.verification.status === '정상' ? '#34d399' : '#fbbf24', sub: '검증 ' + res.verification.status }),
+    statCard(t.shortage > 0 ? '모자른 다이아' : '남는 다이아', fmt(t.shortage > 0 ? t.shortage : t.surplus), {
+      icon: res.verification.status === '정상' ? '✅' : '⚠️',
+      color: res.verification.status === '정상' ? '#34d399' : '#fbbf24',
+      sub: '검증 ' + res.verification.status,
+    }),
   ]));
 
   // ── tier breakdown ──

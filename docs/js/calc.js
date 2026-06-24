@@ -85,20 +85,26 @@ export function computeSettlement(data) {
     each: partDiaByTier[t.tier] || 0, subtotal: (partDiaByTier[t.tier] || 0) * (tierCount[t.tier] || 0),
   }));
 
+  // Per-tier rounding (required by "같은 티어 동일 지급") makes an exact budget
+  // match generally impossible — the source 시트 also drifts a few diamonds and
+  // reports 남는/모자른. Tolerate drift up to ~1 diamond per member.
+  const remaining = total - distributed;          // +면 남는, -면 모자른
+  const tol = Math.max(10, members.length);
   return {
     rows,
     totals: {
       total, staffBudget, powerBudget, partBudget,
       staffSum, powerSum, partSum, distributed,
-      remaining: total - distributed,
+      remaining, surplus: Math.max(0, remaining), shortage: Math.max(0, -remaining),
     },
     byTier,
     tierCount,
     verification: {
-      ok: distributed <= total,
-      remaining: total - distributed,
-      shortage: Math.max(0, distributed - total),
-      status: distributed <= total ? '정상' : '초과',
+      ok: Math.abs(remaining) <= tol,
+      remaining,
+      surplus: Math.max(0, remaining),
+      shortage: Math.max(0, -remaining),
+      status: Math.abs(remaining) <= tol ? '정상' : (remaining < 0 ? '초과(조정 필요)' : '잔여 많음'),
     },
   };
 }
