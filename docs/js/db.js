@@ -152,6 +152,7 @@ function normalize(d) {
   d.schedule ||= [];
   d.statusBoards ||= []; // generic per-member status tracking (장비/주문석/성좌 등)
   if (d.distributionRules == null) d.distributionRules = DEFAULT_RULES;
+  if (d.ocrCrop === undefined) d.ocrCrop = null; // remembered OCR crop as image fractions {x,y,w,h}
   return d;
 }
 

@@ -167,8 +167,14 @@ function checkinPanel(content) {
   async function pick(file) {
     if (!file || !file.type.startsWith('image/')) return;
     try { curImg = await loadImage(file); } catch { return toast('이미지를 열 수 없습니다', 'error'); }
-    crop = null; drop.style.display = 'none'; buildPreview();
-    runOcr(); // auto-run on the full image; crop the panel + re-run for higher accuracy
+    crop = cropFromMemory();         // auto-apply remembered region (image fractions)
+    drop.style.display = 'none'; buildPreview();
+    runOcr();                        // auto-run (remembered crop if set, else full image)
+  }
+  function cropFromMemory() {
+    const rc = DB.state.ocrCrop;
+    if (!rc) return null;
+    return { x: rc.x * curImg.naturalWidth, y: rc.y * curImg.naturalHeight, w: rc.w * curImg.naturalWidth, h: rc.h * curImg.naturalHeight };
   }
 
   // Drag to select the name area; OCR reads text wherever it is (no grid assumed)
@@ -180,8 +186,11 @@ function checkinPanel(content) {
     selBox = el('div.crop-box', { style: { display: 'none' } });
     const stage = el('div.crop-stage', {}, [imgEl, selBox]);
     previewWrap.appendChild(el('div.ocr-hint', {
-      text: '💡 닉네임이 모두 보이도록 클랜 명단 영역을 드래그한 뒤 “선택영역 인식”을 누르면 정확도가 올라갑니다 (배경·버튼 등 제외).' }));
+      html: DB.state.ocrCrop
+        ? '✅ 기억된 영역을 자동 적용했습니다. 영역을 다시 드래그하면 갱신됩니다.'
+        : '💡 닉네임이 모두 보이도록 클랜 명단 영역을 드래그하세요. “이 영역 기억”을 누르면 다음부터 자동 적용됩니다.' }));
     previewWrap.appendChild(stage);
+    imgEl.onload = drawMemoryBox;
     buildControls();
     const ptr = (e) => { const r = imgEl.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, r }; };
     stage.onmousedown = (e) => { const p = ptr(e); dragging = { x0: p.x, y0: p.y }; };
@@ -191,15 +200,27 @@ function checkinPanel(content) {
       const w = Math.min(p.r.width, Math.abs(p.x - dragging.x0)), h = Math.min(p.r.height, Math.abs(p.y - dragging.y0));
       Object.assign(selBox.style, { display: 'block', left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
       const sx = curImg.naturalWidth / p.r.width, sy = curImg.naturalHeight / p.r.height;
-      if (w > 8 && h > 8) crop = { x: x * sx, y: y * sy, w: w * sx, h: h * sy };
+      if (w > 8 && h > 8) { crop = { x: x * sx, y: y * sy, w: w * sx, h: h * sy }; buildControls(); }
     };
     const end = () => { dragging = null; }; stage.onmouseup = end; stage.onmouseleave = end;
+    drawMemoryBox();
+  }
+  function drawMemoryBox() { // show the (remembered) crop rect on the preview
+    if (!selBox || !imgEl || !crop) return;
+    const r = imgEl.getBoundingClientRect(); if (!r.width) return;
+    const sx = r.width / curImg.naturalWidth, sy = r.height / curImg.naturalHeight;
+    Object.assign(selBox.style, { display: 'block', left: crop.x * sx + 'px', top: crop.y * sy + 'px', width: crop.w * sx + 'px', height: crop.h * sy + 'px' });
   }
 
   function buildControls() {
     clear(controls); controls.style.display = 'flex';
     controls.appendChild(btn('🔍 선택영역 인식', () => runOcr(), { kind: 'primary' }));
     controls.appendChild(btn('전체 영역', () => { crop = null; if (selBox) selBox.style.display = 'none'; runOcr(); }, { kind: 'ghost' }));
+    if (crop) controls.appendChild(btn('📌 이 영역 기억', () => {
+      DB.state.ocrCrop = { x: crop.x / curImg.naturalWidth, y: crop.y / curImg.naturalHeight, w: crop.w / curImg.naturalWidth, h: crop.h / curImg.naturalHeight };
+      DB.commit(); toast('영역을 기억했습니다 — 다음 스크린샷부터 자동 적용');
+    }, { kind: 'ghost' }));
+    if (DB.state.ocrCrop) controls.appendChild(btn('기억 해제', () => { DB.state.ocrCrop = null; DB.commit(); toast('영역 기억을 해제했습니다'); }, { kind: 'ghost' }));
     controls.appendChild(btn('다른 스크린샷', () => fileInput.click(), { kind: 'ghost' }));
   }
 
