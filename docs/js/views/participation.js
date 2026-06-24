@@ -6,7 +6,7 @@ import { DB, Mutations } from '../db.js';
 import { computeScores, tierForScore } from '../calc.js';
 import { el, fmt, toast, clear } from '../util.js';
 import { CATEGORY_ORDER } from '../config.js';
-import { loadImage, extractLines, matchRoster } from '../ocr.js';
+import { loadImage, extractLines, extractSlots, matchRoster } from '../ocr.js';
 import { page, card, btn, tierBadge, classBadge } from './ui.js';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -139,7 +139,9 @@ function checkinPanel(content) {
   const roster = s.members.filter((m) => m.active !== false);
   const cat = s.contentCatalog.find((c) => c.name === content);
   const current = new Set(Mutations.getEvent(selDate, content)); // memberIds already recorded
-  let curImg = null, crop = null;
+  let curImg = null, crop = null, imgEl = null;
+  let mode = 'slot';                 // 'slot' (격자 정밀) | 'full' (전체 빠름)
+  let gridRows = 5, gridCols = 5, nameLeftPct = 0.18;
 
   const wrap = el('div.checkin');
   wrap.appendChild(el('div.checkin-head', {}, [
@@ -147,11 +149,10 @@ function checkinPanel(content) {
     cat ? el('span.muted', { text: `${cat.points}점 · ${cat.category}` }) : null,
   ]));
 
-  // drop / preview area
   const drop = el('div.drop', {}, [
     el('div.drop-icon', { text: '📷' }),
     el('div', { text: '참여자 스크린샷을 끌어다 놓거나 클릭' }),
-    el('div.drop-sub', { text: '붙여넣기(Ctrl+V) 지원 · 이름 영역 드래그하면 인식률↑' }),
+    el('div.drop-sub', { text: '붙여넣기(Ctrl+V) 지원' }),
   ]);
   const fileInput = el('input', { type: 'file', accept: 'image/*', style: { display: 'none' } });
   const previewWrap = el('div.ocr-preview', { style: { display: 'none' } });
@@ -168,23 +169,26 @@ function checkinPanel(content) {
   async function pick(file) {
     if (!file || !file.type.startsWith('image/')) return;
     try { curImg = await loadImage(file); } catch { return toast('이미지를 열 수 없습니다', 'error'); }
-    crop = null; drop.style.display = 'none'; buildPreview(); runOcr();
+    crop = null; drop.style.display = 'none'; buildPreview();
+    if (mode === 'full') runOcr(); // slot mode waits for grid alignment
   }
-  let selBox = null, dragging = null;
+
+  let selBox = null, gridLayer = null, dragging = null;
   function buildPreview() {
     clear(previewWrap); previewWrap.style.display = 'block';
-    clear(controls); controls.style.display = 'flex';
-    const dispW = Math.min(520, curImg.naturalWidth);
-    const img = el('img.ocr-img', { src: curImg.src, style: { width: dispW + 'px' } });
+    const dispW = Math.min(560, curImg.naturalWidth);
+    imgEl = el('img.ocr-img', { src: curImg.src, style: { width: dispW + 'px' } });
     selBox = el('div.crop-box', { style: { display: 'none' } });
-    const stage = el('div.crop-stage', {}, [img, selBox]);
-    previewWrap.appendChild(el('div.ocr-hint', { text: '이름 영역을 드래그하면 인식률이 올라갑니다 (선택).' }));
+    gridLayer = el('div.grid-layer');
+    const stage = el('div.crop-stage', {}, [imgEl, selBox, gridLayer]);
+    previewWrap.appendChild(el('div.ocr-hint', {
+      text: mode === 'slot' ? '① 명단이 있는 한 묶음(예: 1~5부대)을 드래그 → ② 빨간 칸이 닉네임에 맞게 행/열 조정 → ③ 격자 인식'
+        : '이름 영역을 드래그하면 인식률이 올라갑니다 (선택).' }));
     previewWrap.appendChild(stage);
-    controls.appendChild(btn('🔍 다시 인식', () => runOcr(), { kind: 'ghost' }));
-    controls.appendChild(btn('전체 영역', () => { crop = null; if (selBox) selBox.style.display = 'none'; runOcr(); }, { kind: 'ghost' }));
-    controls.appendChild(btn('다른 스크린샷', () => fileInput.click(), { kind: 'ghost' }));
-    const ptr = (e) => { const r = img.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, r }; };
-    stage.onmousedown = (e) => { const p = ptr(e); dragging = { x0: p.x, y0: p.y }; };
+    imgEl.onload = drawGrid;
+    buildControls();
+    const ptr = (e) => { const r = imgEl.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, r }; };
+    stage.onmousedown = (e) => { if (e.target.closest('.grid-layer')) return; const p = ptr(e); dragging = { x0: p.x, y0: p.y }; };
     stage.onmousemove = (e) => {
       if (!dragging) return; const p = ptr(e);
       const x = Math.max(0, Math.min(dragging.x0, p.x)), y = Math.max(0, Math.min(dragging.y0, p.y));
@@ -192,8 +196,48 @@ function checkinPanel(content) {
       Object.assign(selBox.style, { display: 'block', left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
       const sx = curImg.naturalWidth / p.r.width, sy = curImg.naturalHeight / p.r.height;
       if (w > 8 && h > 8) crop = { x: x * sx, y: y * sy, w: w * sx, h: h * sy };
+      drawGrid();
     };
     const end = () => { dragging = null; }; stage.onmouseup = end; stage.onmouseleave = end;
+    drawGrid();
+  }
+
+  function buildControls() {
+    clear(controls); controls.style.display = 'flex';
+    const seg = el('div.seg', {}, [
+      el('button.seg-btn', { class: mode === 'slot' ? 'on' : '', text: '격자 정밀', onclick: () => { mode = 'slot'; buildControls(); drawGrid(); } }),
+      el('button.seg-btn', { class: mode === 'full' ? 'on' : '', text: '전체 빠름', onclick: () => { mode = 'full'; buildControls(); drawGrid(); } }),
+    ]);
+    controls.appendChild(seg);
+    if (mode === 'slot') {
+      const num = (label, val, min, max, step, cb) => el('label.mini-field', {}, [el('span', { text: label }),
+        el('input.input.mini-num', { type: 'number', value: val, min, max, step, onchange: (e) => { cb(+e.target.value); drawGrid(); } })]);
+      controls.appendChild(num('열', gridCols, 1, 10, 1, (v) => gridCols = Math.max(1, v)));
+      controls.appendChild(num('행', gridRows, 1, 12, 1, (v) => gridRows = Math.max(1, v)));
+      controls.appendChild(num('좌측여백%', Math.round(nameLeftPct * 100), 0, 60, 2, (v) => nameLeftPct = Math.min(0.6, Math.max(0, v / 100))));
+      controls.appendChild(btn('격자 인식', () => runOcr(), { kind: 'primary' }));
+    } else {
+      controls.appendChild(btn('🔍 다시 인식', () => runOcr(), { kind: 'ghost' }));
+      controls.appendChild(btn('전체 영역', () => { crop = null; if (selBox) selBox.style.display = 'none'; drawGrid(); runOcr(); }, { kind: 'ghost' }));
+    }
+    controls.appendChild(btn('다른 스크린샷', () => fileInput.click(), { kind: 'ghost' }));
+  }
+
+  function drawGrid() {
+    if (!gridLayer || !imgEl) return;
+    clear(gridLayer);
+    if (mode !== 'slot') { gridLayer.style.display = 'none'; return; }
+    gridLayer.style.display = 'block';
+    const dw = imgEl.clientWidth, dh = imgEl.clientHeight;
+    const sx = dw / curImg.naturalWidth, sy = dh / curImg.naturalHeight;
+    const reg = crop ? { x: crop.x * sx, y: crop.y * sy, w: crop.w * sx, h: crop.h * sy } : { x: 0, y: 0, w: dw, h: dh };
+    const cw = reg.w / gridCols, rh = reg.h / gridRows;
+    for (let r = 0; r < gridRows; r++) for (let c = 0; c < gridCols; c++) {
+      const cell = el('div.grid-cell', { style: {
+        left: (reg.x + c * cw + cw * nameLeftPct) + 'px', top: (reg.y + r * rh + rh * 0.06) + 'px',
+        width: (cw * (1 - nameLeftPct - 0.02)) + 'px', height: (rh * 0.88) + 'px' } });
+      gridLayer.appendChild(cell);
+    }
   }
 
   const picked = new Map(); // memberId -> {member, score, token, checked}
@@ -201,7 +245,10 @@ function checkinPanel(content) {
   async function runOcr() {
     if (!curImg) return;
     try {
-      const out = await extractLines(curImg, crop, (p) => { progress.textContent = `${p.stage} (${Math.round(p.progress * 100)}%)`; });
+      const prog = (p) => { progress.textContent = `${p.stage} (${Math.round(p.progress * 100)}%)`; };
+      const out = mode === 'slot'
+        ? await extractSlots(curImg, crop, { rows: gridRows, cols: gridCols, nameLeftPct }, prog)
+        : await extractLines(curImg, crop, prog);
       const { matched, maybe, unmatched } = matchRoster(out.lines, roster);
       picked.clear();
       for (const mm of [...matched, ...maybe]) picked.set(mm.member.id, { ...mm, checked: mm.score >= 0.72 });

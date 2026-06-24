@@ -25,12 +25,12 @@ export function loadImage(file) {
  * @param {{x,y,w,h}|null} crop in source-image pixels
  * @returns {{dataUrl:string, canvas:HTMLCanvasElement}}
  */
-export function preprocess(img, crop = null) {
+export function preprocess(img, crop = null, scaleHint = SCALE) {
   const sx = crop ? Math.max(0, crop.x) : 0;
   const sy = crop ? Math.max(0, crop.y) : 0;
   const sw = crop ? Math.min(crop.w, img.width - sx) : img.width;
   const sh = crop ? Math.min(crop.h, img.height - sy) : img.height;
-  const scale = Math.min(SCALE, MAX_SIDE / Math.max(sw, sh));
+  const scale = Math.max(1, Math.min(scaleHint, MAX_SIDE / Math.max(sw, sh)));
   const cv = document.createElement('canvas');
   cv.width = Math.max(1, Math.round(sw * scale));
   cv.height = Math.max(1, Math.round(sh * scale));
@@ -72,25 +72,52 @@ async function getWorker(onProgress) {
     const worker = await window.Tesseract.createWorker('kor+eng', 1, {
       logger: (m) => { if (m.status === 'recognizing text') onProgress({ stage: '문자 인식 중', progress: 0.3 + m.progress * 0.65 }); },
     });
-    await worker.setParameters({ tessedit_pageseg_mode: '11' }); // SPARSE_TEXT — scattered UI labels
     return worker;
   })();
   return _workerPromise;
 }
 
 /**
- * Run OCR and return cleaned candidate tokens.
- * @param {HTMLImageElement} img
- * @param {{x,y,w,h}|null} crop
- * @returns {Promise<{lines:string[], engine:string}>}
+ * Whole-image OCR (sparse text). Returns cleaned candidate tokens.
  */
 export async function extractLines(img, crop, onProgress = () => {}) {
   const { dataUrl } = preprocess(img, crop);
   const worker = await getWorker(onProgress);
+  await worker.setParameters({ tessedit_pageseg_mode: '11' }); // SPARSE_TEXT
   onProgress({ stage: '문자 인식 중', progress: 0.3 });
   const { data } = await worker.recognize(dataUrl);
   onProgress({ stage: '완료', progress: 1 });
   return { lines: dedup(data.text || ''), engine: 'tesseract(kor+eng)' };
+}
+
+/**
+ * Slot-grid OCR: slice `region` into rows×cols cells and OCR each cell's name
+ * area (left `nameLeftPct` skipped for the portrait) individually. One name per
+ * cell → far fewer mis-reads than whole-image OCR.
+ * @returns {Promise<{cells:Array<{text,row,col,rect}>, lines:string[], engine}>}
+ */
+export async function extractSlots(img, region, { rows, cols, nameLeftPct = 0.22 }, onProgress = () => {}) {
+  const reg = region || { x: 0, y: 0, w: img.width, h: img.height };
+  const colW = reg.w / cols, rowH = reg.h / rows;
+  const worker = await getWorker(onProgress);
+  await worker.setParameters({ tessedit_pageseg_mode: '7' }); // SINGLE_LINE
+  const cells = [];
+  const total = rows * cols; let done = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const rect = {
+        x: reg.x + c * colW + colW * nameLeftPct, y: reg.y + r * rowH + rowH * 0.08,
+        w: colW * (1 - nameLeftPct - 0.02), h: rowH * 0.84,
+      };
+      const { dataUrl } = preprocess(img, rect, 3.4); // upscale tiny cells
+      const { data } = await worker.recognize(dataUrl);
+      const text = (data.text || '').trim().replace(/\s+/g, ' ');
+      cells.push({ text, row: r, col: c, rect });
+      onProgress({ stage: `슬롯 인식 ${done + 1}/${total}`, progress: (++done) / total });
+    }
+  }
+  const lines = cells.map((c) => c.text).filter((t) => normName(t).length >= 1);
+  return { cells, lines, engine: 'tesseract-slot' };
 }
 
 function dedup(text) {
