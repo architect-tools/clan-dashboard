@@ -48,10 +48,12 @@ const result = await page.evaluate(async () => {
   };
   await run('full-psm11', null, { psm: '11' });
   await run('panel-psm11', panel, { psm: '11' });
-  await run('panel-psm6', panel, { psm: '6' });
-  await run('panel-psm4', panel, { psm: '4' });
-  await run('panel-psm11-inv', panel, { psm: '11', invert: true });
-  await run('panel-psm6-inv', panel, { psm: '6', invert: true });
+  // refined (line-detection + per-line re-OCR, no grid)
+  for (const [label, crop, seg] of [['refined-full-seg6', null, '6'], ['refined-panel-seg6', panel, '6'], ['refined-panel-seg4', panel, '4'], ['refined-panel-seg11', panel, '11']]) {
+    const r = await O.extractRefined(img, crop, () => {}, { segPsm: seg });
+    const m = O.matchRoster(r.lines, roster);
+    out[label] = { lines: r.lines, matched: m.matched.map((x) => x.member.name), maybe: m.maybe.map((x) => x.member.name) };
+  }
   return { dims: W + 'x' + H, out };
 }).catch((e) => ({ error: String(e) }));
 

@@ -56,7 +56,8 @@ export function preprocess(img, crop = null, scaleHint = SCALE, { invert = false
     p[i] = p[i + 1] = p[i + 2] = v;
   }
   ctx.putImageData(im, 0, 0);
-  return { dataUrl: cv.toDataURL('image/png'), canvas: cv };
+  // ox/oy = source-image offset, scale = canvas px per source px (for bbox → source mapping)
+  return { dataUrl: cv.toDataURL('image/png'), canvas: cv, scale, ox: sx, oy: sy };
 }
 
 let _workerPromise = null;
@@ -91,6 +92,47 @@ export async function extractLines(img, crop, onProgress = () => {}, { psm = '11
   const { data } = await worker.recognize(dataUrl);
   onProgress({ stage: '완료', progress: 1 });
   return { lines: dedup(data.text || ''), engine: `tesseract(psm${psm}${invert ? '+inv' : ''})` };
+}
+
+/**
+ * Refined OCR: detect text-line positions in `crop` (no grid assumption), then
+ * re-OCR each detected line individually at a normalized height. Handles the
+ * real UI layout (headers/gaps/uneven spacing) because lines come from detection.
+ */
+export async function extractRefined(img, crop, onProgress = () => {}, { segPsm = '6' } = {}) {
+  const pre = preprocess(img, crop, SCALE);
+  const worker = await getWorker(onProgress);
+  // pass 1: segmentation — find line boxes (text content of this pass is ignored)
+  await worker.setParameters({ tessedit_pageseg_mode: segPsm });
+  onProgress({ stage: '줄 위치 감지', progress: 0.2 });
+  const { data } = await worker.recognize(pre.dataUrl);
+  let lineBoxes = (data.lines || [])
+    .filter((l) => l.bbox && (l.bbox.x1 - l.bbox.x0) > 12 && (l.bbox.y1 - l.bbox.y0) > 10)
+    .map((l) => l.bbox);
+  // fallback to word boxes if no lines detected
+  if (!lineBoxes.length) lineBoxes = (data.words || []).map((w) => w.bbox).filter(Boolean);
+
+  // map canvas bbox → source-image rect, pad a little
+  const rects = lineBoxes.map((b) => {
+    const x = pre.ox + b.x0 / pre.scale, y = pre.oy + b.y0 / pre.scale;
+    const w = (b.x1 - b.x0) / pre.scale, h = (b.y1 - b.y0) / pre.scale;
+    const padX = w * 0.06, padY = h * 0.18;
+    return { x: x - padX, y: y - padY, w: w + padX * 2, h: h + padY * 2 };
+  });
+
+  // pass 2: re-OCR each detected line at a normalized height (single line)
+  await worker.setParameters({ tessedit_pageseg_mode: '7' });
+  const lines = [];
+  let done = 0;
+  for (const rect of rects) {
+    const scale = Math.min(6, Math.max(1, TARGET_CELL_H / Math.max(8, rect.h)));
+    const { dataUrl } = preprocess(img, rect, scale);
+    const { data: d2 } = await worker.recognize(dataUrl);
+    const t = (d2.text || '').trim().replace(/\s+/g, ' ');
+    if (t) lines.push(t);
+    onProgress({ stage: `줄 인식 ${done + 1}/${rects.length}`, progress: 0.4 + (++done) / rects.length * 0.6 });
+  }
+  return { lines: dedup(lines.join('\n')), engine: `tesseract-refined(${rects.length}줄)` };
 }
 
 /**
