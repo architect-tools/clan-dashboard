@@ -5,7 +5,7 @@ import { DB, Mutations } from '../db.js';
 import { scoreFromAttendance, tierForScore, maxWeeklyScore } from '../calc.js';
 import { el, fmt, toast, clear } from '../util.js';
 import { CATEGORY_ORDER } from '../config.js';
-import { imageToBase64, extractLines, matchRoster } from '../ocr.js';
+import { loadImage, extractLines, matchRoster } from '../ocr.js';
 import { page, card, btn, modal, select, tierBadge } from './ui.js';
 
 let showInactive = false;
@@ -107,97 +107,143 @@ function openOcrCheckin() {
   const contents = activeContents();
   if (!contents.length) return toast('먼저 콘텐츠를 설정하세요', 'error');
   const week = s.participation.weeks.find((w) => w.id === s.participation.current);
+  const roster = s.members.filter((m) => m.active !== false);
   let target = contents[0].name;
+
+  // accumulated across multiple screenshots within one session
+  const picked = new Map();          // memberId -> { member, score, token, checked }
+  const unmatchedSet = new Set();    // leftover OCR tokens for manual assignment
+  let curImg = null, crop = null;    // current image + crop (natural px)
+
   const contentSel = select(contents.map((c) => ({ value: c.name, label: `${c.category} · ${c.name}` })), target,
-    { onchange: (e) => { target = e.target.value; } });
+    { onchange: (e) => { target = e.target.value; applyBtn.textContent = `체크인 적용 (${target})`; } });
 
   modal('스크린샷으로 참여 체크인', (close) => {
     const drop = el('div.drop', {}, [
       el('div.drop-icon', { text: '📷' }),
-      el('div', { text: '스크린샷을 끌어다 놓거나 클릭해서 선택' }),
-      el('div.drop-sub', { text: '여러 장 가능 · 붙여넣기(Ctrl+V)도 지원' }),
+      el('div', { text: '클랜 부대/참여자 스크린샷을 끌어다 놓거나 클릭해서 선택' }),
+      el('div.drop-sub', { text: '붙여넣기(Ctrl+V)도 지원 · 여러 장 순서대로 인식 가능' }),
     ]);
-    const fileInput = el('input', { type: 'file', accept: 'image/*', multiple: true, style: { display: 'none' } });
-    const result = el('div.ocr-result');
+    const fileInput = el('input', { type: 'file', accept: 'image/*', style: { display: 'none' } });
+    const previewWrap = el('div.ocr-preview', { style: { display: 'none' } });
     const progress = el('div.ocr-progress');
+    const result = el('div.ocr-result');
+
+    const runBtn = btn('🔍 인식 시작', () => runOcr(), { kind: 'primary' });
+    const fullBtn = btn('전체 영역', () => { crop = null; drawSel(); }, { kind: 'ghost' });
+    const moreBtn = btn('다른 스크린샷', () => fileInput.click(), { kind: 'ghost' });
+    const controls = el('div.ocr-controls', { style: { display: 'none' } }, [runBtn, fullBtn, moreBtn]);
+    const applyBtn = btn(`체크인 적용 (${target})`, () => applyCheckin(), { kind: 'primary' });
 
     drop.onclick = () => fileInput.click();
     drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); };
     drop.ondragleave = () => drop.classList.remove('over');
-    drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); handleFiles(e.dataTransfer.files); };
-    fileInput.onchange = () => handleFiles(fileInput.files);
+    drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); pick(e.dataTransfer.files[0]); };
+    fileInput.onchange = () => pick(fileInput.files[0]);
     const onPaste = (e) => {
-      const items = [...(e.clipboardData?.items || [])].filter((i) => i.type.startsWith('image/'));
-      if (items.length) handleFiles(items.map((i) => i.getAsFile()));
+      const it = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
+      if (it) pick(it.getAsFile());
     };
     document.addEventListener('paste', onPaste);
+    const cleanup = () => document.removeEventListener('paste', onPaste);
 
-    async function handleFiles(files) {
-      const roster = s.members.filter((m) => m.active !== false);
-      const allMatched = new Map(); // memberId -> {member, score}
-      const allUnmatched = [];
-      clear(result);
-      for (const f of [...files]) {
-        if (!f || !f.type.startsWith('image/')) continue;
-        progress.textContent = '이미지 처리 중…';
-        const img = await imageToBase64(f);
-        let engine = '';
-        try {
-          const out = await extractLines(img, (p) => { progress.textContent = `${p.stage} (${Math.round(p.progress * 100)}%)`; });
-          engine = out.engine;
-          const { matched, unmatched } = matchRoster(out.lines, roster);
-          matched.forEach((mm) => { if (!allMatched.has(mm.member.id) || mm.score > allMatched.get(mm.member.id).score) allMatched.set(mm.member.id, mm); });
-          unmatched.forEach((u) => allUnmatched.push(u));
-        } catch (e) { console.error(e); toast('OCR 실패: ' + e.message, 'error'); }
-        progress.textContent = `인식 완료 (엔진: ${engine || '-'})`;
-      }
-      renderMatches([...allMatched.values()], allUnmatched);
+    // ── load + preview with draggable crop box ──
+    async function pick(file) {
+      if (!file || !file.type.startsWith('image/')) return;
+      try { curImg = await loadImage(file); } catch { return toast('이미지를 열 수 없습니다', 'error'); }
+      crop = null;
+      drop.style.display = 'none';
+      controls.style.display = 'flex';
+      buildPreview();
     }
 
-    function renderMatches(matched, unmatched) {
+    let selBox = null, dragging = null;
+    function buildPreview() {
+      clear(previewWrap); previewWrap.style.display = 'block';
+      const dispW = Math.min(560, curImg.naturalWidth);
+      const img = el('img.ocr-img', { src: curImg.src, style: { width: dispW + 'px' } });
+      selBox = el('div.crop-box', { style: { display: 'none' } });
+      const stage = el('div.crop-stage', {}, [img, selBox]);
+      previewWrap.appendChild(el('div.ocr-hint', { text: '이름이 있는 영역을 드래그하면 인식률이 올라갑니다 (선택). “전체 영역”으로 초기화.' }));
+      previewWrap.appendChild(stage);
+
+      const ptr = (e) => { const r = img.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, r }; };
+      stage.onmousedown = (e) => { const p = ptr(e); dragging = { x0: p.x, y0: p.y }; };
+      stage.onmousemove = (e) => {
+        if (!dragging) return;
+        const p = ptr(e);
+        const x = Math.max(0, Math.min(dragging.x0, p.x)), y = Math.max(0, Math.min(dragging.y0, p.y));
+        const w = Math.min(p.r.width, Math.abs(p.x - dragging.x0)), h = Math.min(p.r.height, Math.abs(p.y - dragging.y0));
+        Object.assign(selBox.style, { display: 'block', left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
+        const sx = curImg.naturalWidth / p.r.width, sy = curImg.naturalHeight / p.r.height;
+        if (w > 8 && h > 8) crop = { x: x * sx, y: y * sy, w: w * sx, h: h * sy };
+      };
+      const end = () => { dragging = null; };
+      stage.onmouseup = end; stage.onmouseleave = end;
+      drawSel();
+    }
+    function drawSel() { if (selBox) selBox.style.display = crop ? 'block' : 'none'; }
+
+    // ── run OCR on current image/crop, merge into picked ──
+    async function runOcr() {
+      if (!curImg) return;
+      runBtn.disabled = true;
+      try {
+        const out = await extractLines(curImg, crop, (p) => { progress.textContent = `${p.stage} (${Math.round(p.progress * 100)}%)`; });
+        const { matched, maybe, unmatched } = matchRoster(out.lines, roster);
+        for (const m of matched) mergePick(m, true);
+        for (const m of maybe) mergePick(m, false);
+        unmatched.forEach((u) => unmatchedSet.add(u));
+        progress.textContent = `인식 완료 — 신뢰 ${matched.length} · 확인필요 ${maybe.length} (엔진: ${out.engine})`;
+        renderReview();
+      } catch (e) { console.error(e); toast('OCR 실패: ' + e.message, 'error'); progress.textContent = ''; }
+      runBtn.disabled = false;
+    }
+    function mergePick(m, checked) {
+      const prev = picked.get(m.member.id);
+      if (!prev || m.score > prev.score) picked.set(m.member.id, { ...m, checked: prev ? prev.checked : checked });
+    }
+
+    function renderReview() {
       clear(result);
-      if (!matched.length && !unmatched.length) { result.appendChild(el('div.empty', { text: '인식된 닉네임이 없습니다.' })); return; }
-      const checks = new Map();
-      result.appendChild(el('div.ocr-head', { text: `인식: ${matched.length}명 매칭 / 미매칭 ${unmatched.length}` }));
+      const items = [...picked.values()].sort((a, b) => b.score - a.score);
+      const leftovers = [...unmatchedSet];
+      if (!items.length && !leftovers.length) { result.appendChild(el('div.empty', { text: '인식된 닉네임이 없습니다. 영역을 좁혀 다시 시도해 보세요.' })); return; }
+      const checkedN = items.filter((i) => i.checked).length;
+      result.appendChild(el('div.ocr-head', { text: `선택 ${checkedN}명 / 인식 ${items.length}명 · 미매칭 ${leftovers.length}` }));
       const list = el('div.match-list');
-      matched.forEach((mm) => {
-        const cb = el('input', { type: 'checkbox', checked: true });
-        checks.set(mm.member.id, cb);
-        list.appendChild(el('label.match-row', { class: mm.score < 0.78 ? 'low' : '' }, [
+      items.forEach((mm) => {
+        const cb = el('input', { type: 'checkbox', checked: mm.checked, onchange: (e) => { mm.checked = e.target.checked; } });
+        list.appendChild(el('label.match-row', { class: mm.score < 0.72 ? 'low' : '' }, [
           cb, el('b', { text: mm.member.name }),
           el('span.match-token', { text: `“${mm.token}”` }),
           el('span.match-score', { text: Math.round(mm.score * 100) + '%' }),
         ]));
       });
-      // unmatched → manual assign
-      const roster = s.members.filter((m) => m.active !== false);
-      unmatched.slice(0, 30).forEach((tok) => {
-        const sel = select([{ value: '', label: '— 무시 —' }, ...roster.map((m) => ({ value: m.id, label: m.name }))], '');
+      leftovers.slice(0, 40).forEach((tok) => {
+        const sel = select([{ value: '', label: '— 무시 —' }, ...roster.map((m) => ({ value: m.id, label: m.name }))], '',
+          { onchange: (e) => { manual.set(tok, e.target.value); } });
         list.appendChild(el('label.match-row.unmatched', {}, [
           el('span.match-token', { text: `“${tok}”` }), el('span', { text: '→' }), sel,
         ]));
-        checks.set('manual:' + tok, sel);
       });
       result.appendChild(list);
-      result.appendChild(el('div.modal-actions', {}, [
-        btn('취소', close),
-        btn(`체크인 적용 (${target})`, () => {
-          let n = 0;
-          for (const [key, ctrl] of checks) {
-            if (typeof key === 'number' && ctrl.checked) { Mutations.bumpAttendance(key, target, +1, week.id); n++; }
-            else if (typeof key === 'string' && key.startsWith('manual:') && ctrl.value) { Mutations.bumpAttendance(+ctrl.value, target, +1, week.id); n++; }
-          }
-          DB.commit();
-          document.removeEventListener('paste', onPaste);
-          toast(`${target}: ${n}명 체크인 완료`);
-          close(); renderParticipation();
-        }, { kind: 'primary' }),
-      ]));
+    }
+    const manual = new Map(); // token -> memberId (manual assignments)
+
+    function applyCheckin() {
+      let n = 0;
+      for (const mm of picked.values()) if (mm.checked) { Mutations.bumpAttendance(mm.member.id, target, +1, week.id); n++; }
+      for (const [, id] of manual) if (id) { Mutations.bumpAttendance(+id, target, +1, week.id); n++; }
+      DB.commit(); cleanup();
+      toast(`${target}: ${n}명 체크인 완료`);
+      close(); renderParticipation();
     }
 
     return el('div', {}, [
       el('div.field', {}, [el('span.field-label', { text: '체크인할 콘텐츠' }), contentSel]),
-      drop, fileInput, progress, result,
+      drop, fileInput, previewWrap, controls, progress, result,
+      el('div.modal-actions', {}, [btn('취소', () => { cleanup(); close(); }), applyBtn]),
     ]);
-  }, { wide: true, onClose: () => {} });
+  }, { wide: true });
 }
