@@ -2,7 +2,7 @@
 // Engine: Tesseract.js (kor+eng, sparse-text mode) loaded lazily from CDN.
 // Matching is against the known roster, so even imperfect OCR is recovered by
 // fuzzy hangul matching + the admin's review step.
-import { matchName, normName } from './util.js';
+import { matchName, normName, similarity } from './util.js';
 
 const TESSERACT_CDN = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 const MAX_SIDE = 5200;     // cap upscaled canvas to keep memory sane
@@ -86,18 +86,66 @@ async function getWorker(onProgress, lang = 'kor+eng') {
  * another. Running a few scales and unioning all recognized text catches names
  * no single pass gets. Combined with confusable-char matching downstream.
  */
-export async function extractLines(img, crop, onProgress = () => {}, { psm = '11', invert = false, scales = [3.0, 3.8, 4.6], lang = 'kor+eng' } = {}) {
+export async function extractLines(img, crop, onProgress = () => {}, { psm = '11', invert = false, scales = [2.6, 3.4, 4.2, 5.0, 5.8], lang = 'kor+eng' } = {}) {
   const worker = await getWorker(onProgress, lang);
   await worker.setParameters({ tessedit_pageseg_mode: psm });
-  let all = '';
+  const perScale = [];
   for (let i = 0; i < scales.length; i++) {
     onProgress({ stage: `문자 인식 중 (${i + 1}/${scales.length})`, progress: 0.2 + i / scales.length * 0.75 });
     const { dataUrl } = preprocess(img, crop, scales[i], { invert });
     const { data } = await worker.recognize(dataUrl);
-    all += '\n' + (data.text || '');
+    perScale.push(dedup(data.text || ''));
   }
   onProgress({ stage: '완료', progress: 1 });
-  return { lines: dedup(all), engine: `tesseract(${lang},x${scales.length}scale)` };
+  return { lines: dedup(perScale.flat().join('\n')), perScale, engine: `tesseract(${lang},x${scales.length})` };
+}
+
+// Latin-heavy short roster names (KDA, EXE, xooos, Babyee…) attract OCR garbage,
+// so they must be read near-exactly. Korean names match reliably via jamo
+// distance, so they keep a normal (lower) bar.
+const _norm = (n) => normName(n);
+const _latinFrac = (n) => { const x = _norm(n); const l = (x.match(/[a-z]/g) || []).length; return x.length ? l / x.length : 0; };
+const loThresh = (n) => {
+  const L = _norm(n).length;
+  if (_latinFrac(n) >= 0.6) return L <= 3 ? 0.88 : L <= 5 ? 0.80 : 0.72; // latin-heavy: strict
+  return L <= 2 ? 0.70 : 0.62;                                          // korean/mixed: normal
+};
+const hiThresh = (n) => {                      // single-scale auto-confirm bar (no consensus)
+  const L = _norm(n).length;
+  if (_latinFrac(n) >= 0.6) return L <= 3 ? 0.97 : 0.92;
+  return 0.92;                                 // korean single-scale must be near-exact too
+};
+
+/**
+ * Consensus match across per-scale OCR passes + length-aware thresholds.
+ * A member is confirmed if read above its low bar in ≥2 scales (consensus) or
+ * above its high bar in any single scale. Kills scale-specific & short-name
+ * garbage while keeping recall high.
+ */
+export function consensusMatch(perScale, roster, { minVotes = 2 } = {}) {
+  const tally = new Map();
+  for (const lines of perScale) {
+    const perMember = new Map(); // best score for each member within THIS scale
+    for (const line of lines) {
+      let best = null, bs = 0;
+      for (const m of roster) { const s = similarity(line, m.name); if (s > bs) { bs = s; best = m; } }
+      if (best) { const cur = perMember.get(best.id); if (!cur || bs > cur.score) perMember.set(best.id, { member: best, score: bs, token: line }); }
+    }
+    for (const v of perMember.values()) {
+      const t = tally.get(v.member.id) || { member: v.member, best: 0, votes: 0, token: v.token };
+      if (v.score >= loThresh(v.member.name)) t.votes++;
+      if (v.score > t.best) { t.best = v.score; t.token = v.token; }
+      tally.set(v.member.id, t);
+    }
+  }
+  const matched = [], maybe = [];
+  for (const t of tally.values()) {
+    const e = { member: t.member, score: t.best, token: t.token, votes: t.votes };
+    if ((t.votes >= minVotes && t.best >= loThresh(t.member.name)) || t.best >= hiThresh(t.member.name)) matched.push(e);
+    else if (t.best >= loThresh(t.member.name)) maybe.push(e);
+  }
+  matched.sort((a, b) => b.score - a.score); maybe.sort((a, b) => b.score - a.score);
+  return { matched, maybe };
 }
 
 /**

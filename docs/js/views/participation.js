@@ -6,7 +6,7 @@ import { DB, Mutations } from '../db.js';
 import { computeScores, tierForScore } from '../calc.js';
 import { el, fmt, toast, clear } from '../util.js';
 import { CATEGORY_ORDER } from '../config.js';
-import { loadImage, extractLines, matchRoster } from '../ocr.js';
+import { loadImage, extractLines, consensusMatch } from '../ocr.js';
 import { page, card, btn, tierBadge, classBadge } from './ui.js';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -209,11 +209,12 @@ function checkinPanel(content) {
     if (!curImg) return;
     try {
       const out = await extractLines(curImg, crop, (p) => { progress.textContent = `${p.stage} (${Math.round(p.progress * 100)}%)`; });
-      const { matched, maybe, unmatched } = matchRoster(out.lines, roster);
+      const { matched, maybe } = consensusMatch(out.perScale, roster);
       picked.clear();
-      for (const mm of [...matched, ...maybe]) picked.set(mm.member.id, { ...mm, checked: mm.score >= 0.72 });
-      progress.textContent = `인식 완료 — 신뢰 ${matched.length} · 확인필요 ${maybe.length}. 못 찾은 인원은 아래 “명단에서 직접 선택”으로 추가하세요.`;
-      renderResult(unmatched);
+      for (const mm of matched) picked.set(mm.member.id, { ...mm, checked: true });
+      for (const mm of maybe) if (!picked.has(mm.member.id)) picked.set(mm.member.id, { ...mm, checked: false });
+      progress.textContent = `인식 완료 — 신뢰 ${matched.length}명(자동 체크) · 확인필요 ${maybe.length}명. 못 찾은 인원은 아래 “명단에서 직접 선택”으로 추가하세요.`;
+      renderResult([]);
     } catch (e) { console.error(e); toast('OCR 실패: ' + e.message, 'error'); progress.textContent = ''; }
   }
 
