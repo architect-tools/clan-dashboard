@@ -140,7 +140,7 @@ function checkinPanel(content) {
   const cat = s.contentCatalog.find((c) => c.name === content);
   const current = new Set(Mutations.getEvent(selDate, content)); // memberIds already recorded
   let curImg = null, crop = null, imgEl = null;
-  let mode = 'slot';                 // 'slot' (격자 정밀) | 'full' (전체 빠름)
+  let mode = 'full';                 // 'full' (영역 일괄, 권장·정확) | 'slot' (격자 정밀, 보조)
   let gridRows = 5, gridCols = 5, nameLeftPct = 0.18;
 
   const wrap = el('div.checkin');
@@ -170,7 +170,7 @@ function checkinPanel(content) {
     if (!file || !file.type.startsWith('image/')) return;
     try { curImg = await loadImage(file); } catch { return toast('이미지를 열 수 없습니다', 'error'); }
     crop = null; drop.style.display = 'none'; buildPreview();
-    if (mode === 'full') runOcr(); // slot mode waits for grid alignment
+    if (mode === 'full') runOcr(); // auto-run on upload; user can crop the panel then re-run for higher accuracy
   }
 
   let selBox = null, gridLayer = null, dragging = null;
@@ -183,7 +183,7 @@ function checkinPanel(content) {
     const stage = el('div.crop-stage', {}, [imgEl, selBox, gridLayer]);
     previewWrap.appendChild(el('div.ocr-hint', {
       text: mode === 'slot' ? '① 명단이 있는 한 묶음(예: 1~5부대)을 드래그 → ② 빨간 칸이 닉네임에 맞게 행/열 조정 → ③ 격자 인식'
-        : '이름 영역을 드래그하면 인식률이 올라갑니다 (선택).' }));
+        : '💡 닉네임이 모두 보이도록 클랜 명단 영역을 드래그한 뒤 “선택영역 인식”을 누르면 정확도가 크게 올라갑니다 (배경·UI 제외).' }));
     previewWrap.appendChild(stage);
     imgEl.onload = drawGrid;
     buildControls();
@@ -205,8 +205,8 @@ function checkinPanel(content) {
   function buildControls() {
     clear(controls); controls.style.display = 'flex';
     const seg = el('div.seg', {}, [
+      el('button.seg-btn', { class: mode === 'full' ? 'on' : '', text: '영역 일괄 (권장)', onclick: () => { mode = 'full'; buildControls(); drawGrid(); } }),
       el('button.seg-btn', { class: mode === 'slot' ? 'on' : '', text: '격자 정밀', onclick: () => { mode = 'slot'; buildControls(); drawGrid(); } }),
-      el('button.seg-btn', { class: mode === 'full' ? 'on' : '', text: '전체 빠름', onclick: () => { mode = 'full'; buildControls(); drawGrid(); } }),
     ]);
     controls.appendChild(seg);
     if (mode === 'slot') {
@@ -217,7 +217,7 @@ function checkinPanel(content) {
       controls.appendChild(num('좌측여백%', Math.round(nameLeftPct * 100), 0, 60, 2, (v) => nameLeftPct = Math.min(0.6, Math.max(0, v / 100))));
       controls.appendChild(btn('격자 인식', () => runOcr(), { kind: 'primary' }));
     } else {
-      controls.appendChild(btn('🔍 다시 인식', () => runOcr(), { kind: 'ghost' }));
+      controls.appendChild(btn('🔍 선택영역 인식', () => runOcr(), { kind: 'primary' }));
       controls.appendChild(btn('전체 영역', () => { crop = null; if (selBox) selBox.style.display = 'none'; drawGrid(); runOcr(); }, { kind: 'ghost' }));
     }
     controls.appendChild(btn('다른 스크린샷', () => fileInput.click(), { kind: 'ghost' }));

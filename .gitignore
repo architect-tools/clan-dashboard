@@ -5,3 +5,7 @@ scratchpad/
 
 # Tesseract lang data (downloaded by node test tooling)
 *.traineddata
+
+# local OCR test artifacts
+docs/_ocrtest.html
+docs/_sample.png

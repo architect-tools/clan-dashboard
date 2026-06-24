@@ -27,7 +27,7 @@ export function loadImage(file) {
  * @param {{x,y,w,h}|null} crop in source-image pixels
  * @returns {{dataUrl:string, canvas:HTMLCanvasElement}}
  */
-export function preprocess(img, crop = null, scaleHint = SCALE) {
+export function preprocess(img, crop = null, scaleHint = SCALE, { invert = false } = {}) {
   const sx = crop ? Math.max(0, crop.x) : 0;
   const sy = crop ? Math.max(0, crop.y) : 0;
   const sw = crop ? Math.min(crop.w, img.width - sx) : img.width;
@@ -51,7 +51,8 @@ export function preprocess(img, crop = null, scaleHint = SCALE) {
   }
   const range = Math.max(1, max - min);
   for (let i = 0, j = 0; i < p.length; i += 4, j++) {
-    const v = ((gray[j] - min) * 255 / range) | 0;
+    let v = ((gray[j] - min) * 255 / range) | 0;
+    if (invert) v = 255 - v; // light-on-dark game UI → dark-on-light for Tesseract
     p[i] = p[i + 1] = p[i + 2] = v;
   }
   ctx.putImageData(im, 0, 0);
@@ -82,14 +83,14 @@ async function getWorker(onProgress) {
 /**
  * Whole-image OCR (sparse text). Returns cleaned candidate tokens.
  */
-export async function extractLines(img, crop, onProgress = () => {}) {
-  const { dataUrl } = preprocess(img, crop);
+export async function extractLines(img, crop, onProgress = () => {}, { psm = '11', invert = false, scale = SCALE } = {}) {
+  const { dataUrl } = preprocess(img, crop, scale, { invert });
   const worker = await getWorker(onProgress);
-  await worker.setParameters({ tessedit_pageseg_mode: '11' }); // SPARSE_TEXT
+  await worker.setParameters({ tessedit_pageseg_mode: psm });
   onProgress({ stage: '문자 인식 중', progress: 0.3 });
   const { data } = await worker.recognize(dataUrl);
   onProgress({ stage: '완료', progress: 1 });
-  return { lines: dedup(data.text || ''), engine: 'tesseract(kor+eng)' };
+  return { lines: dedup(data.text || ''), engine: `tesseract(psm${psm}${invert ? '+inv' : ''})` };
 }
 
 /**
