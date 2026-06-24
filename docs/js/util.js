@@ -92,17 +92,39 @@ function levenshtein(a, b) {
 const CONFUSE = { '0': 'o', '1': 'l', '2': 'z', '3': 'e', '4': 'a', '5': 's', '6': 'b', '7': 't', '8': 'b', '9': 'g' };
 function fold(s) { return s.replace(/[0-9]/g, (d) => CONFUSE[d]); }
 
+// Tense→plain consonant fold (ㄲ→ㄱ …) — Tesseract routinely confuses these.
+const TENSE = { 'ㄲ': 'ㄱ', 'ㄸ': 'ㄷ', 'ㅃ': 'ㅂ', 'ㅆ': 'ㅅ', 'ㅉ': 'ㅈ' };
+/** Decompose to jamo with tense-fold; optionally drop jongsung (받침),
+ *  which OCR frequently fails to read (e.g. 딱꽁 → "따꼬"). */
+function jamo2(str, dropJong) {
+  let out = '';
+  for (const ch of String(str)) {
+    const code = ch.charCodeAt(0) - 0xac00;
+    if (code >= 0 && code <= 11171) {
+      let cho = CHO[Math.floor(code / 588)]; cho = TENSE[cho] || cho;
+      const jung = JUNG[Math.floor((code % 588) / 28)];
+      let jong = JONG[code % 28]; jong = TENSE[jong] || jong;
+      out += cho + jung + (dropJong ? '' : jong);
+    } else out += (TENSE[ch] || ch);
+  }
+  return out;
+}
+
 function simCore(na, nb) {
   if (na === nb) return 1;
   const raw = 1 - levenshtein(na, nb) / Math.max(na.length, nb.length);
-  const ja = toJamo(na), jb = toJamo(nb);
-  const jam = 1 - levenshtein(ja, jb) / Math.max(ja.length, jb.length);
-  let sim = raw * 0.45 + jam * 0.55;
-  // Substring bonus, scaled by coverage so that e.g. "싸다"⊂"아싸다" does NOT
-  // beat the exact "아싸다" match (avoids cross-assigning similar nicknames).
+  const ff = jamo2(na, false), fb = jamo2(nb, false);
+  const jamFull = 1 - levenshtein(ff, fb) / Math.max(ff.length, fb.length);
+  const cf = jamo2(na, true), cb = jamo2(nb, true);     // jongsung-insensitive
+  const jamCJ = 1 - levenshtein(cf, cb) / Math.max(cf.length, cb.length);
+  const jam = Math.max(jamFull, jamCJ * 0.99);          // jongsung-insensitive (OCR drops 받침)
+  let sim = raw * 0.35 + jam * 0.65;
+  // Substring bonus, scaled by coverage. Require the contained string to be ≥2
+  // chars so 1-char fragments (group-number "3", stray "로") can't substring-match
+  // a full name like 배방3 / 제크로무.
   if (na.includes(nb) || nb.includes(na)) {
     const minL = Math.min(na.length, nb.length), maxL = Math.max(na.length, nb.length);
-    sim = Math.max(sim, 0.55 + 0.4 * (minL / maxL));
+    if (minL >= 2) sim = Math.max(sim, 0.55 + 0.4 * (minL / maxL));
   }
   return Math.max(0, Math.min(1, sim));
 }

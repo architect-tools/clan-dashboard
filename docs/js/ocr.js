@@ -102,7 +102,7 @@ export async function detectByAnchor(img, anchor, onProgress = () => {}) {
  * @param {{x,y,w,h}|null} crop in source-image pixels
  * @returns {{dataUrl:string, canvas:HTMLCanvasElement}}
  */
-export function preprocess(img, crop = null, scaleHint = SCALE, { invert = false } = {}) {
+export function preprocess(img, crop = null, scaleHint = SCALE, { invert = false, binarize = false } = {}) {
   const sx = crop ? Math.max(0, crop.x) : 0;
   const sy = crop ? Math.max(0, crop.y) : 0;
   const sw = crop ? Math.min(crop.w, img.width - sx) : img.width;
@@ -127,7 +127,8 @@ export function preprocess(img, crop = null, scaleHint = SCALE, { invert = false
   const range = Math.max(1, max - min);
   for (let i = 0, j = 0; i < p.length; i += 4, j++) {
     let v = ((gray[j] - min) * 255 / range) | 0;
-    if (invert) v = 255 - v; // light-on-dark game UI → dark-on-light for Tesseract
+    if (binarize) v = v > 132 ? 0 : 255;   // bright text → black on white (Tesseract-friendly)
+    else if (invert) v = 255 - v;          // light-on-dark → dark-on-light
     p[i] = p[i + 1] = p[i + 2] = v;
   }
   ctx.putImageData(im, 0, 0);
@@ -161,18 +162,20 @@ async function getWorker(onProgress, lang = 'kor+eng') {
  * another. Running a few scales and unioning all recognized text catches names
  * no single pass gets. Combined with confusable-char matching downstream.
  */
-export async function extractLines(img, crop, onProgress = () => {}, { psm = '11', invert = false, scales = [2.6, 3.4, 4.2, 5.0, 5.8], lang = 'kor+eng' } = {}) {
+export async function extractLines(img, crop, onProgress = () => {}, { psm = '11', scales = [2.8, 3.6, 4.4, 5.2], lang = 'kor+eng', variants = [{}, { binarize: true }] } = {}) {
   const worker = await getWorker(onProgress, lang);
   await worker.setParameters({ tessedit_pageseg_mode: psm });
   const perScale = [];
-  for (let i = 0; i < scales.length; i++) {
-    onProgress({ stage: `문자 인식 중 (${i + 1}/${scales.length})`, progress: 0.2 + i / scales.length * 0.75 });
-    const { dataUrl } = preprocess(img, crop, scales[i], { invert });
+  const passes = [];
+  for (const s of scales) for (const v of variants) passes.push({ s, v });
+  for (let i = 0; i < passes.length; i++) {
+    onProgress({ stage: `문자 인식 중 (${i + 1}/${passes.length})`, progress: 0.15 + i / passes.length * 0.8 });
+    const { dataUrl } = preprocess(img, crop, passes[i].s, passes[i].v);
     const { data } = await worker.recognize(dataUrl);
     perScale.push(dedup(data.text || ''));
   }
   onProgress({ stage: '완료', progress: 1 });
-  return { lines: dedup(perScale.flat().join('\n')), perScale, engine: `tesseract(${lang},x${scales.length})` };
+  return { lines: dedup(perScale.flat().join('\n')), perScale, engine: `tesseract(${lang},${passes.length}pass)` };
 }
 
 // Latin-heavy short roster names (KDA, EXE, xooos, Babyee…) attract OCR garbage,
@@ -183,7 +186,7 @@ const _latinFrac = (n) => { const x = _norm(n); const l = (x.match(/[a-z]/g) || 
 const loThresh = (n) => {
   const L = _norm(n).length;
   if (_latinFrac(n) >= 0.6) return L <= 3 ? 0.88 : L <= 5 ? 0.80 : 0.72; // latin-heavy: strict
-  return L <= 2 ? 0.70 : 0.62;                                          // korean/mixed: normal
+  return L <= 2 ? 0.60 : 0.56;                                          // korean/mixed: normal
 };
 const hiThresh = (n) => {                      // single-scale auto-confirm bar (no consensus)
   const L = _norm(n).length;
