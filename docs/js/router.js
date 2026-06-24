@@ -19,4 +19,9 @@ export const Router = {
   },
   navigate(path) { location.hash = '#/' + path; },
   current() { return this._current; },
+  /** Re-render the current route (used after undo/redo). */
+  refresh() {
+    const render = this.routes[this._current];
+    if (render) { const y = window.scrollY; render(); window.scrollTo(0, y); }
+  },
 };

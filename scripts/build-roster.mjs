@@ -38,15 +38,16 @@ for (let i = 4; i < wrows.length; i++) {
 const seed = JSON.parse(readFileSync(seedFile, 'utf8'));
 const oldMembers = seed.members; // for 참여점수 carryover
 
+// Clan merger → fresh start: participation scores reset to 0 (rebuilt via tracking).
 const members = CANON.map((name, i) => {
   const w = weekly[i] || {};                      // positional 전투력/직업
-  const m = matchName(name, oldMembers, 0.7);     // fuzzy carryover of 참여점수/직업
+  const m = matchName(name, oldMembers, 0.7);     // fuzzy fallback for 직업 only
   return {
     id: i + 1, order: i + 1, name,
     cls: w.cls || (m ? m.member.cls : ''),
     power: w.power || (m ? m.member.power : 0),
-    score: m ? m.member.score : 0,
-    active: true, note: (i === CANON.length - 1 && !w.name) ? '전투력 미입력' : '',
+    score: 0,                                     // fresh start (clan merger)
+    active: true, note: !w.name ? '전투력 미입력' : '',
   };
 });
 

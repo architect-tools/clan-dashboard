@@ -9,18 +9,26 @@ import { renderMembers } from './views/members.js';
 import { renderParticipation } from './views/participation.js';
 import { renderDiamond } from './views/diamond.js';
 import { renderRotation } from './views/rotation.js';
+import { renderGear } from './views/gear.js';
 import { renderSchedule } from './views/schedule.js';
 import { renderSettings } from './views/settings.js';
 
 const NAV = [
   { path: 'dashboard', icon: '🏠', label: '대시보드' },
   { path: 'members', icon: '👥', label: '명단 관리' },
-  { path: 'participation', icon: '📷', label: '주간 참여도' },
+  { path: 'participation', icon: '📅', label: '주간 참여도' },
   { path: 'diamond', icon: '💎', label: '다이아 정산' },
   { path: 'rotation', icon: '🎁', label: '순번제/분배' },
-  { path: 'schedule', icon: '📅', label: '일정' },
+  { path: 'gear', icon: '🛡️', label: '장비/숙련 현황' },
+  { path: 'schedule', icon: '🗓️', label: '일정' },
   { path: 'settings', icon: '⚙️', label: '설정' },
 ];
+
+let undoBtn, redoBtn;
+function updateHistoryButtons() {
+  if (undoBtn) undoBtn.disabled = !DB.canUndo();
+  if (redoBtn) redoBtn.disabled = !DB.canRedo();
+}
 
 function buildShell() {
   const root = $('#root');
@@ -36,14 +44,26 @@ function buildShell() {
       el('a.nav-link.logout', { onclick: () => Auth.logout(), text: '🔒 잠금' }),
     ]),
   ]);
+  undoBtn = el('button.icon-btn', { title: '실행 취소 (Ctrl+Z)', onclick: () => DB.undo(), disabled: true }, ['↶']);
+  redoBtn = el('button.icon-btn', { title: '다시 실행 (Ctrl+Shift+Z)', onclick: () => DB.redo(), disabled: true }, ['↷']);
   const main = el('main.main', {}, [el('div#app')]);
   const topbar = el('header.topbar', {}, [
     el('button.menu-btn', { text: '☰', onclick: () => document.body.classList.toggle('nav-open') }),
     el('span.topbar-title', { text: CONFIG.appName }),
+    el('div.topbar-tools', {}, [undoBtn, redoBtn]),
   ]);
   root.appendChild(el('div.layout', {}, [nav, el('div.main-wrap', {}, [topbar, main])]));
-  // close mobile nav on link click
   nav.addEventListener('click', (e) => { if (e.target.closest('.nav-link')) document.body.classList.remove('nav-open'); });
+
+  // keyboard: Ctrl/Cmd+Z undo, Ctrl+Shift+Z or Ctrl+Y redo
+  document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return; // don't hijack field editing
+    const k = e.key.toLowerCase();
+    if (k === 'z' && !e.shiftKey) { e.preventDefault(); DB.undo(); }
+    else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); DB.redo(); }
+  });
 }
 
 async function main() {
@@ -52,15 +72,19 @@ async function main() {
   try { await DB.init(); }
   catch (e) { console.error(e); toast('데이터 로드 실패: ' + e.message, 'error'); return; }
 
+  DB.setCallbacks({ onHistory: updateHistoryButtons, onRefresh: () => Router.refresh() });
+
   Router
     .on('dashboard', renderDashboard)
     .on('members', renderMembers)
     .on('participation', renderParticipation)
     .on('diamond', renderDiamond)
     .on('rotation', renderRotation)
+    .on('gear', renderGear)
     .on('schedule', renderSchedule)
     .on('settings', renderSettings)
     .start('dashboard');
+  updateHistoryButtons();
 }
 
 main();

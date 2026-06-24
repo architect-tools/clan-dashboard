@@ -109,18 +109,38 @@ export function computeSettlement(data) {
   };
 }
 
-/** Suggested participation score from a per-member content attendance map.
- *  attendance: { [contentName]: count }. catalog: [{name, points, weekly}]. */
-export function scoreFromAttendance(attendance, catalog) {
+/** Participation score for a member from the date-based event log.
+ *  byDate: { 'YYYY-MM-DD': { [content]: [memberId,...] } }. range: {from,to} (inclusive, optional). */
+export function scoreForMember(byDate, catalog, memberId, range = {}) {
+  const pts = Object.fromEntries(catalog.map((c) => [c.name, c.points || 0]));
+  const { from, to } = range;
   let s = 0;
-  for (const c of catalog) {
-    const n = Math.min(attendance[c.name] || 0, c.weekly || Infinity);
-    s += n * (c.points || 0);
+  for (const date of Object.keys(byDate)) {
+    if (from && date < from) continue;
+    if (to && date > to) continue;
+    const day = byDate[date];
+    for (const content of Object.keys(day)) {
+      if (day[content].includes(memberId)) s += pts[content] || 0;
+    }
   }
   return s;
 }
 
-/** Max possible weekly participation score from the catalog. */
-export function maxWeeklyScore(catalog) {
-  return catalog.reduce((s, c) => s + (c.points || 0) * (c.weekly || 0), 0);
+/** Map of memberId -> participation score over a date range. */
+export function computeScores(byDate, catalog, members, range = {}) {
+  const out = {};
+  for (const m of members) out[m.id] = scoreForMember(byDate, catalog, m.id, range);
+  return out;
+}
+
+/** How many distinct participations a member has in a date range (for activity display). */
+export function attendanceCount(byDate, memberId, range = {}) {
+  const { from, to } = range;
+  let n = 0;
+  for (const date of Object.keys(byDate)) {
+    if (from && date < from) continue;
+    if (to && date > to) continue;
+    for (const ids of Object.values(byDate[date])) if (ids.includes(memberId)) n++;
+  }
+  return n;
 }

@@ -1,21 +1,29 @@
-// db.js — single source of truth + persistence adapter.
-//   • standalone mode (no APPS_SCRIPT_URL): state lives in localStorage,
-//     seeded from data/seed.json on first run.
-//   • live mode: state is fetched from / saved to the Apps Script backend.
-// Views read DB.state, mutate via the helpers, then call DB.commit().
+// db.js — single source of truth + persistence adapter + undo/redo history.
+//   • standalone mode (no APPS_SCRIPT_URL): state in localStorage, seeded from data/seed.json.
+//   • live mode: state fetched from / saved to the Apps Script backend.
+// Views read DB.state, mutate via Mutations, then call DB.commit().
+// Every commit() creates an undo checkpoint.
 
 import { CONFIG } from './config.js';
 import { uid, toast } from './util.js';
 
 const LIVE = () => !!CONFIG.APPS_SCRIPT_URL;
+const clone = (o) => JSON.parse(JSON.stringify(o));
 
 export const DB = {
   state: null,
   _subs: new Set(),
   _saveTimer: null,
+  _undo: [],
+  _redo: [],
+  _snapshot: null,         // state as of the last commit (for building undo entries)
+  _maxHistory: 80,
+  _onHistory: null,        // () => update undo/redo button states
+  _onRefresh: null,        // () => re-render current view (after undo/redo)
 
   subscribe(fn) { this._subs.add(fn); return () => this._subs.delete(fn); },
   _emit() { for (const fn of this._subs) try { fn(this.state); } catch (e) { console.error(e); } },
+  setCallbacks({ onHistory, onRefresh }) { this._onHistory = onHistory; this._onRefresh = onRefresh; },
 
   async init() {
     let data;
@@ -29,21 +37,58 @@ export const DB = {
     }
     if (!data) data = await (await fetch('data/seed.json', { cache: 'no-store' })).json();
     this.state = normalize(data);
+    this._snapshot = clone(this.state);
+    this._undo = []; this._redo = [];
     if (!LIVE()) this._persistLocal();
-    this._emit();
+    this._emit(); this._onHistory && this._onHistory();
     return this.state;
   },
 
-  /** Persist current state (debounced). In live mode also pushes to backend. */
-  commit({ immediate = false } = {}) {
+  /** Persist current state + create an undo checkpoint. In live mode pushes to backend. */
+  commit({ immediate = false, history = true } = {}) {
+    if (history && this._snapshot) {
+      this._undo.push(this._snapshot);
+      if (this._undo.length > this._maxHistory) this._undo.shift();
+      this._redo = [];
+    }
+    this._snapshot = clone(this.state);
     this._persistLocal();
     this._emit();
-    if (LIVE()) {
-      clearTimeout(this._saveTimer);
-      const doSave = () => this._fetch('save', { data: this.state })
-        .then(() => {}).catch((e) => { console.error(e); toast('동기화 실패 (변경은 로컬에 보관됨)', 'error'); });
-      if (immediate) doSave(); else this._saveTimer = setTimeout(doSave, 1200);
-    }
+    this._onHistory && this._onHistory();
+    if (LIVE()) this._scheduleSave(immediate);
+  },
+
+  _scheduleSave(immediate) {
+    clearTimeout(this._saveTimer);
+    const doSave = () => this._fetch('save', { data: this.state })
+      .catch((e) => { console.error(e); toast('동기화 실패 (변경은 로컬에 보관됨)', 'error'); });
+    if (immediate) doSave(); else this._saveTimer = setTimeout(doSave, 1200);
+  },
+
+  canUndo() { return this._undo.length > 0; },
+  canRedo() { return this._redo.length > 0; },
+  undo() {
+    if (!this._undo.length) return false;
+    this._redo.push(clone(this.state));
+    this.state = this._undo.pop();
+    this._snapshot = clone(this.state);
+    this._afterTimeTravel();
+    return true;
+  },
+  redo() {
+    if (!this._redo.length) return false;
+    this._undo.push(clone(this.state));
+    this.state = this._redo.pop();
+    this._snapshot = clone(this.state);
+    this._afterTimeTravel();
+    return true;
+  },
+  _afterTimeTravel() {
+    this._persistLocal();
+    this._emit();
+    this._onHistory && this._onHistory();
+    this._onRefresh && this._onRefresh();
+    if (LIVE()) this._scheduleSave(false);
   },
 
   _persistLocal() {
@@ -64,23 +109,12 @@ export const DB = {
     if (json.error) throw new Error(json.error);
     return json.data;
   },
-
-  // ── OCR (backend Naver CLOVA, or client Tesseract fallback) ──────
-  async ocr(base64png) {
-    if (LIVE()) {
-      try {
-        const r = await this._fetch('ocr', { image: base64png });
-        if (r && r.lines) return r.lines;
-      } catch (e) { console.warn('backend OCR failed, trying client OCR', e); }
-    }
-    return null; // signal caller to use client-side Tesseract
-  },
 };
 
 // ── state normalization / migration ─────────────────────────────────
 function normalize(d) {
   d = d || {};
-  d.meta ||= { clanName: '불면증', schemaVersion: 1 };
+  d.meta ||= { clanName: '불면증', schemaVersion: 2 };
   d.settings ||= { totalDiamonds: 170000, staffRatio: 0.05, powerRatio: 0.40, participationRatio: 0.55 };
   d.tiers ||= [];
   d.powerRanks ||= [];
@@ -94,25 +128,25 @@ function normalize(d) {
   d.rotationQueues ||= [];
   d.weaponProgress ||= [];
 
-  // participation: { weeks:[{id,label,from,to}], current, data:{ [weekId]:{ [memberId]:{ [content]:count } } } }
+  // date-based participation: byDate[YYYY-MM-DD][contentName] = [memberId, ...]
   d.participation ||= {};
-  d.participation.weeks ||= [];
-  d.participation.data ||= {};
-  if (!d.participation.weeks.length) {
-    const wid = uid();
-    d.participation.weeks.push({ id: wid, label: '이번 주', from: '', to: '' });
-    d.participation.current = wid;
-    d.participation.data[wid] = {};
+  d.participation.byDate ||= {};
+  // migrate legacy week-based model if present (rarely needed after fresh start)
+  if (d.participation.data && !Object.keys(d.participation.byDate).length) {
+    delete d.participation.weeks; delete d.participation.data; delete d.participation.current;
   }
-  d.participation.current ||= d.participation.weeks[0].id;
+  d.participation.scoreFrom ||= '';
+  d.participation.scoreTo ||= '';
 
   d.distributionLog ||= [];
   d.schedule ||= [];
+  d.statusBoards ||= []; // generic per-member status tracking (장비/주문석/성좌 등)
   return d;
 }
 
 // ── mutation helpers (operate on DB.state; caller commits) ──────────
 export const Mutations = {
+  // members ----------------------------------------------------------
   upsertMember(m) {
     const list = DB.state.members;
     if (m.id) {
@@ -125,28 +159,38 @@ export const Mutations = {
   },
   removeMember(id) { DB.state.members = DB.state.members.filter((m) => m.id !== id); },
 
-  weekData(weekId = DB.state.participation.current) {
-    return (DB.state.participation.data[weekId] ||= {});
+  // date-based participation -----------------------------------------
+  event(date, content) {
+    const day = (DB.state.participation.byDate[date] ||= {});
+    return (day[content] ||= []);
   },
-  setAttendance(memberId, content, count, weekId = DB.state.participation.current) {
-    const wd = this.weekData(weekId);
-    const mk = (wd[memberId] ||= {});
-    if (count > 0) mk[content] = count; else delete mk[content];
+  getEvent(date, content) {
+    return (DB.state.participation.byDate[date] || {})[content] || [];
   },
-  bumpAttendance(memberId, content, delta = 1, weekId) {
-    const wd = this.weekData(weekId);
-    const mk = (wd[memberId] ||= {});
-    mk[content] = Math.max(0, (mk[content] || 0) + delta);
-    if (!mk[content]) delete mk[content];
-    return mk[content] || 0;
+  setEventMembers(date, content, ids) {
+    const day = (DB.state.participation.byDate[date] ||= {});
+    const arr = [...new Set(ids.map(Number))];
+    if (arr.length) day[content] = arr; else { delete day[content]; if (!Object.keys(day).length) delete DB.state.participation.byDate[date]; }
   },
-  addWeek(label) {
-    const id = uid();
-    DB.state.participation.weeks.unshift({ id, label: label || '새 주차', from: '', to: '' });
-    DB.state.participation.data[id] = {};
-    DB.state.participation.current = id;
-    return id;
+  addEventMembers(date, content, ids) {
+    const cur = this.getEvent(date, content);
+    this.setEventMembers(date, content, [...cur, ...ids.map(Number)]);
   },
+  toggleEventMember(date, content, id) {
+    const cur = new Set(this.getEvent(date, content));
+    cur.has(+id) ? cur.delete(+id) : cur.add(+id);
+    this.setEventMembers(date, content, [...cur]);
+  },
+  removeEventMember(date, content, id) {
+    this.setEventMembers(date, content, this.getEvent(date, content).filter((x) => x !== +id));
+  },
+  dateSummary(date) {
+    const day = DB.state.participation.byDate[date] || {};
+    const out = {}; for (const c of Object.keys(day)) out[c] = day[c].length; return out;
+  },
+  datesWithData() { return Object.keys(DB.state.participation.byDate).sort(); },
+
+  // distribution log -------------------------------------------------
   logDistribution(entry) {
     DB.state.distributionLog.unshift({ id: uid(), date: entry.date || '', ...entry });
   },

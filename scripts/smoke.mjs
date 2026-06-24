@@ -23,7 +23,7 @@ const ok = (name) => { console.log('  ✅ ' + name); pass++; };
 const bad = (name, e) => { console.log('  ❌ ' + name + ' — ' + (e?.stack || e)); fail++; };
 
 const { DB, Mutations } = await import('../docs/js/db.js');
-const { computeSettlement, scoreFromAttendance } = await import('../docs/js/calc.js');
+const { computeSettlement, computeScores } = await import('../docs/js/calc.js');
 const app = document.getElementById('app');
 
 await DB.init();
@@ -35,6 +35,7 @@ const views = {
   participation: (await import('../docs/js/views/participation.js')).renderParticipation,
   diamond: (await import('../docs/js/views/diamond.js')).renderDiamond,
   rotation: (await import('../docs/js/views/rotation.js')).renderRotation,
+  gear: (await import('../docs/js/views/gear.js')).renderGear,
   schedule: (await import('../docs/js/views/schedule.js')).renderSchedule,
   settings: (await import('../docs/js/views/settings.js')).renderSettings,
 };
@@ -57,14 +58,28 @@ try {
   if (DB.state.members.length === before + 1 && m.id) ok('upsertMember adds'); else bad('upsertMember', 'count');
   Mutations.upsertMember({ id: m.id, score: 175 });
   if (DB.state.members.find((x) => x.id === m.id).score === 175) ok('upsertMember edits'); else bad('upsertMember edit', 'score');
-  Mutations.bumpAttendance(m.id, '7그룹', 1);
-  Mutations.bumpAttendance(m.id, '심연 중앙', 1);
-  const att = Mutations.weekData()[m.id];
-  const sc = scoreFromAttendance(att, DB.state.contentCatalog);
-  if (sc === 65) ok(`attendance→score 7그룹(15)+심연중앙(50)=${sc}`); else bad('attendance score', `got ${sc}, want 65`);
+  const D = '2026-06-24';
+  Mutations.addEventMembers(D, '7그룹', [m.id]);
+  Mutations.addEventMembers(D, '심연 중앙', [m.id]);
+  const scMap = computeScores(DB.state.participation.byDate, DB.state.contentCatalog, [m], {});
+  if (scMap[m.id] === 65) ok(`date events→score 7그룹(15)+심연중앙(50)=${scMap[m.id]}`); else bad('event score', `got ${scMap[m.id]}, want 65`);
+  Mutations.toggleEventMember(D, '7그룹', m.id); // remove
+  if (!Mutations.getEvent(D, '7그룹').includes(m.id)) ok('toggleEventMember removes'); else bad('toggle', 'still present');
   Mutations.removeMember(m.id);
   if (DB.state.members.length === before) ok('removeMember'); else bad('removeMember', 'count');
 } catch (e) { bad('mutations', e); }
+
+console.log('\n── undo / redo ──');
+try {
+  const n0 = DB.state.members.length;
+  const tm = Mutations.upsertMember({ name: '언두테스트', cls: '전사' }); DB.commit();
+  const n1 = DB.state.members.length;
+  const u = DB.undo();
+  if (u && DB.state.members.length === n0) ok(`undo (${n1}→${DB.state.members.length})`); else bad('undo', `len=${DB.state.members.length}`);
+  const r = DB.redo();
+  if (r && DB.state.members.length === n1) ok(`redo (→${DB.state.members.length})`); else bad('redo', `len=${DB.state.members.length}`);
+  DB.undo(); // clean up the test member
+} catch (e) { bad('undo/redo', e); }
 
 console.log('\n── settlement consistency (post-init, current roster) ──');
 try {

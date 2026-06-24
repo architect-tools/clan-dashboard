@@ -1,6 +1,6 @@
 // dashboard.js — overview: clan stats, tier distribution, top lists.
 import { DB } from '../db.js';
-import { computeSettlement, tierForScore, scoreFromAttendance } from '../calc.js';
+import { computeSettlement, tierForScore } from '../calc.js';
 import { el, fmt } from '../util.js';
 import { CONFIG, TIER_COLORS, CLASSES } from '../config.js';
 import { page, card, statCard, table, classBadge, tierBadge, btn } from './ui.js';
