@@ -10,6 +10,16 @@ import { uid, toast } from './util.js';
 const LIVE = () => !!CONFIG.APPS_SCRIPT_URL;
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
+const DEFAULT_RULES = `1. 필요 시 최우선 분배 대상 우선
+2. 전용 주문석·엘릭서·탈것·성좌: 투력 순 분배
+3. 공용 주문석·마부핵: 고투(상위) 제외, 내판가 적용 (기준 투력 필요)
+4. 드랍템
+   · 무기   4티(60만↑ 투력순) / 3티(50만↑ 내판가·참여도) / 2티(65만↓ 내판가·참여도)
+   · 방어구 4티(60만 투력순) / 3티(50만 내판가·참여도) / 2티(65만↓ 내판가·참여도)
+   · 장신구 4티(70만↑ 순번제) / 3티(65만 순번제·내판가) / 2티↓(내판가·참여도)
+   · 설계도(상급/중급/하급): 상급 순번제, 중급·하급 내판가·참여도
+* 참여도 우선, 중복 입찰 시 1가지 상품만 (몰림 방지) — 직전 입찰자는 다음 순번으로`;
+
 export const DB = {
   state: null,
   _subs: new Set(),
@@ -141,6 +151,7 @@ function normalize(d) {
   d.distributionLog ||= [];
   d.schedule ||= [];
   d.statusBoards ||= []; // generic per-member status tracking (장비/주문석/성좌 등)
+  if (d.distributionRules == null) d.distributionRules = DEFAULT_RULES;
   return d;
 }
 

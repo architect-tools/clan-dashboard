@@ -25,16 +25,15 @@ export function renderRotation() {
     { label: '', align: 'right', render: (r) => btn('삭제', () => { s.distributionLog = s.distributionLog.filter((x) => x.id !== r.id); DB.commit(); renderRotation(); }, { kind: 'ghost-danger' }) },
   ], s.distributionLog, { empty: '분배 내역이 없습니다.' })));
 
-  // ── weapon progress ──
-  if (s.weaponProgress?.length) {
-    body.appendChild(card('무기 강화 현황', table([
-      { key: 'name', label: '닉네임', render: (w) => el('b', { text: w.name }) },
-      { key: 'cls', label: '직업' },
-      { key: 'main', label: '주무기', align: 'center' },
-      { key: 'sub1', label: '보조', align: 'center' },
-      { key: 'sub2', label: '보조2', align: 'center' },
-    ], s.weaponProgress), { className: 'card-compact' }));
-  }
+  // ── 분배 기준 (editable reference) ──
+  const rulesArea = el('textarea.input', { rows: 11, value: s.distributionRules || '',
+    style: { width: '100%', fontFamily: 'inherit', lineHeight: '1.7', resize: 'vertical' } });
+  let dirty = false;
+  rulesArea.addEventListener('input', () => { dirty = true; });
+  body.appendChild(card('분배 기준', el('div', {}, [
+    rulesArea,
+    el('div.row-actions', {}, [btn('기준 저장', () => { s.distributionRules = rulesArea.value; DB.commit(); toast('분배 기준 저장됨'); dirty = false; }, { kind: 'primary' })]),
+  ]), { actions: el('span.hint', { text: '무기 강화 현황은 “장비/숙련 현황” 메뉴로 이동했습니다' }) }));
 
   function renderQueue(qу) {
     const nextIdx = qу.items.findIndex((it) => !it.status);

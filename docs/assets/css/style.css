@@ -300,6 +300,11 @@ select.input{cursor:pointer}
 .rec-count{color:var(--accent);font-size:12px;font-weight:700;flex:1}
 .chips{display:flex;flex-wrap:wrap;gap:5px}
 .chip{padding:3px 9px;border-radius:7px;background:var(--panel2);border:1px solid var(--line2);font-size:12px}
+.summary-chips{margin-bottom:6px}
+.cls-chip{color:var(--c);border-color:color-mix(in srgb,var(--c) 35%,transparent);background:color-mix(in srgb,var(--c) 12%,transparent);font-weight:600}
+.banner{display:flex;align-items:center;gap:12px;padding:13px 16px;border-radius:12px;font-size:13.5px;
+  background:color-mix(in srgb,var(--warn) 12%,transparent);border:1px solid color-mix(in srgb,var(--warn) 35%,transparent)}
+.banner .btn{margin-left:auto}
 
 .checkin{display:flex;flex-direction:column;gap:12px}
 .checkin-head{display:flex;align-items:baseline;gap:10px;font-size:14px}
