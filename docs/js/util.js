@@ -87,9 +87,12 @@ function levenshtein(a, b) {
 }
 
 /** 0..1 similarity combining raw + jamo-level edit distance. */
-export function similarity(a, b) {
-  const na = normName(a), nb = normName(b);
-  if (!na || !nb) return 0;
+// Fold digits to their look-alike letters — OCR commonly reads s하울s as "5하울5",
+// VISVIM as "V15V1M", etc. Applied to both sides so it only ever helps.
+const CONFUSE = { '0': 'o', '1': 'l', '2': 'z', '3': 'e', '4': 'a', '5': 's', '6': 'b', '7': 't', '8': 'b', '9': 'g' };
+function fold(s) { return s.replace(/[0-9]/g, (d) => CONFUSE[d]); }
+
+function simCore(na, nb) {
   if (na === nb) return 1;
   const raw = 1 - levenshtein(na, nb) / Math.max(na.length, nb.length);
   const ja = toJamo(na), jb = toJamo(nb);
@@ -102,6 +105,15 @@ export function similarity(a, b) {
     sim = Math.max(sim, 0.55 + 0.4 * (minL / maxL));
   }
   return Math.max(0, Math.min(1, sim));
+}
+
+export function similarity(a, b) {
+  const na = normName(a), nb = normName(b);
+  if (!na || !nb) return 0;
+  let sim = simCore(na, nb);
+  const fa = fold(na), fb = fold(nb);
+  if (fa !== na || fb !== nb) sim = Math.max(sim, simCore(fa, fb) * 0.98); // tiny penalty so exact wins ties
+  return sim;
 }
 
 /**

@@ -46,14 +46,8 @@ const result = await page.evaluate(async () => {
     const m = O.matchRoster(r.lines, roster);
     out[label] = { lines: r.lines, matched: m.matched.map((x) => x.member.name), maybe: m.maybe.map((x) => x.member.name) };
   };
-  await run('full-psm11', null, { psm: '11' });
-  await run('panel-psm11', panel, { psm: '11' });
-  // refined (line-detection + per-line re-OCR, no grid)
-  for (const [label, crop, seg] of [['refined-full-seg6', null, '6'], ['refined-panel-seg6', panel, '6'], ['refined-panel-seg4', panel, '4'], ['refined-panel-seg11', panel, '11']]) {
-    const r = await O.extractRefined(img, crop, () => {}, { segPsm: seg });
-    const m = O.matchRoster(r.lines, roster);
-    out[label] = { lines: r.lines, matched: m.matched.map((x) => x.member.name), maybe: m.maybe.map((x) => x.member.name) };
-  }
+  await run('FULL image (multiscale)', null, {});
+  await run('PANEL crop (multiscale)', panel, {});
   return { dims: W + 'x' + H, out };
 }).catch((e) => ({ error: String(e) }));
 
@@ -63,8 +57,8 @@ else {
   for (const [label, r] of Object.entries(result.out)) {
     console.log(`[${label}]`);
     console.log('  신뢰   :', score(r.matched));
-    console.log('  +확인  :', score([...r.matched, ...r.maybe]));
     console.log('  matched:', r.matched.join(', '));
+    console.log('  RAW    :', JSON.stringify(r.lines));
   }
 }
 

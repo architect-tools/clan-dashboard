@@ -5,8 +5,8 @@
 import { matchName, normName } from './util.js';
 
 const TESSERACT_CDN = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
-const MAX_SIDE = 3400;     // cap upscaled canvas to keep memory sane
-const SCALE = 2.4;         // default upscale factor (whole-image mode)
+const MAX_SIDE = 5200;     // cap upscaled canvas to keep memory sane
+const SCALE = 3.5;         // default upscale factor (small game-UI text needs enlarging)
 const TARGET_CELL_H = 96;  // slot mode: normalize each cell to ~this text height
                            // (resolution-independent — no fixed-pixel assumptions)
 
@@ -60,10 +60,10 @@ export function preprocess(img, crop = null, scaleHint = SCALE, { invert = false
   return { dataUrl: cv.toDataURL('image/png'), canvas: cv, scale, ox: sx, oy: sy };
 }
 
-let _workerPromise = null;
-async function getWorker(onProgress) {
-  if (_workerPromise) return _workerPromise;
-  _workerPromise = (async () => {
+const _workers = {};  // cache one worker per language combo
+async function getWorker(onProgress, lang = 'kor+eng') {
+  if (_workers[lang]) return _workers[lang];
+  _workers[lang] = (async () => {
     if (!window.Tesseract) {
       onProgress({ stage: 'OCR 엔진 로딩(최초 1회)', progress: 0.05 });
       await new Promise((res, rej) => {
@@ -72,26 +72,32 @@ async function getWorker(onProgress) {
         document.head.appendChild(s);
       });
     }
-    onProgress({ stage: '한글 데이터 준비(최초 1회 다운로드)', progress: 0.1 });
-    const worker = await window.Tesseract.createWorker('kor+eng', 1, {
-      logger: (m) => { if (m.status === 'recognizing text') onProgress({ stage: '문자 인식 중', progress: 0.3 + m.progress * 0.65 }); },
+    onProgress({ stage: `OCR 데이터 준비(${lang}, 최초 1회)`, progress: 0.1 });
+    return window.Tesseract.createWorker(lang, 1, {
+      logger: (m) => { if (m.status === 'recognizing text') onProgress({ stage: '문자 인식 중', progress: 0.3 + m.progress * 0.6 }); },
     });
-    return worker;
   })();
-  return _workerPromise;
+  return _workers[lang];
 }
 
 /**
- * Whole-image OCR (sparse text). Returns cleaned candidate tokens.
+ * Whole-region OCR with MULTI-SCALE union. OCR of small game text is
+ * non-monotonic in scale — a name garbled at one zoom level is read cleanly at
+ * another. Running a few scales and unioning all recognized text catches names
+ * no single pass gets. Combined with confusable-char matching downstream.
  */
-export async function extractLines(img, crop, onProgress = () => {}, { psm = '11', invert = false, scale = SCALE } = {}) {
-  const { dataUrl } = preprocess(img, crop, scale, { invert });
-  const worker = await getWorker(onProgress);
+export async function extractLines(img, crop, onProgress = () => {}, { psm = '11', invert = false, scales = [3.0, 3.8, 4.6], lang = 'kor+eng' } = {}) {
+  const worker = await getWorker(onProgress, lang);
   await worker.setParameters({ tessedit_pageseg_mode: psm });
-  onProgress({ stage: '문자 인식 중', progress: 0.3 });
-  const { data } = await worker.recognize(dataUrl);
+  let all = '';
+  for (let i = 0; i < scales.length; i++) {
+    onProgress({ stage: `문자 인식 중 (${i + 1}/${scales.length})`, progress: 0.2 + i / scales.length * 0.75 });
+    const { dataUrl } = preprocess(img, crop, scales[i], { invert });
+    const { data } = await worker.recognize(dataUrl);
+    all += '\n' + (data.text || '');
+  }
   onProgress({ stage: '완료', progress: 1 });
-  return { lines: dedup(data.text || ''), engine: `tesseract(psm${psm}${invert ? '+inv' : ''})` };
+  return { lines: dedup(all), engine: `tesseract(${lang},x${scales.length}scale)` };
 }
 
 /**
