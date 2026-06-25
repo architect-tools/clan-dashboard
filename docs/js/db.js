@@ -36,9 +36,9 @@ export const DB = {
   setCallbacks({ onHistory, onRefresh }) { this._onHistory = onHistory; this._onRefresh = onRefresh; },
 
   async init() {
-    let data;
+    let data, fromBackend = false;
     if (LIVE()) {
-      try { data = await this._fetch('getAll'); }
+      try { data = await this._fetch('getAll'); fromBackend = !!data; }
       catch (e) { console.error('backend load failed, falling back to local', e); toast('백엔드 연결 실패 — 로컬 모드로 표시', 'error'); }
     }
     if (!data) {
@@ -50,6 +50,8 @@ export const DB = {
     this._snapshot = clone(this.state);
     this._undo = []; this._redo = [];
     if (!LIVE()) this._persistLocal();
+    // 라이브 첫 연결인데 백엔드가 비어 있으면, 로컬/시드 데이터를 클라우드로 1회 이관(데이터 유실 방지)
+    else if (!fromBackend) { try { await this._fetch('save', { data: this.state }); toast('현재 데이터를 클라우드로 옮겼습니다'); } catch (e) { console.warn('초기 이관 실패', e); } }
     this._emit(); this._onHistory && this._onHistory();
     return this.state;
   },
