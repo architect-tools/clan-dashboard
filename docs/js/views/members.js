@@ -32,7 +32,6 @@ export function renderMembers() {
     subtitle: `클랜원 ${active.length}명 · 직업/전투력/참여점수 관리`,
     actions: [
       btn(quickEdit ? '빠른편집 끄기' : '빠른편집', () => { quickEdit = !quickEdit; refresh(); }, { kind: quickEdit ? 'primary' : 'ghost', admin: true }),
-      btn('+ 여러명 추가', () => bulkAdd(), { kind: 'ghost', admin: true }),
       btn('+ 클랜원 추가', () => editMember(null), { kind: 'primary', admin: true }),
     ],
   });
@@ -78,31 +77,6 @@ export function renderMembers() {
 
   function refresh() { renderMembers(); }
   function setSort(k) { if (sortKey === k) sortDir *= -1; else { sortKey = k; sortDir = (k === 'name') ? 1 : -1; } refresh(); }
-}
-
-function bulkAdd() {
-  const ta = el('textarea.input', { rows: 10, placeholder: '한 줄에 한 명씩\n예) 닉네임\n또는) 닉네임, 직업, 전투력\n붉으래, 암살자, 128\n보스' , style: { width: '100%', fontFamily: 'inherit', resize: 'vertical' } });
-  modal('여러 명 추가 (붙여넣기)', (close) => el('div.form', {}, [
-    el('p.hint', { text: '게임 클랜 명단을 그대로 붙여넣으세요. 한 줄에 한 명. “닉네임, 직업, 전투력” 형식도 인식합니다.' }),
-    ta,
-    el('div.modal-actions', {}, [
-      btn('취소', close),
-      btn('추가', () => {
-        const lines = ta.value.split('\n').map((l) => l.trim()).filter(Boolean);
-        let n = 0;
-        for (const line of lines) {
-          const parts = line.split(/[\t,]|\s{2,}/).map((x) => x.trim()).filter(Boolean);
-          const name = parts[0]; if (!name) continue;
-          const cls = parts.find((p) => CLASS_LIST.includes(p)) || '';
-          const power = parts.map((p) => parseFloat(p)).find((x) => Number.isFinite(x)) || 0;
-          Mutations.upsertMember({ name, cls, power, score: 0 });
-          n++;
-        }
-        if (!n) return toast('추가할 이름이 없습니다', 'error');
-        DB.commit(); toast(`${n}명 추가되었습니다`); close(); renderMembers();
-      }, { kind: 'primary' }),
-    ]),
-  ]));
 }
 
 function editMember(m) {

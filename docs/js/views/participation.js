@@ -287,6 +287,11 @@ function checkinPanel(content) {
 
   const picked = new Map(); // memberId -> {member, score, token, checked}
   const manual = new Map();
+  // OCR에서 체크된 인원을 '명단에서 직접 선택' 목록에도 반영(체크 동기화)
+  const reflectToManual = (id, on) => {
+    const cb = manualPick.querySelector(`input[data-mid="${id}"]`);
+    if (cb) { cb.checked = on; cb.closest('.pick-item').classList.toggle('on', on); }
+  };
   async function runOcr() {
     if (!curImg) return;
     const busy = busyOverlay('참여자 인식 중…', 'OCR 엔진 준비 중');
@@ -300,6 +305,8 @@ function checkinPanel(content) {
       picked.clear();
       for (const mm of matched) picked.set(mm.member.id, { ...mm, checked: true });
       for (const mm of maybe) if (!picked.has(mm.member.id)) picked.set(mm.member.id, { ...mm, checked: false });
+      for (const mm of picked.values()) if (mm.checked) reflectToManual(mm.member.id, true); // 명단 직접선택 목록과 체크 동기화
+      manualPick.open = true; // 동기화된 목록을 바로 펼쳐 보여줌
       progress.textContent = `인식 완료 — 신뢰 ${matched.length}명(자동 체크) · 확인필요 ${maybe.length}명. 못 찾은 인원은 아래 “명단에서 직접 선택”으로 추가하세요.`;
       renderResult([]);
     } catch (e) { console.error(e); toast('OCR 실패: ' + e.message, 'error'); progress.textContent = ''; }
@@ -325,7 +332,7 @@ function checkinPanel(content) {
       ocrResult.appendChild(el('div.ocr-head', { text: `인식 ${items.length}명 (체크된 인원만 기록)` }));
       const list = el('div.match-list');
       items.forEach((mm) => {
-        const cb = el('input', { type: 'checkbox', checked: mm.checked, onchange: (e) => { mm.checked = e.target.checked; } });
+        const cb = el('input', { type: 'checkbox', checked: mm.checked, onchange: (e) => { mm.checked = e.target.checked; reflectToManual(mm.member.id, e.target.checked); } });
         list.appendChild(el('label.match-row', { class: mm.score < 0.72 ? 'low' : '' }, [
           cb, el('b', { text: mm.member.name }), el('span.match-token', { text: `“${mm.token}”` }),
           el('span.match-score', { text: Math.round(mm.score * 100) + '%' }),

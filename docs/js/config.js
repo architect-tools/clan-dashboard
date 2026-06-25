@@ -47,4 +47,4 @@ export const TIER_COLORS = {
 };
 
 // Content category display order
-export const CATEGORY_ORDER = ['필드 보스', '월드 보스', '거인의 탑', '심연의 전장', '기타'];
+export const CATEGORY_ORDER = ['필드 보스', '월드 보스', '거인의 탑', '심연의 전장', '클랜 활동', '기타'];
