@@ -4,8 +4,17 @@ import { el, fmt, toast, uid, clear } from '../util.js';
 import { page, card, table, btn, modal, select, input, field, classBadge, confirmDialog } from './ui.js';
 
 const DIST_TYPES = ['순번제', '투력', '내판', '참여도', '고정', '기타'];
+const BID_TYPES = ['투력순', '참여도순', '경매', '선착순'];
 let dropQ = '';
 const openQueues = new Set(); // 펼쳐진 큐 이름(재렌더에도 유지)
+let countdownTimer = null;
+const pad2 = (n) => String(n).padStart(2, '0');
+function remainText(ms) {
+  if (ms <= 0) return '마감됨';
+  const s = Math.floor(ms / 1000), d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return (d > 0 ? `${d}일 ` : '') + `${pad2(h)}:${pad2(m)}:${pad2(sec)}`;
+}
+const remainClass = (ms) => ms <= 0 ? 'cd-over' : ms < 600000 ? 'cd-soon' : ms < 3600000 ? 'cd-near' : 'cd-far';
 
 export function renderRotation() {
   const s = DB.state;
@@ -13,6 +22,25 @@ export function renderRotation() {
     subtitle: '드랍 · 내판 · 순번제 · 분배 기록',
     actions: [btn('내판 도우미', () => saleHelper()), btn('+ 분배 기록', () => logDist(), { kind: 'primary' })],
   });
+
+  // ── 진행 중 내판 (입찰 보드) ──
+  clearInterval(countdownTimer); countdownTimer = null;
+  const sales = s.sales || [];
+  const board = sales.length
+    ? el('div.sale-board', {}, sales.map((sale) => renderSale(sale)))
+    : el('div.empty.small', { text: '진행 중인 내판이 없습니다. “+ 내판 올리기”로 시작하세요.' });
+  body.appendChild(card('진행 중 내판', board, { actions: btn('+ 내판 올리기', () => postSale(), { kind: 'primary' }) }));
+  if (sales.length) {
+    const tick = () => document.querySelectorAll('.sale-cd').forEach((c) => {
+      const rem = (+c.dataset.deadline) - Date.now();
+      c.textContent = remainText(rem); c.className = 'sale-cd ' + remainClass(rem);
+    });
+    tick(); countdownTimer = setInterval(tick, 1000);
+    if (typeof MutationObserver !== 'undefined') {
+      const obs = new MutationObserver(() => { if (!document.querySelector('.sale-board')) { clearInterval(countdownTimer); countdownTimer = null; obs.disconnect(); } });
+      obs.observe(document.getElementById('app') || document.body, { childList: true, subtree: true });
+    }
+  }
 
   // ── 순번제 큐 (컴팩트 아코디언) ──
   const qWrap = s.rotationQueues.length
@@ -206,5 +234,75 @@ export function renderRotation() {
         result,
       ]);
     }, { wide: 'x' });
+  }
+
+  // ── 내판 입찰 보드 ──
+  function renderSale(sale) {
+    const rem = (+sale.deadline) - Date.now();
+    const head = el('div.sale-head', {}, [
+      el('b.sale-item', { text: sale.item }),
+      el('span.sale-type', { text: sale.bidType }),
+      sale.basePrice ? el('span.sale-price', { text: `기준 ${fmt(sale.basePrice)}` }) : null,
+      el('span.sale-cd', { dataset: { deadline: String(sale.deadline) }, class: remainClass(rem), text: remainText(rem) }),
+    ]);
+    const bids = el('div.sale-bids', {}, sale.bids.length
+      ? sale.bids.map((b, i) => el('span.bid-chip', {}, [
+        el('span', { text: b.name + (b.amount ? ` · ${fmt(b.amount)}` : '') }),
+        btn('✕', () => { sale.bids.splice(i, 1); DB.commit(); renderRotation(); }, { kind: 'ghost-danger', title: '입찰 취소(관리자)' }),
+      ]))
+      : [el('span.muted', { text: '입찰 없음' })]);
+    return el('div.sale-card', {}, [head, bids, el('div.row-actions', {}, [
+      btn('+ 입찰', () => addBid(sale), { kind: 'ghost' }),
+      btn('마감 & 정산', () => closeSale(sale)),
+      btn('내판 취소', () => confirmDialog(`'${sale.item}' 내판을 취소(삭제)할까요?`, () => { s.sales = s.sales.filter((x) => x.id !== sale.id); DB.commit(); renderRotation(); }, { danger: true, yesText: '취소' }), { kind: 'ghost-danger' }),
+    ])]);
+  }
+  function postSale() {
+    const item = input({ placeholder: '아이템명' });
+    const bidType = select(BID_TYPES, '투력순');
+    const basePrice = input({ type: 'number', value: '10' });
+    const n = new Date(Date.now() + 3600000);
+    const deadline = input({ type: 'datetime-local', value: `${n.getFullYear()}-${pad2(n.getMonth() + 1)}-${pad2(n.getDate())}T${pad2(n.getHours())}:${pad2(n.getMinutes())}` });
+    modal('내판 올리기', (close) => el('div.form', {}, [
+      field('아이템명', item),
+      el('div.form-grid', {}, [field('입찰 타입', bidType), field('기준/시작가(다이아)', basePrice)]),
+      field('마감 시간', deadline),
+      el('p.hint', { text: '투력순/참여도순 = 입찰자 중 자동 순위 · 경매 = 입찰가 최고 · 선착순 = 먼저 입찰' }),
+      el('div.modal-actions', {}, [btn('취소', close), btn('올리기', () => {
+        if (!item.value.trim()) return toast('아이템 입력', 'error');
+        const dl = Date.parse(deadline.value);
+        (s.sales = s.sales || []).unshift({ id: uid(), item: item.value.trim(), bidType: bidType.value, basePrice: +basePrice.value || 0, deadline: isNaN(dl) ? Date.now() + 3600000 : dl, bids: [] });
+        DB.commit(); close(); toast('내판이 올라갔습니다'); renderRotation();
+      }, { kind: 'primary' })]),
+    ]));
+  }
+  function addBid(sale) {
+    const active = s.members.filter((m) => m.active !== false);
+    const member = select(active.map((m) => m.name), active[0]?.name);
+    const amount = input({ type: 'number', placeholder: '입찰가' });
+    modal('입찰 추가', (close) => el('div.form', {}, [
+      field('클랜원', member),
+      sale.bidType === '경매' ? field('입찰가(다이아)', amount) : null,
+      el('div.modal-actions', {}, [btn('취소', close), btn('입찰', () => {
+        if (sale.bids.some((b) => b.name === member.value)) return toast('이미 입찰함', 'error');
+        sale.bids.push({ name: member.value, amount: sale.bidType === '경매' ? (+amount.value || 0) : 0 });
+        DB.commit(); close(); renderRotation();
+      }, { kind: 'primary' })]),
+    ]));
+  }
+  function closeSale(sale) {
+    if (!sale.bids.length) return toast('입찰자가 없습니다', 'error');
+    const byName = Object.fromEntries(s.members.map((m) => [m.name, m]));
+    const ranked = [...sale.bids];
+    if (sale.bidType === '투력순') ranked.sort((a, b) => (byName[b.name]?.power || 0) - (byName[a.name]?.power || 0));
+    else if (sale.bidType === '참여도순') ranked.sort((a, b) => (byName[b.name]?.score || 0) - (byName[a.name]?.score || 0));
+    else if (sale.bidType === '경매') ranked.sort((a, b) => (b.amount || 0) - (a.amount || 0));
+    const win = ranked[0];
+    const price = sale.bidType === '경매' ? (win.amount || 0) : (sale.basePrice || 0);
+    confirmDialog(`'${sale.item}' 낙찰: ${win.name} (${fmt(price)} 다이아 · ${sale.bidType}). 분배 기록하고 마감할까요?`, () => {
+      Mutations.logDistribution({ date: new Date().toISOString().slice(0, 10), item: sale.item, type: '내판', member: win.name, from: '', price, note: sale.bidType });
+      s.sales = s.sales.filter((x) => x.id !== sale.id);
+      DB.commit(); toast(`${sale.item} → ${win.name} 낙찰`); renderRotation();
+    }, { yesText: '마감 & 기록' });
   }
 }

@@ -235,6 +235,21 @@ select.input{cursor:pointer}
 .rules-det>summary::before{content:'▸ ';color:var(--dim);font-size:11px}
 .rules-det[open]>summary::before{content:'▾ '}
 .rules-body{padding:0 0 16px}
+/* 진행 중 내판 (입찰 보드) */
+.sale-board{display:grid;grid-template-columns:repeat(auto-fill,minmax(264px,1fr));gap:12px}
+.sale-card{border:1px solid var(--line);border-radius:10px;background:var(--bg2);padding:12px 13px;display:flex;flex-direction:column;gap:9px}
+.sale-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sale-item{font-size:14px}
+.sale-type{font-size:11px;font-weight:600;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));border-radius:6px;padding:1px 7px}
+.sale-price{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.sale-cd{margin-left:auto;font-family:var(--mono);font-size:13.5px;font-weight:700}
+.cd-far{color:var(--good)}
+.cd-near{color:var(--warn)}
+.cd-soon{color:var(--bad)}
+.cd-over{color:var(--dim)}
+.sale-bids{display:flex;flex-wrap:wrap;gap:5px;min-height:22px}
+.bid-chip{display:inline-flex;align-items:center;gap:2px;padding:2px 4px 2px 9px;border-radius:7px;background:var(--panel2);border:1px solid var(--line2);font-size:12px}
+.bid-chip .btn{padding:2px 5px}
 
 /* ── schedule ────────────────────────────────────────────────────── */
 .sched-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:0}
