@@ -278,18 +278,23 @@ select.input{cursor:pointer}
 .equip-group{margin:0 0 10px}
 .equip-group-label{font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.5px;text-align:center;
   margin:0 0 8px;padding-top:8px;border-top:1px solid var(--line)}
-.equip-row{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
-.equip-slot{width:82px;text-align:center}
-.equip-box{position:relative;aspect-ratio:1;border-radius:10px;border:1px solid var(--line2);
-  background:linear-gradient(160deg,#3a1f24,#1c1320);display:grid;place-items:center;cursor:pointer;transition:.12s}
-.equip-box:hover{border-color:var(--primary);transform:translateY(-1px)}
-.equip-box.empty{background:var(--bg2);border-style:dashed;border-color:var(--line)}
-.equip-grade{position:absolute;top:3px;left:4px;font-size:10px;font-weight:800;color:#ffd27f;
-  background:rgba(0,0,0,.45);border-radius:4px;padding:0 4px;line-height:1.5}
-.equip-tier{position:absolute;top:4px;right:5px;font-size:10.5px;font-weight:700;color:#cdd7ee;text-shadow:0 1px 2px #000}
-.equip-enh{position:absolute;bottom:2px;right:5px;font-size:14px;font-weight:800;color:#7fffd4;text-shadow:0 1px 2px #000}
-.equip-empty-mark{color:var(--dim);font-size:18px}
+.equip-row{display:grid;grid-template-columns:repeat(var(--cols,4),82px);justify-content:center;gap:10px}
+.equip-slot{text-align:center}
+/* fixed 82×82 (box-sizing:border-box global) → 빈/채움 슬롯 크기 동일 */
+.equip-box{position:relative;width:82px;height:82px;border-radius:10px;border:2px solid var(--line2);
+  background:linear-gradient(160deg,#2a2030,#15121b);display:grid;place-items:center;cursor:pointer;transition:.12s;overflow:hidden}
+.equip-box:hover{transform:translateY(-1px);filter:brightness(1.14)}
+.equip-box.empty{background:var(--bg2);border:1px dashed var(--line)}
+.equip-icon{font-size:30px;line-height:1;opacity:.5}
+.equip-box.empty .equip-icon{opacity:.25}
+.equip-star{position:absolute;top:3px;left:4px;font-size:10px;font-weight:800;line-height:1.5;
+  background:rgba(0,0,0,.55);border-radius:4px;padding:0 4px;text-shadow:0 1px 2px #000}
+.equip-tier{position:absolute;top:4px;right:5px;font-size:10.5px;font-weight:800;color:#e7ecf7;text-shadow:0 1px 3px #000}
+.equip-enh{position:absolute;bottom:2px;right:5px;font-size:14px;font-weight:800;color:#7fffd4;text-shadow:0 1px 3px #000}
 .equip-name{font-size:11px;color:var(--muted);margin-top:5px;white-space:nowrap}
+.equip-box.bg-item::after{content:'';position:absolute;inset:0;pointer-events:none;opacity:.55;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='14' viewBox='0 0 16 14'><path d='M4 0 L12 0 L16 7 L12 14 L4 14 L0 7 Z' fill='none' stroke='%23ffd27f' stroke-opacity='0.55' stroke-width='1'/></svg>");
+  background-size:13px 11px}
 .confirm-msg{margin:0 0 16px;color:var(--muted);font-size:14px}
 @keyframes fade{from{opacity:0}} @keyframes pop{from{transform:scale(.96);opacity:0}}
 /* busy spinner overlay (engine load / OCR) */
