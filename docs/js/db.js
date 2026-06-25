@@ -153,6 +153,7 @@ function normalize(d) {
   d.participation.scoreTo ||= '';
 
   d.distributionLog ||= [];
+  d.dropLog ||= [];     // 드랍 기록: {id, date, content, item, note}
   d.settlements ||= []; // finalized diamond distributions (다이아 분배 확정 기록)
   d.schedule ||= [];
   d.statusBoards ||= []; // generic per-member status tracking (장비/주문석/성좌 등)
