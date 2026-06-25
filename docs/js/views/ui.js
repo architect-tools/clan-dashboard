@@ -20,7 +20,7 @@ export function page(title, { subtitle, actions } = {}) {
 }
 
 export function card(title, children, { className = '', actions } = {}) {
-  return el('div.card ' + className, {}, [
+  return el('div.card', { class: className }, [
     title ? el('div.card-head', {}, [
       el('h3.card-title', { text: title }),
       actions ? el('div.card-actions', {}, [].concat(actions)) : null,
@@ -41,7 +41,10 @@ export function statCard(label, value, { sub, color, icon } = {}) {
 }
 
 export function btn(text, onclick, { kind = '', icon, title } = {}) {
-  return el(`button.btn ${kind ? 'btn-' + kind : ''}`, { onclick, title: title || text }, [
+  // class via el()'s `class` attr — el()'s tag parser rejects spaces, so a
+  // `button.btn btn-primary` tag string would silently fall back to a classless
+  // <div> (looks like text, no pointer cursor). Keep the tag space-free.
+  return el('button.btn', { class: kind ? 'btn-' + kind : '', onclick, title: title || text, type: 'button' }, [
     icon ? el('span.btn-icon', { text: icon }) : null, text,
   ]);
 }
