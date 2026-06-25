@@ -1,4 +1,4 @@
-// ocr.js — screenshot → text lines → roster matches.
+// ocr.js — screenshot → text lines → roster matches. (preproc: raw+b132+b110)
 // Engine: Tesseract.js (kor+eng, sparse-text mode) loaded lazily from CDN.
 // Matching is against the known roster, so even imperfect OCR is recovered by
 // fuzzy hangul matching + the admin's review step.
@@ -125,10 +125,12 @@ export function preprocess(img, crop = null, scaleHint = SCALE, { invert = false
     gray[j] = g; if (g < min) min = g; if (g > max) max = g;
   }
   const range = Math.max(1, max - min);
+  // binarize: true → 132 (back-compat); a number → that threshold; else off
+  const binT = binarize === true ? 132 : (typeof binarize === 'number' ? binarize : null);
   for (let i = 0, j = 0; i < p.length; i += 4, j++) {
     let v = ((gray[j] - min) * 255 / range) | 0;
-    if (binarize) v = v > 132 ? 0 : 255;   // bright text → black on white (Tesseract-friendly)
-    else if (invert) v = 255 - v;          // light-on-dark → dark-on-light
+    if (binT != null) v = v > binT ? 0 : 255;   // bright text → black on white (Tesseract-friendly)
+    else if (invert) v = 255 - v;               // light-on-dark → dark-on-light
     p[i] = p[i + 1] = p[i + 2] = v;
   }
   ctx.putImageData(im, 0, 0);
@@ -162,7 +164,7 @@ async function getWorker(onProgress, lang = 'kor+eng') {
  * another. Running a few scales and unioning all recognized text catches names
  * no single pass gets. Combined with confusable-char matching downstream.
  */
-export async function extractLines(img, crop, onProgress = () => {}, { psm = '11', scales = [2.8, 3.6, 4.4, 5.2], lang = 'kor+eng', variants = [{}, { binarize: true }] } = {}) {
+export async function extractLines(img, crop, onProgress = () => {}, { psm = '11', scales = [2.8, 3.6, 4.4, 5.2], lang = 'kor+eng', variants = [{}, { binarize: 132 }, { binarize: 110 }] } = {}) {
   const worker = await getWorker(onProgress, lang);
   await worker.setParameters({ tessedit_pageseg_mode: psm });
   const perScale = [];
