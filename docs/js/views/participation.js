@@ -150,7 +150,7 @@ function openSlot(cn, ids, byId) {
     el('div.chips', { style: { marginTop: '10px' } }, ids.map((id) => el('span.chip', { text: byId[id]?.name || '?' }))),
     el('div.modal-actions', {}, [
       btn('닫기', close),
-      btn('편집', () => { close(); selContent = cn; renderParticipation(); }, { kind: 'primary' }),
+      Roles.isAdmin() ? btn('편집', () => { close(); selContent = cn; renderParticipation(); }, { kind: 'primary' }) : null,
     ]),
   ]));
 }
@@ -309,11 +309,11 @@ function checkinPanel(content) {
   // manual roster picker (always available, even without screenshot)
   const manualPick = el('details.manual-pick', {}, [
     el('summary', { text: '명단에서 직접 선택 / 추가' }),
-    el('div.pick-grid', {}, roster.map((m) => {
+    el('div.pick-grid', {}, Roles.selfFirst(roster).map((m) => {
       const on = current.has(m.id);
       return el('label.pick-item', { class: on ? 'on' : '' }, [
         el('input', { type: 'checkbox', checked: on, dataset: { mid: m.id }, onchange: (e) => e.target.closest('.pick-item').classList.toggle('on', e.target.checked) }),
-        el('span', { text: m.name }),
+        el('span', { text: m.name + (Roles.isMe(m.name) ? ' (나)' : '') }),
       ]);
     })),
   ]);

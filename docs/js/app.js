@@ -64,6 +64,7 @@ function buildShell() {
   // keyboard: Ctrl/Cmd+Z undo, Ctrl+Shift+Z or Ctrl+Y redo
   document.addEventListener('keydown', (e) => {
     if (!(e.ctrlKey || e.metaKey)) return;
+    if (!Roles.isAdmin()) return; // undo/redo는 공유 상태 보호 위해 관리자만
     const tag = (e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select') return; // don't hijack field editing
     const k = e.key.toLowerCase();

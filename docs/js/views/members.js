@@ -203,7 +203,7 @@ function openMemberDetail(m) {
       : el('div.empty.small', { text: '받은 다이아 없음' }),
 
     el('div.modal-sec', { text: '장착 장비' }),
-    equipGrid(m, { editable: Roles.isAdmin() }),
+    equipGrid(m, { editable: Roles.isAdmin() || Roles.isMe(m.name) }),
     boards.length ? el('div.modal-sec', { text: '기타 현황' }) : null,
     boards.length ? el('div', {}, boards.map((b) => el('div.md-board', {}, [
       el('b', { text: b.name }),

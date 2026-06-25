@@ -127,8 +127,8 @@ export function renderRotation() {
     const itemView = el('input.input', { value: qу.name, readonly: 'readonly', style: { opacity: '.6' } });
     const date = input({ type: 'date', value: new Date().toISOString().slice(0, 10) });
     const type = select(DIST_TYPES, '순번제');
-    const member = select(s.members.map((m) => m.name), person.name);
-    const from = select(['없음', ...s.members.map((m) => m.name)], '없음');
+    const member = select(Roles.selfFirst(s.members.map((m) => m.name)), person.name);
+    const from = select(['없음', ...Roles.selfFirst(s.members.map((m) => m.name))], '없음');
     const price = input({ type: 'number', value: '10' });
     const note = input({ placeholder: '메모(선택)' });
     modal('순번 분배 기록', (close) => el('div.form', {}, [
@@ -147,7 +147,7 @@ export function renderRotation() {
     [qу.items[i], qу.items[j]] = [qу.items[j], qу.items[i]]; DB.commit(); renderRotation();
   }
   function addToQueue(qу) {
-    const nm = select(s.members.map((m) => m.name), s.members[0]?.name);
+    const nm = select(Roles.selfFirst(s.members.map((m) => m.name)), Roles.me() || s.members[0]?.name);
     modal('큐에 인원 추가', (close) => el('div.form', {}, [field('닉네임', nm),
       el('div.modal-actions', {}, [btn('취소', close), btn('추가', () => { qу.items.push({ name: nm.value }); DB.commit(); close(); renderRotation(); }, { kind: 'primary' })])]));
   }
@@ -175,8 +175,8 @@ export function renderRotation() {
     const date = input({ type: 'date', value: new Date().toISOString().slice(0, 10) });
     const item = input({ placeholder: '아이템명' });
     const type = select(DIST_TYPES, '순번제');
-    const member = select(s.members.map((m) => m.name), s.members[0]?.name);
-    const from = select(['없음', ...s.members.map((m) => m.name)], '없음');
+    const member = select(Roles.selfFirst(s.members.map((m) => m.name)), Roles.me() || s.members[0]?.name);
+    const from = select(['없음', ...Roles.selfFirst(s.members.map((m) => m.name))], '없음');
     const price = input({ type: 'number', placeholder: '내판가(다이아, 선택)' });
     const note = input({ placeholder: '메모(선택)' });
     modal('분배 기록', (close) => el('div.form', {}, [
@@ -199,8 +199,8 @@ export function renderRotation() {
       const threshold = input({ type: 'number', placeholder: '예: 90 (이상=10다이아)' });
       const salePrice = input({ type: 'number', value: '10' });
       const active = s.members.filter((mm) => mm.active !== false);
-      const picks = el('div.pick-grid', {}, active.map((mm) => el('label.pick-item', {}, [
-        el('input', { type: 'checkbox', dataset: { id: String(mm.id) } }), el('span', { text: mm.name }),
+      const picks = el('div.pick-grid', {}, Roles.selfFirst(active).map((mm) => el('label.pick-item', {}, [
+        el('input', { type: 'checkbox', dataset: { id: String(mm.id) } }), el('span', { text: mm.name + (Roles.isMe(mm.name) ? ' (나)' : '') }),
       ])));
       const result = el('div', { style: { marginTop: '12px' } });
       const compute = () => {
@@ -286,7 +286,7 @@ export function renderRotation() {
     const isAdm = Roles.isAdmin();
     // 관리자는 누구 이름으로든 대리 입찰 가능, 멤버는 본인(닉네임)으로 고정
     const member = isAdm
-      ? select(active.map((m) => m.name), Roles.me() || active[0]?.name)
+      ? select(Roles.selfFirst(active.map((m) => m.name)), Roles.me() || active[0]?.name)
       : input({ value: Roles.me(), readonly: 'readonly', style: { opacity: '.7' } });
     const amount = input({ type: 'number', placeholder: '입찰가' });
     const bidderName = () => (isAdm ? member.value : Roles.me()).trim();

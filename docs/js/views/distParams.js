@@ -97,7 +97,7 @@ export function renderDistParams() {
   ]), { className: 'card-compact' }));
 
   function addStaff() {
-    const name = select(s.members.map((m) => m.name), s.members[0]?.name);
+    const name = select(Roles.selfFirst(s.members.map((m) => m.name)), Roles.me() || s.members[0]?.name);
     const ratio = input({ type: 'number', step: '0.1', value: '1.3' });
     modal('운영진 추가', (close) => el('div.form', {}, [
       field('닉네임', name), field('비율 (%)', ratio),

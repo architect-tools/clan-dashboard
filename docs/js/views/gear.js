@@ -24,15 +24,17 @@ export function renderGear() {
   });
 
   // ── 장착 장비 (구조화 슬롯, 게임 장비창 레이아웃) ──
-  const activeMembers = s.members.filter((m) => m.active !== false);
+  const me = Roles.me();
+  const activeMembers = Roles.selfFirst(s.members.filter((m) => m.active !== false)); // 본인 먼저
   if (activeMembers.length) {
-    if (!gearMember || !activeMembers.some((m) => m.id === gearMember)) gearMember = activeMembers[0].id;
+    if (!gearMember || !activeMembers.some((m) => m.id === gearMember)) gearMember = activeMembers[0].id; // 기본 = 본인
     const selMember = activeMembers.find((m) => m.id === gearMember);
-    const picker = select(activeMembers.map((m) => ({ value: String(m.id), label: m.name })), String(gearMember),
+    const canEditSel = adm || Roles.isMe(selMember.name); // 멤버는 본인 장비만 편집
+    const picker = select(activeMembers.map((m) => ({ value: String(m.id), label: m.name + (Roles.isMe(m.name) ? ' (나)' : '') })), String(gearMember),
       { onchange: (e) => { gearMember = +e.target.value; renderGear(); } });
     body.appendChild(card('장착 장비', el('div', {}, [
-      el('div.toolbar', {}, [el('span.muted', { text: '클랜원' }), picker, adm ? el('span.hint', { text: '슬롯을 클릭해 등급·티어·강화 입력' }) : null]),
-      equipGrid(selMember, { editable: adm }),
+      el('div.toolbar', {}, [el('span.muted', { text: '클랜원' }), picker, canEditSel ? el('span.hint', { text: '슬롯을 클릭해 등급·티어·강화 입력' }) : el('span.hint', { text: '본인 장비만 편집할 수 있습니다' })]),
+      equipGrid(selMember, { editable: canEditSel }),
     ])));
   }
 
@@ -48,7 +50,7 @@ export function renderGear() {
 
   if (!board) { body.appendChild(el('div.empty', { text: '보드를 추가하세요.' })); return; }
 
-  const members = s.members.filter((m) => m.active !== false);
+  const members = Roles.selfFirst(s.members.filter((m) => m.active !== false)); // 본인 행 먼저
   const tbl = el('table.tbl');
   const headCells = [el('th.sticky-col', { text: '닉네임' }), el('th', { text: '직업', style: { width: '80px' } })];
   board.columns.forEach((col) => headCells.push(el('th', {}, [
@@ -66,8 +68,9 @@ export function renderGear() {
       el('td', { class: 'muted', text: m.cls || '-' }),
     ]);
     const rec = (board.data[m.id] ||= {});
+    const canEditRow = adm || Roles.isMe(m.name); // 멤버는 본인 행만 편집
     board.columns.forEach((col) => {
-      const cell = adm
+      const cell = canEditRow
         ? input({ value: rec[col] ?? '', placeholder: '-', class: 'cell-input', onchange: (e) => { rec[col] = e.target.value; DB.commit(); } })
         : el('span', { class: rec[col] ? '' : 'muted', text: rec[col] || '-' });
       row.appendChild(el('td', {}, [cell]));
