@@ -4,7 +4,8 @@ import { CONFIG } from './config.js';
 import { el, $ } from './util.js';
 
 export const Auth = {
-  ok() { return localStorage.getItem(CONFIG.AUTH_KEY) === '1'; },
+  // 비밀번호(=백엔드 토큰)가 바뀌면 저장된 토큰이 안 맞으므로 재로그인 유도
+  ok() { return localStorage.getItem(CONFIG.AUTH_KEY) === '1' && localStorage.getItem(CONFIG.TOKEN_KEY) === CONFIG.GATE_PASSWORD; },
   logout() { localStorage.removeItem(CONFIG.AUTH_KEY); localStorage.removeItem(CONFIG.TOKEN_KEY); location.reload(); },
 
   /** Resolve once the user passes the gate. */

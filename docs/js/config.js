@@ -8,11 +8,11 @@ export const CONFIG = {
 
   // ── Backend (optional) ───────────────────────────────────────────
   // Paste the Apps Script Web App URL here (…/exec). Blank = standalone mode.
-  APPS_SCRIPT_URL: '',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbx6GJnd7PitETPxym-CZv_LIqL5h_MTEZ0mECcRtk6Rwo0p3f1c7xBZrrhUpoywDB9w/exec',
 
   // Access gate. Change this password. (Obfuscation only — the real write
   // protection is the token checked by the Apps Script backend.)
-  GATE_PASSWORD: 'insomnia',
+  GATE_PASSWORD: '7979',
 
   // localStorage keys
   STORE_KEY: 'clandash.v1.data',
