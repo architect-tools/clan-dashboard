@@ -17,7 +17,6 @@ export function renderDiamond() {
     actions: [
       btn('💎 분배 확정', () => finalize(), { kind: 'primary' }),
       btn('📜 분배 기록', () => openHistory()),
-      btn('CSV 내보내기', () => exportCsv(res), { kind: 'ghost' }),
       btn('설정 변경', () => location.hash = '#/settings', { kind: 'ghost' }),
     ],
   });
@@ -97,56 +96,56 @@ function finalize() {
   );
 }
 
-// ── 분배 기록 모달: 누적 다이아 랭킹 + 회차 목록(클릭 → 상세) ──
+// ── 분배 기록 모달: 회차 슬롯 목록만 (클릭 → 상세) ──
 function openHistory() {
   const s = DB.state;
   const list = s.settlements || [];
-  const byId = Object.fromEntries(s.members.map((m) => [m.id, m]));
-  const cum = {};
-  for (const st of list) for (const e of st.entries) cum[e.memberId] = (cum[e.memberId] || 0) + e.total;
-  const rankRows = Object.entries(cum).map(([id, total]) => ({ name: byId[id]?.name || '(탈퇴)', total })).sort((a, b) => b.total - a.total);
+  modal('📜 분배 기록', (close) => (
+    !list.length
+      ? el('div.empty', { text: '확정된 분배가 아직 없습니다. 정산 후 “💎 분배 확정”을 누르면 여기에 기록됩니다.' })
+      : el('div.dist-list', {}, list.map((st) => el('div.dist-row', { onclick: () => openSettlementDetail(st) }, [
+        el('div.dist-main', {}, [el('b', { text: `${st.from || '?'} ~ ${st.to || '?'}` }), el('span.muted', { text: ` · ${st.entries.length}명 · 확정 ${st.date}` })]),
+        el('div.dist-side', {}, [
+          el('span', { text: `${fmt(st.distributed || st.total)} 다이아` }),
+          btn('삭제', (e) => {
+            e.stopPropagation();
+            confirmDialog(`${st.from}~${st.to} 분배 기록을 삭제할까요? (참여점수는 복구되지 않습니다)`, () => {
+              Mutations.removeSettlement(st.id); DB.commit(); close(); openHistory();
+            }, { danger: true, yesText: '삭제' });
+          }, { kind: 'ghost-danger' }),
+        ]),
+      ])))
+  ));
+}
 
-  modal('📜 분배 기록 · 다이아 통계', (close) => el('div', {}, [
-    !list.length ? el('div.empty', { text: '확정된 분배가 아직 없습니다. 정산 후 “💎 분배 확정”을 누르면 여기에 기록됩니다.' }) : null,
-    list.length ? el('div.modal-sec', { text: `누적 다이아 · 분배 ${list.length}회` }) : null,
-    list.length ? table([
+// ── 회차 상세 모달: 멤버별 내역 + 이 회차 CSV 내보내기 ──
+function openSettlementDetail(st) {
+  modal(`분배 상세 · ${st.from || '?'} ~ ${st.to || '?'}`, (close) => el('div', {}, [
+    table([
       { label: '#', align: 'center', width: '42px', render: (_, i) => i + 1 },
       { key: 'name', label: '닉네임', render: (r) => el('b', { text: r.name }) },
-      { key: 'total', label: '누적 다이아', align: 'right', render: (r) => el('b', { style: { color: '#38bdf8' }, text: fmt(r.total) }) },
-    ], rankRows) : null,
-    list.length ? el('div.modal-sec', { text: '분배 회차 (클릭 → 상세)' }) : null,
-    list.length ? el('div.dist-list', {}, list.map((st) => el('div.dist-row', { onclick: () => openSettlementDetail(st) }, [
-      el('div.dist-main', {}, [el('b', { text: `${st.from || '?'} ~ ${st.to || '?'}` }), el('span.muted', { text: ` · ${st.entries.length}명 · 확정 ${st.date}` })]),
-      el('div.dist-side', {}, [
-        el('span', { text: `${fmt(st.distributed || st.total)} 다이아` }),
-        btn('삭제', (e) => {
-          e.stopPropagation();
-          confirmDialog(`${st.from}~${st.to} 분배 기록을 삭제할까요? (참여점수는 복구되지 않습니다)`, () => {
-            Mutations.removeSettlement(st.id); DB.commit(); close(); openHistory();
-          }, { danger: true, yesText: '삭제' });
-        }, { kind: 'ghost-danger' }),
-      ]),
-    ]))) : null,
+      { label: '티어', align: 'center', render: (r) => tierBadge(r.tier) },
+      { key: 'powerDia', label: '투력', align: 'right', render: (r) => fmt(r.powerDia) },
+      { key: 'partDia', label: '참여', align: 'right', render: (r) => fmt(r.partDia) },
+      { key: 'staffDia', label: '운영진', align: 'right', render: (r) => r.staffDia ? fmt(r.staffDia) : '–' },
+      { key: 'total', label: '총', align: 'right', render: (r) => el('b', { style: { color: '#38bdf8' }, text: fmt(r.total) }) },
+    ], [...st.entries].sort((a, b) => b.total - a.total)),
+    el('div.modal-actions', {}, [
+      btn('📄 CSV 내보내기', () => exportSettlementCsv(st), { kind: 'primary' }),
+      btn('닫기', close, { kind: 'ghost' }),
+    ]),
   ]), { wide: true });
 }
 
-function openSettlementDetail(st) {
-  modal(`분배 상세 · ${st.from || '?'} ~ ${st.to || '?'}`, table([
-    { label: '#', align: 'center', width: '42px', render: (_, i) => i + 1 },
-    { key: 'name', label: '닉네임', render: (r) => el('b', { text: r.name }) },
-    { label: '티어', align: 'center', render: (r) => tierBadge(r.tier) },
-    { key: 'powerDia', label: '투력', align: 'right', render: (r) => fmt(r.powerDia) },
-    { key: 'partDia', label: '참여', align: 'right', render: (r) => fmt(r.partDia) },
-    { key: 'staffDia', label: '운영진', align: 'right', render: (r) => r.staffDia ? fmt(r.staffDia) : '–' },
-    { key: 'total', label: '총', align: 'right', render: (r) => el('b', { style: { color: '#38bdf8' }, text: fmt(r.total) }) },
-  ], [...st.entries].sort((a, b) => b.total - a.total)), { wide: true });
-}
-
-function exportCsv(res) {
-  const head = ['순위', '닉네임', '직업', '투력순위', '티어', '투력다이아', '참여다이아', '운영진다이아', '총다이아'];
+// CSV of one confirmed settlement record.
+function exportSettlementCsv(st) {
+  const rows = [...st.entries].sort((a, b) => b.total - a.total);
+  const head = ['순위', '닉네임', '직업', '티어', '투력다이아', '참여다이아', '운영진다이아', '총다이아'];
   const lines = [head.join(',')];
-  res.rows.forEach((r, i) => lines.push([i + 1, r.name, r.cls, r.powerRank, r.tier, r.powerDia, r.partDia, r.staffDia, r.total].join(',')));
-  lines.push(['', '', '', '', '합계', res.totals.powerSum, res.totals.partSum, res.totals.staffSum, res.totals.distributed].join(','));
-  downloadFile('다이아정산.csv', '﻿' + lines.join('\n'), 'text/csv');
+  rows.forEach((r, i) => lines.push([i + 1, r.name, r.cls, r.tier, r.powerDia, r.partDia, r.staffDia, r.total].join(',')));
+  const sum = (k) => rows.reduce((a, r) => a + (r[k] || 0), 0);
+  lines.push(['', '', '', '합계', sum('powerDia'), sum('partDia'), sum('staffDia'), sum('total')].join(','));
+  const fname = `다이아정산_${st.from || ''}~${st.to || ''}.csv`.replace(/[^\w가-힣.~_-]/g, '');
+  downloadFile(fname, '﻿' + lines.join('\n'), 'text/csv');
   toast('CSV를 내보냈습니다');
 }
