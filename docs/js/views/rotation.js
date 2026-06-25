@@ -1,10 +1,11 @@
-// rotation.js — 전리품: 순번제 큐 + 드랍 기록(콘텐츠→아이템) + 분배 기록(내판가·인계자) + 분배 기준.
+// rotation.js — 전리품: 순번제 큐(컴팩트 아코디언) + 드랍 기록 + 분배 기록(내판가·인계자) + 분배 기준.
 import { DB, Mutations } from '../db.js';
 import { el, fmt, toast, uid } from '../util.js';
 import { page, card, table, btn, modal, select, input, field, confirmDialog } from './ui.js';
 
 const DIST_TYPES = ['순번제', '내판', '참여도', '고정', '기타'];
 let dropQ = '';
+const openQueues = new Set(); // 펼쳐진 큐 이름(재렌더에도 유지)
 
 export function renderRotation() {
   const s = DB.state;
@@ -13,18 +14,11 @@ export function renderRotation() {
     actions: [btn('+ 분배 기록', () => logDist(), { kind: 'primary' })],
   });
 
-  // ── 순번제 큐 ──
-  body.appendChild(el('div.toolbar', {}, [
-    el('span.modal-sec', { text: '순번제 큐', style: { margin: '0' } }),
-    btn('+ 순번 큐 추가', () => addQueue(), { kind: 'ghost' }),
-  ]));
-  if (s.rotationQueues.length) {
-    const grid = el('div.col-2');
-    s.rotationQueues.forEach((qу) => grid.appendChild(renderQueue(qу)));
-    body.appendChild(grid);
-  } else {
-    body.appendChild(el('div.empty.small', { text: '순번제 큐가 없습니다. (설계도·완제 등 순번 분배 목록)' }));
-  }
+  // ── 순번제 큐 (컴팩트 아코디언) ──
+  const qWrap = s.rotationQueues.length
+    ? el('div.q-list', {}, s.rotationQueues.map((qу) => renderQueueRow(qу)))
+    : el('div.empty.small', { text: '순번제 큐가 없습니다. (설계도·완제 등 순번 분배 목록)' });
+  body.appendChild(card('순번제 큐', qWrap, { className: 'card-flush', actions: btn('+ 순번 큐 추가', () => addQueue(), { kind: 'ghost' }) }));
 
   // ── 드랍 기록 ──
   const dropSearch = input({ placeholder: '콘텐츠/아이템 검색', value: dropQ, oninput: (e) => { dropQ = e.target.value; renderRotation(); } });
@@ -32,17 +26,17 @@ export function renderRotation() {
   if (dropQ) drops = drops.filter((d) => (d.content + d.item).includes(dropQ));
   body.appendChild(card('드랍 기록', el('div', {}, [
     el('div.toolbar', { style: { marginBottom: '10px' } }, [dropSearch, el('span.hint', { text: '어떤 콘텐츠에서 무엇이 떨어졌는지' })]),
-    table([
+    el('div.scroll-tbl', {}, [table([
       { key: 'date', label: '날짜', width: '108px' },
       { key: 'content', label: '콘텐츠', render: (r) => el('b', { text: r.content }) },
       { key: 'item', label: '아이템' },
       { key: 'note', label: '메모', render: (r) => el('span.muted', { text: r.note || '' }) },
       { label: '', align: 'right', render: (r) => btn('삭제', () => { s.dropLog = s.dropLog.filter((x) => x.id !== r.id); DB.commit(); renderRotation(); }, { kind: 'ghost-danger' }) },
-    ], drops, { empty: dropQ ? '검색 결과 없음' : '드랍 기록이 없습니다.' }),
+    ], drops, { empty: dropQ ? '검색 결과 없음' : '드랍 기록이 없습니다.' })]),
   ]), { actions: btn('+ 드랍 기록', () => addDrop(), { kind: 'ghost' }) }));
 
   // ── 분배 기록 ──
-  body.appendChild(card('분배 기록', table([
+  body.appendChild(card('분배 기록', el('div.scroll-tbl', {}, [table([
     { key: 'date', label: '날짜', width: '108px' },
     { key: 'item', label: '아이템', render: (r) => el('b', { text: r.item }) },
     { key: 'type', label: '구분', align: 'center' },
@@ -51,40 +45,52 @@ export function renderRotation() {
     { key: 'price', label: '내판가', align: 'right', render: (r) => r.price ? fmt(r.price) : '–' },
     { key: 'note', label: '메모', render: (r) => el('span.muted', { text: r.note || '' }) },
     { label: '', align: 'right', render: (r) => btn('삭제', () => { s.distributionLog = s.distributionLog.filter((x) => x.id !== r.id); DB.commit(); renderRotation(); }, { kind: 'ghost-danger' }) },
-  ], s.distributionLog, { empty: '분배 내역이 없습니다.' }), { actions: btn('+ 분배 기록', () => logDist(), { kind: 'ghost' }) }));
+  ], s.distributionLog, { empty: '분배 내역이 없습니다.' })]), { actions: btn('+ 분배 기록', () => logDist(), { kind: 'ghost' }) }));
 
-  // ── 분배 기준 (편집 가능 참고) ──
+  // ── 분배 기준 (접이식 참고) ──
   const rulesArea = el('textarea.input', { rows: 11, value: s.distributionRules || '',
     style: { width: '100%', fontFamily: 'inherit', lineHeight: '1.7', resize: 'vertical' } });
-  body.appendChild(card('분배 기준', el('div', {}, [
-    rulesArea,
-    el('div.row-actions', {}, [btn('기준 저장', () => { s.distributionRules = rulesArea.value; DB.commit(); toast('분배 기준 저장됨'); }, { kind: 'primary' })]),
-  ])));
+  body.appendChild(el('details.rules-det', {}, [
+    el('summary', { text: '분배 기준 (클릭해서 보기 / 편집)' }),
+    el('div.rules-body', {}, [
+      rulesArea,
+      el('div.row-actions', {}, [btn('기준 저장', () => { s.distributionRules = rulesArea.value; DB.commit(); toast('분배 기준 저장됨'); }, { kind: 'primary' })]),
+    ]),
+  ]));
 
   // ── helpers ──
-  function renderQueue(qу) {
+  function renderQueueRow(qу) {
     const nextIdx = qу.items.findIndex((it) => !it.status);
+    const waiting = qу.items.filter((it) => !it.status).length;
+    const open = openQueues.has(qу.name);
+    const head = el('div.q-head', { onclick: () => { open ? openQueues.delete(qу.name) : openQueues.add(qу.name); renderRotation(); } }, [
+      el('span.q-caret', { text: open ? '▾' : '▸' }),
+      el('b.q-name', { text: qу.name }),
+      nextIdx >= 0 ? el('span.q-next', { text: `다음 ${qу.items[nextIdx].name}` }) : el('span.q-next.done', { text: '완료' }),
+      el('span.q-count', { text: `대기 ${waiting}` }),
+    ]);
+    const item = el('div.q-item', {}, [head]);
+    if (!open) return item;
+
     const rows = qу.items.map((it, i) => ({ ...it, _i: i }));
-    return card(qу.name, el('div', {}, [
-      nextIdx >= 0
-        ? el('div.next-up', { html: `다음 차례: <b>${qу.items[nextIdx].name}</b>` })
-        : el('div.next-up.done', { text: '대기 인원 없음 (전원 지급/졸업)' }),
+    item.appendChild(el('div.q-body', {}, [
       table([
         { label: '#', align: 'center', width: '34px', render: (r) => r._i + 1 },
         { key: 'name', label: '닉네임', render: (r) => el('span', { class: r.status ? 'muted' : '', text: r.name }) },
         { label: '상태', align: 'center', render: (r) => el('span.qstatus', { class: r.status ? 'done' : 'wait', text: r.status || '대기' }) },
-        { label: '', align: 'right', width: '150px', render: (r) => el('div.row-actions.nowrap', {}, [
+        { label: '', align: 'right', width: '146px', render: (r) => el('div.row-actions.nowrap', {}, [
           btn('▲', () => move(qу, r._i, -1), { kind: 'ghost', title: '위로' }),
           btn('▼', () => move(qу, r._i, +1), { kind: 'ghost', title: '아래로' }),
           btn(r.status ? '대기' : '지급', () => { qу.items[r._i].status = r.status ? '' : '지급'; DB.commit(); renderRotation(); }, { kind: 'ghost' }),
           btn('✕', () => { qу.items.splice(r._i, 1); DB.commit(); renderRotation(); }, { kind: 'ghost-danger' }),
         ]) },
-      ], rows, { className: 'card-compact' }),
+      ], rows, { className: 'card-compact', empty: '인원이 없습니다.' }),
       el('div.row-actions', {}, [
         btn('+ 인원 추가', () => addToQueue(qу), { kind: 'ghost' }),
-        btn('큐 삭제', () => confirmDialog(`'${qу.name}' 큐를 삭제할까요?`, () => { s.rotationQueues = s.rotationQueues.filter((x) => x !== qу); DB.commit(); renderRotation(); }, { danger: true, yesText: '삭제' }), { kind: 'ghost-danger' }),
+        btn('큐 삭제', () => confirmDialog(`'${qу.name}' 큐를 삭제할까요?`, () => { s.rotationQueues = s.rotationQueues.filter((x) => x !== qу); openQueues.delete(qу.name); DB.commit(); renderRotation(); }, { danger: true, yesText: '삭제' }), { kind: 'ghost-danger' }),
       ]),
-    ]), { className: 'card-compact' });
+    ]));
+    return item;
   }
   function move(qу, i, d) {
     const j = i + d; if (j < 0 || j >= qу.items.length) return;
@@ -98,7 +104,7 @@ export function renderRotation() {
   function addQueue() {
     const nm = input({ placeholder: '예: 상급 무기 설계도' });
     modal('순번 큐 추가', (close) => el('div.form', {}, [field('큐 이름', nm),
-      el('div.modal-actions', {}, [btn('취소', close), btn('추가', () => { if (!nm.value.trim()) return toast('이름 입력', 'error'); s.rotationQueues.push({ name: nm.value.trim(), items: [] }); DB.commit(); close(); renderRotation(); }, { kind: 'primary' })])]));
+      el('div.modal-actions', {}, [btn('취소', close), btn('추가', () => { if (!nm.value.trim()) return toast('이름 입력', 'error'); s.rotationQueues.push({ name: nm.value.trim(), items: [] }); openQueues.add(nm.value.trim()); DB.commit(); close(); renderRotation(); }, { kind: 'primary' })])]));
   }
   function addDrop() {
     const date = input({ type: 'date', value: new Date().toISOString().slice(0, 10) });

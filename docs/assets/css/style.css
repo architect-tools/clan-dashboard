@@ -216,6 +216,25 @@ select.input{cursor:pointer}
 .qstatus{font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px}
 .qstatus.wait{background:var(--bg2);color:var(--muted)}
 .qstatus.done{background:color-mix(in srgb,var(--good) 16%,var(--panel));color:var(--good)}
+/* 전리품: 순번제 큐 아코디언 + 스크롤 표 + 분배기준 접이식 */
+.q-list{display:flex;flex-direction:column}
+.q-item{border-bottom:1px solid var(--line)}
+.q-item:last-child{border-bottom:none}
+.q-head{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;transition:.12s}
+.q-head:hover{background:var(--panel2)}
+.q-caret{color:var(--dim);font-size:11px;width:12px;text-align:center}
+.q-name{flex:1;font-size:13.5px;font-weight:500}
+.q-next{font-size:12px;color:var(--accent);font-family:var(--mono);white-space:nowrap}
+.q-next.done{color:var(--good)}
+.q-count{font-size:12px;color:var(--muted);min-width:52px;text-align:right;font-family:var(--mono)}
+.q-body{padding:4px 12px 12px;background:var(--bg2);border-top:1px solid var(--line)}
+.scroll-tbl{max-height:380px;overflow:auto}
+.rules-det{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:0 18px;box-shadow:0 1px 3px rgba(0,0,0,.28)}
+.rules-det>summary{cursor:pointer;padding:14px 0;font-size:15px;font-weight:600;list-style:none;color:var(--txt)}
+.rules-det>summary::-webkit-details-marker{display:none}
+.rules-det>summary::before{content:'▸ ';color:var(--dim);font-size:11px}
+.rules-det[open]>summary::before{content:'▾ '}
+.rules-body{padding:0 0 16px}
 
 /* ── schedule ────────────────────────────────────────────────────── */
 .sched-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:0}
