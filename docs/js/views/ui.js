@@ -110,6 +110,21 @@ export function confirmDialog(message, onYes, { yesText = '확인', danger } = {
   ]));
 }
 
+/** Full-screen busy overlay with a CSS spinner for long async work (engine load,
+ *  OCR). Non-dismissable. Returns { update(text, sub), close() }. */
+export function busyOverlay(text = '처리 중…', sub = '') {
+  const tEl = el('div.busy-text', { text });
+  const sEl = el('div.busy-sub', { text: sub });
+  const overlay = el('div.busy-overlay', {}, [
+    el('div.busy-card', {}, [el('div.busy-spinner'), tEl, sEl]),
+  ]);
+  document.body.appendChild(overlay);
+  return {
+    update(t, s) { if (t != null) tEl.textContent = t; if (s != null) sEl.textContent = s; },
+    close() { overlay.remove(); },
+  };
+}
+
 /** Labeled form field. */
 export function field(label, input) {
   return el('label.field', {}, [el('span.field-label', { text: label }), input]);

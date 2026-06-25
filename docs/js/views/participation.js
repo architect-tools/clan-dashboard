@@ -7,7 +7,7 @@ import { computeScores, tierForScore } from '../calc.js';
 import { el, fmt, toast, clear } from '../util.js';
 import { CATEGORY_ORDER } from '../config.js';
 import { loadImage, extractLines, consensusMatch, buildAnchor, detectByAnchor } from '../ocr.js';
-import { page, card, btn, modal, tierBadge, classBadge } from './ui.js';
+import { page, card, btn, modal, busyOverlay, tierBadge, classBadge } from './ui.js';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 let selDate = todayISO();
@@ -280,21 +280,26 @@ function checkinPanel(content) {
   // runs ONLY on click — never automatically on image load (that froze the page).
   async function autoDetect() {
     if (!curImg || !DB.state.ocrAnchor) return;
-    progress.textContent = '패널 자동 감지 중… (최초 1회 엔진 로딩 ~10MB, 잠시 느려질 수 있음)';
+    const busy = busyOverlay('패널 자동 감지 중…', '엔진 로딩(최초 1회 ~10MB)');
     try {
-      const det = await detectByAnchor(curImg, DB.state.ocrAnchor, (p) => { progress.textContent = p.stage; });
+      const det = await detectByAnchor(curImg, DB.state.ocrAnchor, (p) => { busy.update(p.stage); progress.textContent = p.stage; });
       if (det && det.score >= 0.5) { crop = det; drawMemoryBox(); buildControls(); toast(`패널 감지 (신뢰 ${Math.round(det.score * 100)}%)`); }
       else toast('패널을 못 찾았습니다 — 직접 드래그하세요', 'error');
     } catch (e) { console.warn(e); toast('자동 감지 실패 — 직접 드래그하세요', 'error'); }
-    setReadyHint();
+    finally { busy.close(); setReadyHint(); }
   }
 
   const picked = new Map(); // memberId -> {member, score, token, checked}
   const manual = new Map();
   async function runOcr() {
     if (!curImg) return;
+    const busy = busyOverlay('참여자 인식 중…', 'OCR 엔진 준비 중');
     try {
-      const out = await extractLines(curImg, crop, (p) => { progress.textContent = `${p.stage} (${Math.round(p.progress * 100)}%)`; });
+      const out = await extractLines(curImg, crop, (p) => {
+        const pct = Math.round(p.progress * 100);
+        busy.update(p.stage, `${pct}%`);
+        progress.textContent = `${p.stage} (${pct}%)`;
+      });
       const { matched, maybe } = consensusMatch(out.perScale, roster);
       picked.clear();
       for (const mm of matched) picked.set(mm.member.id, { ...mm, checked: true });
@@ -302,6 +307,7 @@ function checkinPanel(content) {
       progress.textContent = `인식 완료 — 신뢰 ${matched.length}명(자동 체크) · 확인필요 ${maybe.length}명. 못 찾은 인원은 아래 “명단에서 직접 선택”으로 추가하세요.`;
       renderResult([]);
     } catch (e) { console.error(e); toast('OCR 실패: ' + e.message, 'error'); progress.textContent = ''; }
+    finally { busy.close(); }
   }
 
   // manual roster picker (always available, even without screenshot)
