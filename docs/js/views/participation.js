@@ -339,11 +339,18 @@ function checkinPanel(content) {
       ? btn('이 기록 삭제', () => { Mutations.setEventMembers(selDate, content, []); DB.commit(); toast('기록 삭제'); renderParticipation(); }, { kind: 'ghost-danger' })
       : null,
     btn('✓ 참여 기록', () => {
-      const ids = new Set(Mutations.getEvent(selDate, content)); // keep existing, merge
-      for (const mm of picked.values()) if (mm.checked) ids.add(mm.member.id);
-      for (const [, id] of manual) if (id) ids.add(+id);
+      // members added THIS session (OCR picks + unmatched-dropdown). The manual
+      // roster picker lists EVERY member and starts unchecked for anyone not already
+      // recorded — so without this guard its unchecked boxes would delete the OCR
+      // picks right after we add them (= records silently dropped, no slot).
+      const added = new Set();
+      for (const mm of picked.values()) if (mm.checked) added.add(mm.member.id);
+      for (const [, id] of manual) if (id) added.add(+id);
+      const ids = new Set([...Mutations.getEvent(selDate, content), ...added]); // existing + additions
       manualPick.querySelectorAll('input[type=checkbox]').forEach((cb) => {
-        const id = +cb.dataset.mid; if (cb.checked) ids.add(id); else ids.delete(id);
+        const id = +cb.dataset.mid;
+        if (cb.checked) ids.add(id);             // manually picked → include
+        else if (!added.has(id)) ids.delete(id); // unchecked → remove, but never undo this-session additions
       });
       Mutations.setEventMembers(selDate, content, [...ids]);
       DB.commit();
