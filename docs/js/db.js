@@ -149,6 +149,7 @@ function normalize(d) {
   d.participation.scoreTo ||= '';
 
   d.distributionLog ||= [];
+  d.settlements ||= []; // finalized diamond distributions (다이아 분배 확정 기록)
   d.schedule ||= [];
   d.statusBoards ||= []; // generic per-member status tracking (장비/주문석/성좌 등)
   if (d.distributionRules == null) d.distributionRules = DEFAULT_RULES;
@@ -207,4 +208,14 @@ export const Mutations = {
   logDistribution(entry) {
     DB.state.distributionLog.unshift({ id: uid(), date: entry.date || '', ...entry });
   },
+
+  // diamond settlements (다이아 분배 확정) ---------------------------
+  recordSettlement(rec) {
+    DB.state.settlements.unshift({
+      id: uid(), date: rec.date || '', from: rec.from || '', to: rec.to || '',
+      total: rec.total || 0, distributed: rec.distributed || 0, entries: rec.entries || [],
+    });
+  },
+  removeSettlement(id) { DB.state.settlements = DB.state.settlements.filter((x) => x.id !== id); },
+  resetScores() { DB.state.members.forEach((m) => { m.score = 0; }); },
 };

@@ -1,8 +1,11 @@
-// diamond.js — diamond settlement (운영진 + 투력 + 참여도 → 최종정산).
-import { DB } from '../db.js';
+// diamond.js — diamond settlement (운영진 + 투력 + 참여도 → 최종정산) + 분배 확정 루프.
+import { DB, Mutations } from '../db.js';
 import { computeSettlement } from '../calc.js';
 import { el, fmt, pct, downloadFile, toast } from '../util.js';
-import { page, card, table, statCard, btn, classBadge, tierBadge } from './ui.js';
+import { page, card, table, statCard, btn, modal, confirmDialog, classBadge, tierBadge } from './ui.js';
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const nextDay = (iso) => { const d = new Date(iso); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
 
 export function renderDiamond() {
   const s = DB.state;
@@ -12,6 +15,8 @@ export function renderDiamond() {
   const body = page('다이아 정산', {
     subtitle: `총 ${fmt(t.total)} 다이아 · 운영진 ${pct(s.settings.staffRatio)} / 투력 ${pct(s.settings.powerRatio)} / 참여도 ${pct(s.settings.participationRatio)}`,
     actions: [
+      btn('💎 분배 확정', () => finalize(), { kind: 'primary' }),
+      btn('📜 분배 기록', () => openHistory()),
       btn('CSV 내보내기', () => exportCsv(res), { kind: 'ghost' }),
       btn('설정 변경', () => location.hash = '#/settings', { kind: 'ghost' }),
     ],
@@ -61,6 +66,80 @@ export function renderDiamond() {
     { key: 'staffDia', label: '운영진', align: 'right', render: (r) => r.staffDia ? fmt(r.staffDia) : '–' },
     { key: 'total', label: '총 다이아', align: 'right', render: (r) => el('b', { style: { color: '#38bdf8' }, text: fmt(r.total) }) },
   ], res.rows)));
+}
+
+// ── 분배 확정: 현재 정산을 기록으로 저장 + 전원 참여점수 초기화 + 기간 진행 ──
+function finalize() {
+  const s = DB.state;
+  if (!s.members.some((m) => m.active !== false)) return toast('확정할 멤버가 없습니다', 'error');
+  const res = computeSettlement(s);
+  const dates = Mutations.datesWithData();
+  const from = s.participation.scoreFrom || dates[0] || todayISO();
+  const to = s.participation.scoreTo || dates[dates.length - 1] || todayISO();
+  confirmDialog(
+    `정산 기간 ${from} ~ ${to}, 총 ${fmt(res.totals.distributed)} 다이아를 분배 기록에 저장하고 전원 참여점수를 0으로 초기화합니다.\n(실수해도 Ctrl+Z로 되돌릴 수 있어요)`,
+    () => {
+      Mutations.recordSettlement({
+        date: todayISO(), from, to, total: res.totals.total, distributed: res.totals.distributed,
+        entries: res.rows.map((r) => ({
+          memberId: r.id, name: r.name, cls: r.cls,
+          powerDia: r.powerDia, partDia: r.partDia, staffDia: r.staffDia,
+          total: r.total, score: r.score, tier: r.tier,
+        })),
+      });
+      Mutations.resetScores();
+      s.participation.scoreFrom = nextDay(to); s.participation.scoreTo = '';
+      DB.commit();
+      toast('분배를 확정하고 참여점수를 초기화했습니다');
+      renderDiamond();
+    },
+    { yesText: '분배 확정' },
+  );
+}
+
+// ── 분배 기록 모달: 누적 다이아 랭킹 + 회차 목록(클릭 → 상세) ──
+function openHistory() {
+  const s = DB.state;
+  const list = s.settlements || [];
+  const byId = Object.fromEntries(s.members.map((m) => [m.id, m]));
+  const cum = {};
+  for (const st of list) for (const e of st.entries) cum[e.memberId] = (cum[e.memberId] || 0) + e.total;
+  const rankRows = Object.entries(cum).map(([id, total]) => ({ name: byId[id]?.name || '(탈퇴)', total })).sort((a, b) => b.total - a.total);
+
+  modal('📜 분배 기록 · 다이아 통계', (close) => el('div', {}, [
+    !list.length ? el('div.empty', { text: '확정된 분배가 아직 없습니다. 정산 후 “💎 분배 확정”을 누르면 여기에 기록됩니다.' }) : null,
+    list.length ? el('div.modal-sec', { text: `누적 다이아 · 분배 ${list.length}회` }) : null,
+    list.length ? table([
+      { label: '#', align: 'center', width: '42px', render: (_, i) => i + 1 },
+      { key: 'name', label: '닉네임', render: (r) => el('b', { text: r.name }) },
+      { key: 'total', label: '누적 다이아', align: 'right', render: (r) => el('b', { style: { color: '#38bdf8' }, text: fmt(r.total) }) },
+    ], rankRows) : null,
+    list.length ? el('div.modal-sec', { text: '분배 회차 (클릭 → 상세)' }) : null,
+    list.length ? el('div.dist-list', {}, list.map((st) => el('div.dist-row', { onclick: () => openSettlementDetail(st) }, [
+      el('div.dist-main', {}, [el('b', { text: `${st.from || '?'} ~ ${st.to || '?'}` }), el('span.muted', { text: ` · ${st.entries.length}명 · 확정 ${st.date}` })]),
+      el('div.dist-side', {}, [
+        el('span', { text: `${fmt(st.distributed || st.total)} 다이아` }),
+        btn('삭제', (e) => {
+          e.stopPropagation();
+          confirmDialog(`${st.from}~${st.to} 분배 기록을 삭제할까요? (참여점수는 복구되지 않습니다)`, () => {
+            Mutations.removeSettlement(st.id); DB.commit(); close(); openHistory();
+          }, { danger: true, yesText: '삭제' });
+        }, { kind: 'ghost-danger' }),
+      ]),
+    ]))) : null,
+  ]), { wide: true });
+}
+
+function openSettlementDetail(st) {
+  modal(`분배 상세 · ${st.from || '?'} ~ ${st.to || '?'}`, table([
+    { label: '#', align: 'center', width: '42px', render: (_, i) => i + 1 },
+    { key: 'name', label: '닉네임', render: (r) => el('b', { text: r.name }) },
+    { label: '티어', align: 'center', render: (r) => tierBadge(r.tier) },
+    { key: 'powerDia', label: '투력', align: 'right', render: (r) => fmt(r.powerDia) },
+    { key: 'partDia', label: '참여', align: 'right', render: (r) => fmt(r.partDia) },
+    { key: 'staffDia', label: '운영진', align: 'right', render: (r) => r.staffDia ? fmt(r.staffDia) : '–' },
+    { key: 'total', label: '총', align: 'right', render: (r) => el('b', { style: { color: '#38bdf8' }, text: fmt(r.total) }) },
+  ], [...st.entries].sort((a, b) => b.total - a.total)), { wide: true });
 }
 
 function exportCsv(res) {
