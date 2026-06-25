@@ -155,6 +155,11 @@ export function matchName(token, roster, threshold = 0.62) {
 }
 
 // ── misc ───────────────────────────────────────────────────────────
+/** Apply a whole-page UI scale (zoom). Clamped to a sane range. */
+export function applyUiScale(scale) {
+  document.documentElement.style.zoom = Math.max(0.6, Math.min(1.8, +scale || 1));
+}
+
 export function downloadFile(filename, text, type = 'application/json') {
   const blob = new Blob([text], { type });
   const a = document.createElement('a');

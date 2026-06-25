@@ -17,7 +17,7 @@ export function renderDiamond() {
     actions: [
       btn('💎 분배 확정', () => finalize(), { kind: 'primary' }),
       btn('📜 분배 기록', () => openHistory()),
-      btn('설정 변경', () => location.hash = '#/settings', { kind: 'ghost' }),
+      btn('분배 파라미터', () => location.hash = '#/dist-params', { kind: 'ghost' }),
     ],
   });
 

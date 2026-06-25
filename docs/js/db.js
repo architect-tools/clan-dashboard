@@ -125,6 +125,8 @@ export const DB = {
 function normalize(d) {
   d = d || {};
   d.meta ||= { clanName: '불면증', schemaVersion: 2 };
+  d.appSettings ||= {};                                  // site-wide app prefs (UI scale 등)
+  if (d.appSettings.uiScale == null) d.appSettings.uiScale = 1;
   d.settings ||= { totalDiamonds: 170000, staffRatio: 0.05, powerRatio: 0.40, participationRatio: 0.55 };
   d.tiers ||= [];
   d.powerRanks ||= [];

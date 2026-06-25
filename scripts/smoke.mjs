@@ -38,6 +38,7 @@ const views = {
   gear: (await import('../docs/js/views/gear.js')).renderGear,
   schedule: (await import('../docs/js/views/schedule.js')).renderSchedule,
   settings: (await import('../docs/js/views/settings.js')).renderSettings,
+  distParams: (await import('../docs/js/views/distParams.js')).renderDistParams,
 };
 
 console.log('\n── render each view ──');

@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import { DB } from './db.js';
 import { Auth } from './auth.js';
 import { Router } from './router.js';
-import { el, $, toast } from './util.js';
+import { el, $, toast, applyUiScale } from './util.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderMembers } from './views/members.js';
 import { renderParticipation } from './views/participation.js';
@@ -12,6 +12,7 @@ import { renderRotation } from './views/rotation.js';
 import { renderGear } from './views/gear.js';
 import { renderSchedule } from './views/schedule.js';
 import { renderSettings } from './views/settings.js';
+import { renderDistParams } from './views/distParams.js';
 
 const NAV = [
   { path: 'dashboard', icon: '🏠', label: '대시보드' },
@@ -72,6 +73,7 @@ async function main() {
   try { await DB.init(); }
   catch (e) { console.error(e); toast('데이터 로드 실패: ' + e.message, 'error'); return; }
 
+  applyUiScale(DB.state.appSettings?.uiScale); // restore saved UI scale
   DB.setCallbacks({ onHistory: updateHistoryButtons, onRefresh: () => Router.refresh() });
 
   Router
@@ -83,6 +85,7 @@ async function main() {
     .on('gear', renderGear)
     .on('schedule', renderSchedule)
     .on('settings', renderSettings)
+    .on('dist-params', renderDistParams)
     .start('dashboard');
   updateHistoryButtons();
 }
