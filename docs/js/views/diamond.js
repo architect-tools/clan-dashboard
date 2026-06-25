@@ -15,8 +15,8 @@ export function renderDiamond() {
   const body = page('다이아 정산', {
     subtitle: `총 ${fmt(t.total)} 다이아 · 운영진 ${pct(s.settings.staffRatio)} / 투력 ${pct(s.settings.powerRatio)} / 참여도 ${pct(s.settings.participationRatio)}`,
     actions: [
-      btn('💎 분배 확정', () => finalize(), { kind: 'primary' }),
-      btn('📜 분배 기록', () => openHistory()),
+      btn('분배 확정', () => finalize(), { kind: 'primary' }),
+      btn('분배 기록', () => openHistory()),
       btn('분배 파라미터', () => location.hash = '#/dist-params', { kind: 'ghost' }),
     ],
   });
@@ -25,7 +25,7 @@ export function renderDiamond() {
   const activeMembers = s.members.filter((m) => m.active !== false);
   if (activeMembers.length && activeMembers.every((m) => !m.score)) {
     body.appendChild(el('div.banner', {}, [
-      el('span', { text: '⚠️' }),
+      el('span', { text: '' }),
       el('span', { text: '참여점수가 아직 없습니다(전원 F티어). 참여 기록에서 콘텐츠 참여를 기록한 뒤 “참여점수 집계 → 명단에 반영”을 누르면 티어와 다이아가 반영됩니다.' }),
       btn('참여 기록으로', () => location.hash = '#/participation', { kind: 'primary' }),
     ]));
@@ -33,13 +33,12 @@ export function renderDiamond() {
 
   // ── summary stats ──
   body.appendChild(el('div.stat-grid', {}, [
-    statCard('총 다이아', fmt(t.total), { icon: '💎', color: '#38bdf8' }),
+    statCard('총 다이아', fmt(t.total)),
     statCard('운영진 합계', fmt(t.staffSum), { sub: pct(s.settings.staffRatio) }),
     statCard('투력 합계', fmt(t.powerSum), { sub: `상위 ${s.powerRanks.length}명` }),
     statCard('참여도 합계', fmt(t.partSum), { sub: pct(s.settings.participationRatio) }),
     statCard(t.shortage > 0 ? '모자른 다이아' : '남는 다이아', fmt(t.shortage > 0 ? t.shortage : t.surplus), {
-      icon: res.verification.status === '정상' ? '✅' : '⚠️',
-      color: res.verification.status === '정상' ? '#34d399' : '#fbbf24',
+      color: res.verification.status === '정상' ? 'var(--good)' : 'var(--warn)',
       sub: '검증 ' + res.verification.status,
     }),
   ]));
@@ -63,7 +62,7 @@ export function renderDiamond() {
     { key: 'powerDia', label: '투력', align: 'right', render: (r) => r.powerDia ? fmt(r.powerDia) : '–' },
     { key: 'partDia', label: '참여', align: 'right', render: (r) => fmt(r.partDia) },
     { key: 'staffDia', label: '운영진', align: 'right', render: (r) => r.staffDia ? fmt(r.staffDia) : '–' },
-    { key: 'total', label: '총 다이아', align: 'right', render: (r) => el('b', { style: { color: '#38bdf8' }, text: fmt(r.total) }) },
+    { key: 'total', label: '총 다이아', align: 'right', render: (r) => el('b', { style: { color: 'var(--primary)' }, text: fmt(r.total) }) },
   ], res.rows)));
 }
 
@@ -100,9 +99,9 @@ function finalize() {
 function openHistory() {
   const s = DB.state;
   const list = s.settlements || [];
-  modal('📜 분배 기록', (close) => (
+  modal('분배 기록', (close) => (
     !list.length
-      ? el('div.empty', { text: '확정된 분배가 아직 없습니다. 정산 후 “💎 분배 확정”을 누르면 여기에 기록됩니다.' })
+      ? el('div.empty', { text: '확정된 분배가 아직 없습니다. 정산 후 “분배 확정”을 누르면 여기에 기록됩니다.' })
       : el('div.dist-list', {}, list.map((st) => el('div.dist-row', { onclick: () => openSettlementDetail(st) }, [
         el('div.dist-main', {}, [el('b', { text: `${st.from || '?'} ~ ${st.to || '?'}` }), el('span.muted', { text: ` · ${st.entries.length}명 · 확정 ${st.date}` })]),
         el('div.dist-side', {}, [
@@ -127,10 +126,10 @@ function openSettlementDetail(st) {
     { key: 'powerDia', label: '투력', align: 'right', render: (r) => fmt(r.powerDia) },
     { key: 'partDia', label: '참여', align: 'right', render: (r) => fmt(r.partDia) },
     { key: 'staffDia', label: '운영진', align: 'right', render: (r) => r.staffDia ? fmt(r.staffDia) : '–' },
-    { key: 'total', label: '총', align: 'right', render: (r) => el('b', { style: { color: '#38bdf8' }, text: fmt(r.total) }) },
+    { key: 'total', label: '총', align: 'right', render: (r) => el('b', { style: { color: 'var(--primary)' }, text: fmt(r.total) }) },
   ], [...st.entries].sort((a, b) => b.total - a.total)), {
     wide: true,
-    headerActions: [btn('📄 CSV 내보내기', () => exportSettlementCsv(st))],
+    headerActions: [btn('CSV 내보내기', () => exportSettlementCsv(st))],
   });
 }
 

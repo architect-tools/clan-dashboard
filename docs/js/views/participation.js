@@ -29,7 +29,7 @@ export function renderParticipation() {
 
   const body = page('참여 기록', {
     subtitle: '날짜 선택 → 콘텐츠 선택 → 스크린샷으로 참여자 자동 기록',
-    actions: [btn('📊 참여점수 집계', () => openScorePanel(), { kind: 'primary' })],
+    actions: [btn('참여점수 집계', () => openScorePanel(), { kind: 'primary' })],
   });
 
   // two-column: calendar (left) + day detail (right)
@@ -149,7 +149,7 @@ function openSlot(cn, ids, byId) {
     el('div.chips', { style: { marginTop: '10px' } }, ids.map((id) => el('span.chip', { text: byId[id]?.name || '?' }))),
     el('div.modal-actions', {}, [
       btn('닫기', close),
-      btn('✏️ 편집', () => { close(); selContent = cn; renderParticipation(); }, { kind: 'primary' }),
+      btn('편집', () => { close(); selContent = cn; renderParticipation(); }, { kind: 'primary' }),
     ]),
   ]));
 }
@@ -169,7 +169,7 @@ function checkinPanel(content) {
   ]));
 
   const drop = el('div.drop', {}, [
-    el('div.drop-icon', { text: '📷' }),
+    el('div.drop-icon', { text: '' }),
     el('div', { text: '참여자 스크린샷을 끌어다 놓거나 클릭' }),
     el('div.drop-sub', { text: '붙여넣기(Ctrl+V) 지원' }),
   ]);
@@ -194,7 +194,7 @@ function checkinPanel(content) {
     // apply the remembered region (resolution-independent fractions) — cheap, no
     // OpenCV. Panel auto-detect is OPT-IN via a button: it loads a ~10MB WASM and
     // runs synchronous template matching that would otherwise freeze the page on
-    // every drop. Recognition itself runs only when the user presses [🔍 인식].
+    // every drop. Recognition itself runs only when the user presses [인식].
     crop = cropFromMemory();
     buildControls(); drawMemoryBox(); setReadyHint();
   }
@@ -214,8 +214,8 @@ function checkinPanel(content) {
     const stage = el('div.crop-stage', {}, [imgEl, selBox]);
     previewWrap.appendChild(el('div.ocr-hint', {
       html: DB.state.ocrCrop
-        ? '✅ 기억된 영역을 적용했습니다. 화면 구성이 다르면 다시 드래그하세요.'
-        : '💡 인식할 명단 영역을 드래그하세요. “📌 이 영역 기억”을 누르면 다음 스크린샷에 자동 적용됩니다.' }));
+        ? '기억된 영역을 적용했습니다. 화면 구성이 다르면 다시 드래그하세요.'
+        : '인식할 명단 영역을 드래그하세요. “이 영역 기억”을 누르면 다음 스크린샷에 자동 적용됩니다.' }));
     previewWrap.appendChild(stage);
     imgEl.draggable = false; // stop the browser's native image-drag from hijacking region selection
     // replace the screenshot by dropping an EXTERNAL image file onto the preview
@@ -253,20 +253,20 @@ function checkinPanel(content) {
   // tell the user recognition is a deliberate step (no auto-run on upload)
   function setReadyHint() {
     progress.innerHTML = crop
-      ? '✅ 인식 영역이 지정됐습니다(드래그로 조정 가능). <b>[🔍 인식]</b>을 누르세요.'
-      : '🖱️ 인식할 <b>명단 영역을 드래그</b>로 지정한 뒤 <b>[🔍 인식]</b>을 누르세요. (영역을 안 잡으면 전체 이미지로 인식)';
+      ? '인식 영역이 지정됐습니다(드래그로 조정 가능). <b>[인식]</b>을 누르세요.'
+      : '인식할 <b>명단 영역을 드래그</b>로 지정한 뒤 <b>[인식]</b>을 누르세요. (영역을 안 잡으면 전체 이미지로 인식)';
   }
 
   function buildControls() {
     clear(controls); controls.style.display = 'flex';
     // single recognize button — uses the current region: your drag if you made
     // one, else the remembered/auto-detected area, else the whole image.
-    controls.appendChild(btn('🔍 인식', () => runOcr(), { kind: 'primary' }));
+    controls.appendChild(btn('인식', () => runOcr(), { kind: 'primary' }));
     controls.appendChild(el('span.ocr-ctrl-sep'));
-    controls.appendChild(btn('🔄 다른 스크린샷', () => fileInput.click()));
+    controls.appendChild(btn('다른 스크린샷', () => fileInput.click()));
     // NOTE: OpenCV 패널 자동감지는 제거됨 — 10MB WASM 로딩이 메인스레드를 막아 페이지가
     // 멈추고(응답 없음) 스피너가 무한 회전했음. 기억된 영역(비율)만 가볍게 적용.
-    if (crop) controls.appendChild(btn('📌 이 영역 기억', () => {
+    if (crop) controls.appendChild(btn('이 영역 기억', () => {
       DB.state.ocrCrop = { x: crop.x / curImg.naturalWidth, y: crop.y / curImg.naturalHeight, w: crop.w / curImg.naturalWidth, h: crop.h / curImg.naturalHeight };
       DB.state.ocrAnchor = null; // 더 이상 사용 안 함(스테일 앵커 정리)
       DB.commit(); buildControls(); toast('영역 기억 — 다음 스크린샷에 자동 적용');
@@ -335,7 +335,7 @@ function checkinPanel(content) {
     Mutations.getEvent(selDate, content).length
       ? btn('이 기록 삭제', () => { Mutations.setEventMembers(selDate, content, []); DB.commit(); toast('기록 삭제'); renderParticipation(); }, { kind: 'ghost-danger' })
       : null,
-    btn('✓ 참여 기록', () => {
+    btn('참여 기록', () => {
       // members added THIS session (OCR picks + unmatched-dropdown). The manual
       // roster picker lists EVERY member and starts unchecked for anyone not already
       // recorded — so without this guard its unchecked boxes would delete the OCR
@@ -370,7 +370,7 @@ function checkinPanel(content) {
 
 // ── 참여점수 집계 (모달) ──────────────────────────────────────────────
 function openScorePanel() {
-  modal('📊 참여점수 집계', (close) => scorePanelContent(close), { wide: true });
+  modal('참여점수 집계', (close) => scorePanelContent(close), { wide: true });
 }
 function scorePanelContent(close) {
   const s = DB.state;

@@ -14,17 +14,17 @@ export function renderDashboard() {
   const body = page(`${s.meta?.clanName || ''} 클랜 대시보드`, {
     subtitle: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }),
     actions: [
-      el('span.mode-pill', { class: live ? 'live' : 'local', text: live ? '☁ 클라우드 동기화' : '💾 로컬 저장' }),
+      el('span.mode-pill', { class: live ? 'live' : 'local', text: live ? '클라우드 동기화' : '로컬 저장' }),
     ],
   });
 
   // ── top stats ──
   const tierCount = res.tierCount;
   body.appendChild(el('div.stat-grid', {}, [
-    statCard('클랜원', fmt(members.length), { icon: '👥', sub: `휴면 ${s.members.length - members.length}명` }),
-    statCard('총 다이아', fmt(s.settings.totalDiamonds), { icon: '💎', color: '#38bdf8' }),
-    statCard('평균 전투력', fmt(members.reduce((a, m) => a + m.power, 0) / (members.length || 1)), { icon: '⚔️' }),
-    statCard('S/A 티어', fmt((tierCount.S || 0) + (tierCount.A || 0)), { icon: '🏆', color: '#fbbf24', sub: `S ${tierCount.S || 0} · A ${tierCount.A || 0}` }),
+    statCard('클랜원', fmt(members.length), { sub: `휴면 ${s.members.length - members.length}명` }),
+    statCard('총 다이아', fmt(s.settings.totalDiamonds)),
+    statCard('평균 전투력', fmt(members.reduce((a, m) => a + m.power, 0) / (members.length || 1))),
+    statCard('S/A 티어', fmt((tierCount.S || 0) + (tierCount.A || 0)), { sub: `S ${tierCount.S || 0} · A ${tierCount.A || 0}` }),
   ]));
 
   // ── tier distribution bar ──

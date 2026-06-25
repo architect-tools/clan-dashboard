@@ -12,15 +12,8 @@ export const EQUIP_GROUPS = [
   { label: '특수', cols: 4, slots: ['복종', '충성', '무한', '심연'] },
 ];
 
-const SLOT_ICONS = {
-  무기: '🗡️', 보조무기1: '⚔️', 보조무기2: '🏹',
-  투구: '🪖', 견갑: '🛡️', 흉갑: '🦺', 각반: '👖',
-  허리띠: '🥋', 장갑: '🧤', 신발: '🥾', 망토: '🧥',
-  목걸이: '📿', 귀걸이: '💠', 반지: '💍', 팔찌: '⌚',
-  복종: '🔱', 충성: '⭐', 무한: '♾️', 심연: '🌀',
-};
-// 1성 회색 · 2성 초록 · 3성 파랑 · 4성 빨강 · 5성 보라 · 6성 노랑
-const STAR_COLORS = ['', '#9aa3b2', '#34d399', '#5b8cff', '#fb7185', '#c084fc', '#fbbf24'];
+// 1성 회색 · 2성 초록 · 3성 파랑 · 4성 빨강 · 5성 보라 · 6성 노랑 (밝은 배경 가독성용 톤)
+const STAR_COLORS = ['', '#8a8f9c', '#3a8a52', '#3b6ea8', '#c2453f', '#9a5cc4', '#c08a1e'];
 const TIER_OPTS = Array.from({ length: 16 }, (_, i) => 1 + i * 0.5); // 1 ~ 8.5 (.5 단위)
 const tierLabel = (t) => (Number.isInteger(t) ? t : t.toFixed(1)) + 'T';
 const isBgItem = (star, tier) => star >= 3 && (tier % 1 === 0.5); // 3성↑ + x.5T = 배경템
@@ -45,14 +38,11 @@ export function equipGrid(member, { editable = false } = {}) {
           title: editable ? '클릭해서 편집'
             : (filled ? `${star ? star + '성 ' : ''}${it.tier ? tierLabel(it.tier) + ' ' : ''}${it.enhance ? '+' + it.enhance : ''}`.trim() : '빈 슬롯'),
           onclick: editable ? () => editSlot(member, slot, render) : null,
-        }, [
-          el('span.equip-icon', { text: SLOT_ICONS[slot] || '🎲' }),
-          ...(filled ? [
-            star ? el('span.equip-star', { style: { color }, text: star + '성' }) : null,
-            it.tier ? el('span.equip-tier', { text: tierLabel(it.tier) }) : null,
-            it.enhance ? el('span.equip-enh', { text: '+' + it.enhance }) : null,
-          ] : []),
-        ]);
+        }, filled ? [
+          star ? el('span.equip-star', { style: { color }, text: star + '성' }) : null,
+          it.tier ? el('span.equip-tier', { text: tierLabel(it.tier) }) : null,
+          it.enhance ? el('span.equip-enh', { text: '+' + it.enhance }) : null,
+        ] : [el('span.equip-empty-mark', { text: editable ? '＋' : '' })]);
         row.appendChild(el('div.equip-slot', {}, [box, el('div.equip-name', { text: slot })]));
       }
       wrap.appendChild(el('div.equip-group', {}, [el('div.equip-group-label', { text: g.label }), row]));

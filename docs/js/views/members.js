@@ -28,7 +28,7 @@ export function renderMembers() {
   const body = page('명단 관리', {
     subtitle: `클랜원 ${active.length}명 · 직업/전투력/참여점수 관리`,
     actions: [
-      btn(quickEdit ? '✓ 빠른편집 끄기' : '✏️ 빠른편집', () => { quickEdit = !quickEdit; refresh(); }, { kind: quickEdit ? 'primary' : 'ghost' }),
+      btn(quickEdit ? '빠른편집 끄기' : '빠른편집', () => { quickEdit = !quickEdit; refresh(); }, { kind: quickEdit ? 'primary' : 'ghost' }),
       btn('+ 여러명 추가', () => bulkAdd(), { kind: 'ghost' }),
       btn('+ 클랜원 추가', () => editMember(null), { kind: 'primary' }),
     ],
@@ -195,7 +195,7 @@ function openMemberDetail(m) {
         { key: 'power', label: '투력', align: 'right', render: (d) => fmt(d.power) },
         { key: 'part', label: '참여', align: 'right', render: (d) => fmt(d.part) },
         { key: 'staff', label: '운영진', align: 'right', render: (d) => d.staff ? fmt(d.staff) : '–' },
-        { key: 'total', label: '총', align: 'right', render: (d) => el('b', { style: { color: '#38bdf8' }, text: fmt(d.total) }) },
+        { key: 'total', label: '총', align: 'right', render: (d) => el('b', { style: { color: 'var(--primary)' }, text: fmt(d.total) }) },
       ], dia)
       : el('div.empty.small', { text: '받은 다이아 없음' }),
 
@@ -208,6 +208,6 @@ function openMemberDetail(m) {
     ]))) : null,
   ]), {
     wide: 'x',
-    headerActions: (close) => [btn('✏️ 편집', () => { close(); editMember(m); })],
+    headerActions: (close) => [btn('편집', () => { close(); editMember(m); })],
   });
 }

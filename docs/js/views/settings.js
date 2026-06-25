@@ -33,7 +33,7 @@ export function renderSettings() {
   // ── 분배 파라미터(별도 페이지) 링크 ──
   body.appendChild(card('분배 파라미터', el('div', {}, [
     el('p.hint', { text: '다이아 분배 비율 · 티어컷 · 고투 · 운영진 · 콘텐츠 점수는 별도 페이지에서 관리합니다.' }),
-    btn('📊 분배 파라미터 열기', () => location.hash = '#/dist-params', { kind: 'primary' }),
+    btn('분배 파라미터 열기', () => location.hash = '#/dist-params', { kind: 'primary' }),
   ])));
 
   // ── 연동 · 데이터 ──

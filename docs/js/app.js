@@ -35,14 +35,14 @@ function buildShell() {
   const root = $('#root');
   root.innerHTML = '';
   const nav = el('nav.sidebar', {}, [
-    el('div.brand', {}, [el('span.brand-logo', { text: '🌙' }), el('div', {}, [
+    el('div.brand', {}, [el('div', {}, [
       el('div.brand-name', { text: CONFIG.appName }), el('div.brand-sub', { text: '관리자 대시보드' })])]),
     el('div.nav-links', {}, NAV.map((n) => el('a.nav-link', {
       'data-nav': n.path, href: '#/' + n.path,
-    }, [el('span.nav-icon', { text: n.icon }), el('span', { text: n.label })]))),
+    }, [el('span', { text: n.label })]))),
     el('div.sidebar-foot', {}, [
-      el('div.ver', { text: 'v' + CONFIG.version + (CONFIG.APPS_SCRIPT_URL ? ' · ☁' : ' · 💾') }),
-      el('a.nav-link.logout', { onclick: () => Auth.logout(), text: '🔒 잠금' }),
+      el('div.ver', { text: 'v' + CONFIG.version + (CONFIG.APPS_SCRIPT_URL ? ' · 클라우드' : ' · 로컬') }),
+      el('a.nav-link.logout', { onclick: () => Auth.logout(), text: '잠금' }),
     ]),
   ]);
   undoBtn = el('button.icon-btn', { title: '실행 취소 (Ctrl+Z)', onclick: () => DB.undo(), disabled: true }, ['↶']);

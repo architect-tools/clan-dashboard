@@ -8,7 +8,7 @@ export function renderDistParams() {
   const s = DB.state;
   const body = page('분배 파라미터', {
     subtitle: '다이아 분배 비율 · 티어컷 · 고투 · 운영진 · 콘텐츠 점수 — 정산 계산에 쓰이는 값',
-    actions: [btn('💎 다이아 정산으로', () => location.hash = '#/diamond', { kind: 'ghost' })],
+    actions: [btn('다이아 정산으로', () => location.hash = '#/diamond', { kind: 'ghost' })],
   });
 
   // ── 다이아 분배 기준 ──
@@ -19,7 +19,7 @@ export function renderDistParams() {
   const ratioNote = el('div.hint');
   const checkRatio = () => {
     const sum = (+staffR.value) + (+powerR.value) + (+partR.value);
-    ratioNote.textContent = `비율 합계: ${sum.toFixed(1)}% ${Math.abs(sum - 100) < 0.05 ? '✅' : '⚠️ 100%가 아닙니다'}`;
+    ratioNote.textContent = `비율 합계: ${sum.toFixed(1)}% ${Math.abs(sum - 100) < 0.05 ? '' : '100%가 아닙니다'}`;
   };
   [staffR, powerR, partR].forEach((i) => i.addEventListener('input', checkRatio)); checkRatio();
 
