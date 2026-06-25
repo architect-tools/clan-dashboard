@@ -1,21 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;500;600;700&display=swap');
-/* ── kami theme: warm parchment · ink blue · serif · restraint ────────
-   배경은 순백 금지(따뜻한 종이), 포인트는 잉크 블루 단색, 본문 세리프,
-   그림자/그라데이션/네온 없음, 얇은 선과 절제된 여백. */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+/* ── Insomnia dark theme (claude design) ─────────────────────────────
+   near-black blue-gray 레이어 · 페리윙클 인디고 포인트(#8A91DE) ·
+   따뜻한 램프 앰버 액센트(#DD9A52) · IBM Plex Sans/Mono · 절제 + 은은한 그림자. */
 :root{
-  --bg:#f5f4ed; --bg2:#eeece0; --panel:#fbfaf4; --panel2:#ece9dc;
-  --line:#e3e0d2; --line2:#d2cebc;
-  --txt:#2a2823; --muted:#6b6757; --dim:#938f7d;
-  --primary:#1B365D; --primary2:#142a49; --accent:#1B365D; --on-ink:#f5f4ed;
-  --good:#4a7c59; --warn:#9a7322; --bad:#9e3b35;
-  --radius:12px; --radius-sm:8px; --sb:236px;
-  --shadow:0 2px 10px rgba(40,38,32,.10);
+  --bg:#0D1015; --bg2:#12161E; --panel:#171B24; --panel2:#1F2430;
+  --line:#242A36; --line2:#333B4A;
+  --txt:#E7EAF1; --muted:#99A1B3; --dim:#626B7D;
+  --primary:#8A91DE; --primary2:#9DA4E8; --accent:#DD9A52; --on-ink:#0D1015;
+  --good:#5FB07E; --warn:#E6B23C; --bad:#D96A63;
+  --radius:10px; --radius-sm:7px; --sb:236px;
+  --shadow:0 12px 34px rgba(0,0,0,.5);
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
   font-synthesis:none;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{
-  font-family:'Noto Serif KR','Nanum Myeongjo',Charter,Georgia,'Times New Roman',serif;
+  font-family:'IBM Plex Sans KR','IBM Plex Sans',system-ui,-apple-system,sans-serif;
   background:var(--bg); color:var(--txt);
   -webkit-font-smoothing:antialiased; min-height:100vh; line-height:1.5;
 }
@@ -58,7 +59,7 @@ a{color:inherit;text-decoration:none}
 .main-wrap{flex:1;min-width:0;display:flex;flex-direction:column}
 .main{flex:1;min-width:0}
 .topbar{display:flex;align-items:center;gap:12px;padding:10px 30px;border-bottom:1px solid var(--line);
-  position:sticky;top:0;background:rgba(245,244,237,.86);backdrop-filter:blur(8px);z-index:60}
+  position:sticky;top:0;background:rgba(13,16,21,.82);backdrop-filter:blur(8px);z-index:60}
 .menu-btn{display:none}
 .topbar-title{display:none}
 .topbar-tools{margin-left:auto;display:flex;gap:6px}
@@ -77,7 +78,7 @@ a{color:inherit;text-decoration:none}
 .page-body{display:flex;flex-direction:column;gap:18px}
 
 /* ── cards ───────────────────────────────────────────────────────── */
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.28)}
 .card-head{display:flex;justify-content:space-between;align-items:center;
   padding:14px 18px;border-bottom:1px solid var(--line)}
 .card-title{margin:0;font-size:15px;font-weight:600}
@@ -90,9 +91,11 @@ a{color:inherit;text-decoration:none}
 /* ── stats ───────────────────────────────────────────────────────── */
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:14px}
 .stat{display:flex;align-items:center;gap:14px;background:var(--panel);
-  border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+  border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.28)}
 .stat-icon{font-size:22px;color:var(--primary)}
-.stat-value{font-size:23px;font-weight:600;letter-spacing:-.4px;font-variant-numeric:tabular-nums}
+.stat-value{font-size:23px;font-weight:600;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+/* 숫자/코드 느낌 요소는 IBM Plex Mono */
+.cal-num,.sched-time,.equip-tier,.equip-enh,.match-score,.slot-count b,.rank,.tier-badge,.cbadge,.cal-badge,.mode-pill{font-family:var(--mono)}
 .stat-label{font-size:12.5px;color:var(--muted);margin-top:2px}
 .stat-sub{font-size:11px;color:var(--dim);margin-top:2px}
 
@@ -179,7 +182,7 @@ select.input{cursor:pointer}
 .ocr-hint{font-size:11.5px;color:var(--dim);margin-bottom:6px}
 .crop-stage{position:relative;display:inline-block;line-height:0;border-radius:10px;overflow:hidden;border:1px solid var(--line);cursor:crosshair;user-select:none}
 .ocr-img{display:block;max-width:100%}
-.crop-box{position:absolute;border:2px solid var(--primary);background:color-mix(in srgb,var(--primary) 10%,transparent);pointer-events:none;box-shadow:0 0 0 9999px rgba(40,38,32,.34)}
+.crop-box{position:absolute;border:2px solid var(--primary);background:color-mix(in srgb,var(--primary) 14%,transparent);pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,.52)}
 .crop-box::before{content:'선택 영역';position:absolute;top:-17px;left:-2px;font-size:10px;font-weight:600;background:var(--primary);color:var(--on-ink);padding:1px 6px;border-radius:5px 5px 0 0;white-space:nowrap}
 .crop-box::after{content:'';position:absolute;right:-5px;bottom:-5px;width:9px;height:9px;background:var(--primary);border:2px solid var(--panel);border-radius:2px}
 .crop-stage.replace-over{outline:3px dashed var(--primary);outline-offset:-3px}
@@ -236,7 +239,7 @@ select.input{cursor:pointer}
 .mode-pill.local{background:var(--bg2);color:var(--muted)}
 
 /* ── modal ───────────────────────────────────────────────────────── */
-.modal-overlay{position:fixed;inset:0;z-index:900;background:rgba(40,38,32,.38);backdrop-filter:blur(2px);
+.modal-overlay{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.6);backdrop-filter:blur(2px);
   display:grid;place-items:center;padding:20px;animation:fade .15s}
 .modal{background:var(--panel);border:1px solid var(--line2);border-radius:14px;
   width:min(440px,94vw);max-height:90vh;overflow:auto;box-shadow:var(--shadow);animation:pop .16s}
@@ -289,15 +292,15 @@ select.input{cursor:pointer}
 .equip-enh{position:absolute;bottom:3px;right:6px;font-size:15px;font-weight:700;color:var(--primary)}
 .equip-empty-mark{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);font-size:18px}
 .equip-name{font-size:11px;color:var(--muted);margin-top:5px;white-space:nowrap}
-.equip-box.bg-item::after{content:'';position:absolute;inset:0;pointer-events:none;opacity:.5;
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='14' viewBox='0 0 16 14'><path d='M4 0 L12 0 L16 7 L12 14 L4 14 L0 7 Z' fill='none' stroke='%231B365D' stroke-opacity='0.4' stroke-width='1'/></svg>");
+.equip-box.bg-item::after{content:'';position:absolute;inset:0;pointer-events:none;opacity:.6;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='14' viewBox='0 0 16 14'><path d='M4 0 L12 0 L16 7 L12 14 L4 14 L0 7 Z' fill='none' stroke='%23DD9A52' stroke-opacity='0.45' stroke-width='1'/></svg>");
   background-size:13px 11px}
 .confirm-msg{margin:0 0 16px;color:var(--muted);font-size:14px}
 @keyframes fade{from{opacity:0}} @keyframes pop{from{transform:scale(.98);opacity:0}}
 
 /* ── busy spinner ────────────────────────────────────────────────── */
 .busy-overlay{position:fixed;inset:0;z-index:1100;display:grid;place-items:center;
-  background:rgba(40,38,32,.42);backdrop-filter:blur(2px);animation:fade .15s ease}
+  background:rgba(0,0,0,.62);backdrop-filter:blur(2px);animation:fade .15s ease}
 .busy-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
   padding:26px 32px;display:flex;flex-direction:column;align-items:center;gap:13px;
   box-shadow:var(--shadow);min-width:230px;max-width:80vw;text-align:center}

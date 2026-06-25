@@ -22,22 +22,23 @@ export const CONFIG = {
 
 // 직업(class) metadata: label + theme color + short tag.
 // 색은 밝은 종이 배경(kami)에서 텍스트로도, 밝은 글씨 배경으로도 읽히도록 중간~짙은 톤.
+// Insomnia 다크 테마 데이터 팔레트(claude design): 차분한 주얼톤, 어두운 배경에서 텍스트로도 읽힘.
 export const CLASSES = {
-  '전투사제': { color: '#2f7d4f', tag: '사제' },
-  '암살자':   { color: '#7a4ea0', tag: '암살' },
-  '사냥꾼':   { color: '#b5732a', tag: '사냥' },
-  '마법사':   { color: '#2a6f9e', tag: '법사' },
-  '전사':     { color: '#a83b3b', tag: '전사' },
+  '전투사제': { color: '#6FB390', tag: '사제' },
+  '암살자':   { color: '#AB8FD9', tag: '암살' },
+  '사냥꾼':   { color: '#DB9F5C', tag: '사냥' },
+  '마법사':   { color: '#6FA0DD', tag: '법사' },
+  '전사':     { color: '#DC807C', tag: '전사' },
 };
 export const CLASS_LIST = Object.keys(CLASSES);
 
 export function classColor(cls) {
-  return (CLASSES[cls] || {}).color || '#8a8576';
+  return (CLASSES[cls] || {}).color || '#828B9C';
 }
 
-// Tier display colors (밝은 배경 가독성용 중간~짙은 톤)
+// Tier display colors (S→F 램프)
 export const TIER_COLORS = {
-  S: '#b5872e', A: '#2f7d4f', B: '#2a6f9e', C: '#7a4ea0', D: '#a8497a', F: '#8a8576',
+  S: '#E7C45A', A: '#6FB390', B: '#6FA0DD', C: '#AB8FD9', D: '#D680AE', F: '#828B9C',
 };
 
 // Content category display order

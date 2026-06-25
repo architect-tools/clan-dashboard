@@ -12,8 +12,8 @@ export const EQUIP_GROUPS = [
   { label: '특수', cols: 4, slots: ['복종', '충성', '무한', '심연'] },
 ];
 
-// 1성 회색 · 2성 초록 · 3성 파랑 · 4성 빨강 · 5성 보라 · 6성 노랑 (밝은 배경 가독성용 톤)
-const STAR_COLORS = ['', '#8a8f9c', '#3a8a52', '#3b6ea8', '#c2453f', '#9a5cc4', '#c08a1e'];
+// 1성 회색 · 2성 초록 · 3성 파랑 · 4성 빨강 · 5성 보라 · 6성 노랑 (Insomnia 다크 팔레트)
+const STAR_COLORS = ['', '#868F9F', '#6FB390', '#6FA0DD', '#DC807C', '#AB8FD9', '#E7C45A'];
 const TIER_OPTS = Array.from({ length: 16 }, (_, i) => 1 + i * 0.5); // 1 ~ 8.5 (.5 단위)
 const tierLabel = (t) => (Number.isInteger(t) ? t : t.toFixed(1)) + 'T';
 const isBgItem = (star, tier) => star >= 3 && (tier % 1 === 0.5); // 3성↑ + x.5T = 배경템
