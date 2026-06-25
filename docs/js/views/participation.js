@@ -194,21 +194,11 @@ function checkinPanel(content) {
     // reset any prior recognition (so replacing the screenshot always starts clean)
     crop = null; picked.clear(); manual.clear(); clear(ocrResult);
     drop.style.display = 'none'; buildPreview();
-    // 1) OpenCV anchor auto-detect only POSITIONS the crop region — it does NOT
-    //    recognize. Recognition runs only when the user presses [🔍 인식].
-    //    Timeout-guarded so a slow/unavailable OpenCV never blocks the check-in.
-    if (DB.state.ocrAnchor) {
-      progress.textContent = '패널 영역 자동 지정 중…';
-      try {
-        const det = await Promise.race([
-          detectByAnchor(curImg, DB.state.ocrAnchor, (p) => { progress.textContent = p.stage; }),
-          new Promise((r) => setTimeout(() => r('timeout'), 15000)),
-        ]);
-        if (det && det !== 'timeout' && det.score >= 0.5) { crop = det; toast(`패널 영역 자동 지정 (신뢰 ${Math.round(det.score * 100)}%)`); }
-      } catch (e) { console.warn('auto-detect failed', e); }
-    }
-    // 2) fall back to remembered fractions
-    if (!crop) crop = cropFromMemory();
+    // apply the remembered region (resolution-independent fractions) — cheap, no
+    // OpenCV. Panel auto-detect is OPT-IN via a button: it loads a ~10MB WASM and
+    // runs synchronous template matching that would otherwise freeze the page on
+    // every drop. Recognition itself runs only when the user presses [🔍 인식].
+    crop = cropFromMemory();
     buildControls(); drawMemoryBox(); setReadyHint();
   }
   function cropFromMemory() {
@@ -227,8 +217,8 @@ function checkinPanel(content) {
     const stage = el('div.crop-stage', {}, [imgEl, selBox]);
     previewWrap.appendChild(el('div.ocr-hint', {
       html: (DB.state.ocrAnchor || DB.state.ocrCrop)
-        ? '✅ 패널 영역을 자동으로 잡았습니다(창 크기·위치 달라도 인식). 빗나가면 다시 드래그 후 “이 영역 기억”.'
-        : '💡 명단 영역을 드래그한 뒤 “이 영역 기억”을 누르면, 이후 스크린샷에서 패널을 자동 감지합니다(OpenCV).' }));
+        ? '✅ 기억된 영역을 적용했습니다. 빗나가면 다시 드래그하세요. (창 크기가 다르면 “📐 패널 자동 감지”)'
+        : '💡 인식할 명단 영역을 드래그하세요. “📌 이 영역 기억”을 누르면 다음 스크린샷에 자동 적용됩니다.' }));
     previewWrap.appendChild(stage);
     imgEl.draggable = false; // stop the browser's native image-drag from hijacking region selection
     // replace the screenshot by dropping an EXTERNAL image file onto the preview
@@ -277,12 +267,26 @@ function checkinPanel(content) {
     controls.appendChild(btn('🔍 인식', () => runOcr(), { kind: 'primary' }));
     controls.appendChild(el('span.ocr-ctrl-sep'));
     controls.appendChild(btn('🔄 다른 스크린샷', () => fileInput.click()));
+    if (DB.state.ocrAnchor) controls.appendChild(btn('📐 패널 자동 감지', () => autoDetect()));
     if (crop) controls.appendChild(btn('📌 이 영역 기억', () => {
       DB.state.ocrCrop = { x: crop.x / curImg.naturalWidth, y: crop.y / curImg.naturalHeight, w: crop.w / curImg.naturalWidth, h: crop.h / curImg.naturalHeight };
       try { DB.state.ocrAnchor = buildAnchor(curImg, crop); } catch (e) { console.warn(e); DB.state.ocrAnchor = null; }
-      DB.commit(); toast('영역+앵커 기억 — 다음부터 패널 자동 감지');
+      DB.commit(); buildControls(); toast('영역 기억 — 다음 스크린샷에 자동 적용');
     }));
-    if (DB.state.ocrCrop || DB.state.ocrAnchor) controls.appendChild(btn('기억 해제', () => { DB.state.ocrCrop = null; DB.state.ocrAnchor = null; DB.commit(); toast('영역 기억을 해제했습니다'); }, { kind: 'ghost' }));
+    if (DB.state.ocrCrop || DB.state.ocrAnchor) controls.appendChild(btn('기억 해제', () => { DB.state.ocrCrop = null; DB.state.ocrAnchor = null; DB.commit(); buildControls(); toast('영역 기억을 해제했습니다'); }, { kind: 'ghost' }));
+  }
+
+  // opt-in panel auto-detect (OpenCV). Heavy + loads ~10MB on first use, so it
+  // runs ONLY on click — never automatically on image load (that froze the page).
+  async function autoDetect() {
+    if (!curImg || !DB.state.ocrAnchor) return;
+    progress.textContent = '패널 자동 감지 중… (최초 1회 엔진 로딩 ~10MB, 잠시 느려질 수 있음)';
+    try {
+      const det = await detectByAnchor(curImg, DB.state.ocrAnchor, (p) => { progress.textContent = p.stage; });
+      if (det && det.score >= 0.5) { crop = det; drawMemoryBox(); buildControls(); toast(`패널 감지 (신뢰 ${Math.round(det.score * 100)}%)`); }
+      else toast('패널을 못 찾았습니다 — 직접 드래그하세요', 'error');
+    } catch (e) { console.warn(e); toast('자동 감지 실패 — 직접 드래그하세요', 'error'); }
+    setReadyHint();
   }
 
   const picked = new Map(); // memberId -> {member, score, token, checked}
