@@ -15,7 +15,7 @@ export const CONFIG = {
   GATE_PASSWORD: '7979',
   // 관리자 비밀번호 — 7979(멤버)와 다르게. 이 비번으로 입장하면 관리자 권한.
   // (공개 repo라 난독화 수준 — 강제는 클라이언트 UI에서. 원하는 값으로 바꾸세요.)
-  ADMIN_PASSWORD: 'admin7979',
+  ADMIN_PASSWORD: 'insomnia97',
 
   // localStorage keys
   STORE_KEY: 'clandash.v1.data',
