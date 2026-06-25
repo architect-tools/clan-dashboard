@@ -171,7 +171,7 @@ function checkinPanel(content) {
     crop = null; picked.clear(); manual.clear(); clear(ocrResult);
     drop.style.display = 'none'; buildPreview();
     // 1) OpenCV anchor auto-detect only POSITIONS the crop region — it does NOT
-    //    recognize. Recognition runs only when the user presses [영역 인식].
+    //    recognize. Recognition runs only when the user presses [🔍 인식].
     //    Timeout-guarded so a slow/unavailable OpenCV never blocks the check-in.
     if (DB.state.ocrAnchor) {
       progress.textContent = '패널 영역 자동 지정 중…';
@@ -242,15 +242,15 @@ function checkinPanel(content) {
   // tell the user recognition is a deliberate step (no auto-run on upload)
   function setReadyHint() {
     progress.innerHTML = crop
-      ? '✅ 인식 영역이 지정됐습니다. 필요하면 미리보기에서 <b>드래그로 조정</b>한 뒤 <b>[🔍 영역 인식]</b> 버튼을 누르세요.'
-      : '🖱️ 미리보기에서 인식할 <b>명단 영역을 드래그</b>로 지정한 뒤 <b>[🔍 영역 인식]</b> 버튼을 누르세요. (전체 인식도 가능)';
+      ? '✅ 인식 영역이 지정됐습니다(드래그로 조정 가능). <b>[🔍 인식]</b>을 누르세요.'
+      : '🖱️ 인식할 <b>명단 영역을 드래그</b>로 지정한 뒤 <b>[🔍 인식]</b>을 누르세요. (영역을 안 잡으면 전체 이미지로 인식)';
   }
 
   function buildControls() {
     clear(controls); controls.style.display = 'flex';
-    // primary action — OCR runs ONLY on an explicit click (never on upload)
-    controls.appendChild(btn('🔍 영역 인식', () => runOcr(), { kind: 'primary' }));
-    controls.appendChild(btn('전체 인식', () => { crop = null; if (selBox) selBox.style.display = 'none'; runOcr(); }));
+    // single recognize button — uses the current region: your drag if you made
+    // one, else the remembered/auto-detected area, else the whole image.
+    controls.appendChild(btn('🔍 인식', () => runOcr(), { kind: 'primary' }));
     controls.appendChild(el('span.ocr-ctrl-sep'));
     controls.appendChild(btn('🔄 다른 스크린샷', () => fileInput.click()));
     if (crop) controls.appendChild(btn('📌 이 영역 기억', () => {
