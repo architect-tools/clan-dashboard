@@ -3,9 +3,10 @@
 // 성좌/탈것/표본, 엘릭서&패시브 …) as editable boards: rows = members, custom columns.
 import { DB } from '../db.js';
 import { el, toast, uid } from '../util.js';
-import { page, card, btn, input, modal, field, confirmDialog } from './ui.js';
+import { page, card, btn, input, select, modal, field, confirmDialog } from './ui.js';
+import { equipGrid } from './equip.js';
 
-let activeBoard = 0;
+let activeBoard = 0, gearMember = null;
 
 export function renderGear() {
   const s = DB.state;
@@ -16,9 +17,25 @@ export function renderGear() {
   const board = s.statusBoards[activeBoard];
 
   const body = page('장비/숙련 현황', {
-    subtitle: '무기 숙련·장비·주문석·성좌 등 클랜원별 현황을 표로 관리',
+    subtitle: '장착 장비(슬롯) + 무기 숙련·주문석·성좌 등 클랜원별 현황',
     actions: [btn('+ 보드 추가', () => addBoard(), { kind: 'primary' })],
   });
+
+  // ── 장착 장비 (구조화 슬롯, 게임 장비창 레이아웃) ──
+  const activeMembers = s.members.filter((m) => m.active !== false);
+  if (activeMembers.length) {
+    if (!gearMember || !activeMembers.some((m) => m.id === gearMember)) gearMember = activeMembers[0].id;
+    const selMember = activeMembers.find((m) => m.id === gearMember);
+    const picker = select(activeMembers.map((m) => ({ value: String(m.id), label: m.name })), String(gearMember),
+      { onchange: (e) => { gearMember = +e.target.value; renderGear(); } });
+    body.appendChild(card('장착 장비', el('div', {}, [
+      el('div.toolbar', {}, [el('span.muted', { text: '클랜원' }), picker, el('span.hint', { text: '슬롯을 클릭해 등급·티어·강화 입력' })]),
+      equipGrid(selMember, { editable: true }),
+    ])));
+  }
+
+  // ── 기타 현황 보드 (무기 숙련·주문석·성좌 등) ──
+  body.appendChild(el('div.modal-sec', { text: '기타 현황 보드' }));
 
   // board tabs
   const tabs = el('div.board-tabs', {}, s.statusBoards.map((b, i) =>

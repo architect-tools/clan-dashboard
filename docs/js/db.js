@@ -135,6 +135,7 @@ function normalize(d) {
     id: m.id || i + 1, order: m.order ?? i + 1, name: m.name || '',
     cls: m.cls || '', power: +m.power || 0, score: +m.score || 0,
     grade: m.grade || '정회원',        // 등급(멤버십): 운영진/정회원/준회원/신입
+    equip: m.equip || {},              // 장착 장비: {슬롯: {grade,tier,enhance}}
     active: m.active !== false, note: m.note || '',
   }));
   d.contentCatalog ||= [];

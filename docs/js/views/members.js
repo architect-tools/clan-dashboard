@@ -4,6 +4,7 @@ import { tierForScore, attendanceCount } from '../calc.js';
 import { el, fmt, toast } from '../util.js';
 import { CLASS_LIST, CLASSES } from '../config.js';
 import { page, card, table, btn, modal, field, input, select, classBadge, tierBadge, confirmDialog } from './ui.js';
+import { equipGrid } from './equip.js';
 
 const GRADES = ['운영진', '정회원', '준회원', '신입'];
 let q = '', sortKey = 'power', sortDir = -1, classFilter = '', quickEdit = false;
@@ -198,13 +199,13 @@ function openMemberDetail(m) {
       ], dia)
       : el('div.empty.small', { text: '받은 다이아 없음' }),
 
-    el('div.modal-sec', { text: '장비 / 현황' }),
-    boards.length
-      ? el('div', {}, boards.map((b) => el('div.md-board', {}, [
-        el('b', { text: b.name }),
-        el('div.chips', {}, b.cells.map((c) => el('span.chip', { text: `${c.col}: ${c.val}` }))),
-      ])))
-      : el('div.empty.small', { text: '장비 입력 없음' }),
+    el('div.modal-sec', { text: '장착 장비' }),
+    equipGrid(m, { editable: true }),
+    boards.length ? el('div.modal-sec', { text: '기타 현황' }) : null,
+    boards.length ? el('div', {}, boards.map((b) => el('div.md-board', {}, [
+      el('b', { text: b.name }),
+      el('div.chips', {}, b.cells.map((c) => el('span.chip', { text: `${c.col}: ${c.val}` }))),
+    ]))) : null,
   ]), {
     wide: 'x',
     headerActions: (close) => [btn('✏️ 편집', () => { close(); editMember(m); })],

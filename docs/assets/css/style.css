@@ -273,6 +273,23 @@ select.input{cursor:pointer}
 .md-stat-l{font-size:11px;color:var(--dim);margin-top:2px}
 .md-board{margin-bottom:10px}
 .md-board>b{display:block;font-size:12.5px;color:var(--accent);margin-bottom:5px}
+/* 장착 장비 슬롯 그리드 (게임 장비창 레이아웃) */
+.equip-wrap{display:flex;flex-direction:column;gap:2px;margin-top:8px}
+.equip-group{margin:0 0 10px}
+.equip-group-label{font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.5px;text-align:center;
+  margin:0 0 8px;padding-top:8px;border-top:1px solid var(--line)}
+.equip-row{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+.equip-slot{width:82px;text-align:center}
+.equip-box{position:relative;aspect-ratio:1;border-radius:10px;border:1px solid var(--line2);
+  background:linear-gradient(160deg,#3a1f24,#1c1320);display:grid;place-items:center;cursor:pointer;transition:.12s}
+.equip-box:hover{border-color:var(--primary);transform:translateY(-1px)}
+.equip-box.empty{background:var(--bg2);border-style:dashed;border-color:var(--line)}
+.equip-grade{position:absolute;top:3px;left:4px;font-size:10px;font-weight:800;color:#ffd27f;
+  background:rgba(0,0,0,.45);border-radius:4px;padding:0 4px;line-height:1.5}
+.equip-tier{position:absolute;top:4px;right:5px;font-size:10.5px;font-weight:700;color:#cdd7ee;text-shadow:0 1px 2px #000}
+.equip-enh{position:absolute;bottom:2px;right:5px;font-size:14px;font-weight:800;color:#7fffd4;text-shadow:0 1px 2px #000}
+.equip-empty-mark{color:var(--dim);font-size:18px}
+.equip-name{font-size:11px;color:var(--muted);margin-top:5px;white-space:nowrap}
 .confirm-msg{margin:0 0 16px;color:var(--muted);font-size:14px}
 @keyframes fade{from{opacity:0}} @keyframes pop{from{transform:scale(.96);opacity:0}}
 /* busy spinner overlay (engine load / OCR) */
