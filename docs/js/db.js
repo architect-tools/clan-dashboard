@@ -134,6 +134,7 @@ function normalize(d) {
   d.members = (d.members || []).map((m, i) => ({
     id: m.id || i + 1, order: m.order ?? i + 1, name: m.name || '',
     cls: m.cls || '', power: +m.power || 0, score: +m.score || 0,
+    grade: m.grade || '정회원',        // 등급(멤버십): 운영진/정회원/준회원/신입
     active: m.active !== false, note: m.note || '',
   }));
   d.contentCatalog ||= [];
@@ -170,7 +171,7 @@ export const Mutations = {
       if (i >= 0) { list[i] = { ...list[i], ...m }; return list[i]; }
     }
     const nm = { id: Math.max(0, ...list.map((x) => x.id)) + 1, order: list.length + 1,
-      name: '', cls: '', power: 0, score: 0, active: true, note: '', ...m };
+      name: '', cls: '', power: 0, score: 0, grade: '정회원', active: true, note: '', ...m };
     list.push(nm); return nm;
   },
   removeMember(id) { DB.state.members = DB.state.members.filter((m) => m.id !== id); },
