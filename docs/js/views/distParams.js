@@ -1,6 +1,7 @@
 // distParams.js — 분배 파라미터(정산 계산용): 다이아 분배 비율 · 티어컷 · 고투 ·
 // 운영진 · 콘텐츠 점수. 다이아 정산의 "분배 파라미터" 버튼으로 진입(사이드바 설정과 분리).
 import { DB } from '../db.js';
+import { Roles } from '../roles.js';
 import { el, fmt, toast } from '../util.js';
 import { page, card, table, btn, input, select, field, modal } from './ui.js';
 
@@ -10,6 +11,7 @@ export function renderDistParams() {
     subtitle: '다이아 분배 비율 · 티어컷 · 고투 · 운영진 · 콘텐츠 점수 — 정산 계산에 쓰이는 값',
     actions: [btn('다이아 정산으로', () => location.hash = '#/diamond', { kind: 'ghost' })],
   });
+  if (!Roles.isAdmin()) { body.appendChild(el('div.empty', { text: '분배 파라미터는 관리자만 변경할 수 있습니다. (관리자 비밀번호로 입장하세요)' })); return; }
 
   // ── 다이아 분배 기준 ──
   const total = input({ type: 'number', value: s.settings.totalDiamonds });

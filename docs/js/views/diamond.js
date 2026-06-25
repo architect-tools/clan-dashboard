@@ -1,5 +1,6 @@
 // diamond.js — diamond settlement (운영진 + 투력 + 참여도 → 최종정산) + 분배 확정 루프.
 import { DB, Mutations } from '../db.js';
+import { Roles } from '../roles.js';
 import { computeSettlement } from '../calc.js';
 import { el, fmt, pct, downloadFile, toast } from '../util.js';
 import { page, card, table, statCard, btn, modal, confirmDialog, classBadge, tierBadge } from './ui.js';
@@ -15,9 +16,9 @@ export function renderDiamond() {
   const body = page('다이아 정산', {
     subtitle: `총 ${fmt(t.total)} 다이아 · 운영진 ${pct(s.settings.staffRatio)} / 투력 ${pct(s.settings.powerRatio)} / 참여도 ${pct(s.settings.participationRatio)}`,
     actions: [
-      btn('분배 확정', () => finalize(), { kind: 'primary' }),
+      btn('분배 확정', () => finalize(), { kind: 'primary', admin: true }),
       btn('분배 기록', () => openHistory()),
-      btn('분배 파라미터', () => location.hash = '#/dist-params', { kind: 'ghost' }),
+      btn('분배 파라미터', () => location.hash = '#/dist-params', { kind: 'ghost', admin: true }),
     ],
   });
 
@@ -111,7 +112,7 @@ function openHistory() {
             confirmDialog(`${st.from}~${st.to} 분배 기록을 삭제할까요? (참여점수는 복구되지 않습니다)`, () => {
               Mutations.removeSettlement(st.id); DB.commit(); close(); openHistory();
             }, { danger: true, yesText: '삭제' });
-          }, { kind: 'ghost-danger' }),
+          }, { kind: 'ghost-danger', admin: true }),
         ]),
       ])))
   ), { wide: 'x' });

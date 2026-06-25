@@ -3,6 +3,7 @@
 // drop a screenshot (OCR) or pick members manually → confirm → recorded for that
 // date+content. Scores are computed from the event log over a settlement period.
 import { DB, Mutations } from '../db.js';
+import { Roles } from '../roles.js';
 import { computeScores, tierForScore } from '../calc.js';
 import { el, fmt, toast, clear } from '../util.js';
 import { CATEGORY_ORDER } from '../config.js';
@@ -29,7 +30,7 @@ export function renderParticipation() {
 
   const body = page('참여 기록', {
     subtitle: '날짜 선택 → 콘텐츠 선택 → 스크린샷으로 참여자 자동 기록',
-    actions: [btn('참여점수 집계', () => openScorePanel(), { kind: 'primary' })],
+    actions: [btn('참여점수 집계', () => openScorePanel(), { kind: 'primary', admin: true })],
   });
 
   // two-column: calendar (left) + day detail (right)
@@ -159,6 +160,16 @@ function checkinPanel(content) {
   const s = DB.state;
   const roster = s.members.filter((m) => m.active !== false);
   const cat = s.contentCatalog.find((c) => c.name === content);
+  // 멤버: 기록 편집 불가 — 현재 참여자만 읽기 전용으로 표시
+  if (!Roles.isAdmin()) {
+    const ids = Mutations.getEvent(selDate, content);
+    const byId = Object.fromEntries(s.members.map((m) => [m.id, m]));
+    return el('div.checkin', {}, [
+      el('div.checkin-head', {}, [el('b', { text: `${content} 참여자 ${ids.length}명` }), cat ? el('span.muted', { text: `${cat.points}점 · ${cat.category}` }) : null]),
+      ids.length ? el('div.chips', { style: { marginTop: '10px' } }, ids.map((id) => el('span.chip', { text: byId[id]?.name || '?' }))) : el('div.empty.small', { text: '아직 기록이 없습니다.' }),
+      el('div.checkin-actions', {}, [btn('닫기', () => { selContent = null; renderParticipation(); }, { kind: 'ghost' })]),
+    ]);
+  }
   const current = new Set(Mutations.getEvent(selDate, content)); // memberIds already recorded
   let curImg = null, crop = null, imgEl = null;
 

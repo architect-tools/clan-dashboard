@@ -40,11 +40,13 @@ export function statCard(label, value, { sub, color, icon } = {}) {
   ]);
 }
 
-export function btn(text, onclick, { kind = '', icon, title } = {}) {
+export function btn(text, onclick, { kind = '', icon, title, admin = false } = {}) {
   // class via el()'s `class` attr — el()'s tag parser rejects spaces, so a
   // `button.btn btn-primary` tag string would silently fall back to a classless
   // <div> (looks like text, no pointer cursor). Keep the tag space-free.
-  return el('button.btn', { class: kind ? 'btn-' + kind : '', onclick, title: title || text, type: 'button' }, [
+  // admin:true → .admin-only (멤버 역할에서 CSS로 숨김).
+  const cls = [kind ? 'btn-' + kind : '', admin ? 'admin-only' : ''].filter(Boolean).join(' ');
+  return el('button.btn', { class: cls, onclick, title: title || text, type: 'button' }, [
     icon ? el('span.btn-icon', { text: icon }) : null, text,
   ]);
 }

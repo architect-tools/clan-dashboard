@@ -18,6 +18,10 @@ globalThis.fetch = async (u) => {
   return { ok: true, json: async () => JSON.parse(text), text: async () => text };
 };
 
+// run as admin so admin-only render paths are exercised
+localStorage.setItem('clandash.v1.role', 'admin');
+localStorage.setItem('clandash.v1.me', '관리자');
+
 let pass = 0, fail = 0;
 const ok = (name) => { console.log('  ✅ ' + name); pass++; };
 const bad = (name, e) => { console.log('  ❌ ' + name + ' — ' + (e?.stack || e)); fail++; };
@@ -51,6 +55,14 @@ for (const [name, fn] of Object.entries(views)) {
     else bad(name, 'empty output');
   } catch (e) { bad(name, e); }
 }
+
+console.log('\n── render each view (member role) ──');
+localStorage.setItem('clandash.v1.role', 'member');
+for (const [name, fn] of Object.entries(views)) {
+  try { app.innerHTML = ''; fn(); ok(`${name} (member) rendered`); }
+  catch (e) { bad(name + ' (member)', e); }
+}
+localStorage.setItem('clandash.v1.role', 'admin');
 
 console.log('\n── core mutations ──');
 try {

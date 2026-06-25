@@ -1,5 +1,6 @@
 // rotation.js — 전리품: 순번제 큐(컴팩트 아코디언) + 드랍 기록 + 분배 기록(내판가·인계자) + 분배 기준.
 import { DB, Mutations } from '../db.js';
+import { Roles } from '../roles.js';
 import { el, fmt, toast, uid, clear } from '../util.js';
 import { page, card, table, btn, modal, select, input, field, classBadge, confirmDialog } from './ui.js';
 
@@ -18,9 +19,10 @@ const remainClass = (ms) => ms <= 0 ? 'cd-over' : ms < 600000 ? 'cd-soon' : ms <
 
 export function renderRotation() {
   const s = DB.state;
+  const adm = Roles.isAdmin();
   const body = page('전리품', {
     subtitle: '드랍 · 내판 · 순번제 · 분배 기록',
-    actions: [btn('내판 도우미', () => saleHelper()), btn('+ 분배 기록', () => logDist(), { kind: 'primary' })],
+    actions: [btn('내판 도우미', () => saleHelper(), { admin: true }), btn('+ 분배 기록', () => logDist(), { kind: 'primary', admin: true })],
   });
 
   // ── 진행 중 내판 (입찰 보드) ──
@@ -29,7 +31,7 @@ export function renderRotation() {
   const board = sales.length
     ? el('div.sale-board', {}, sales.map((sale) => renderSale(sale)))
     : el('div.empty.small', { text: '진행 중인 내판이 없습니다. “+ 내판 올리기”로 시작하세요.' });
-  body.appendChild(card('진행 중 내판', board, { actions: btn('+ 내판 올리기', () => postSale(), { kind: 'primary' }) }));
+  body.appendChild(card('진행 중 내판', board, { actions: btn('+ 내판 올리기', () => postSale(), { kind: 'primary', admin: true }) }));
   if (sales.length) {
     const tick = () => document.querySelectorAll('.sale-cd').forEach((c) => {
       const rem = (+c.dataset.deadline) - Date.now();
@@ -46,7 +48,7 @@ export function renderRotation() {
   const qWrap = s.rotationQueues.length
     ? el('div.q-list', {}, s.rotationQueues.map((qу) => renderQueueRow(qу)))
     : el('div.empty.small', { text: '순번제 큐가 없습니다. (설계도·완제 등 순번 분배 목록)' });
-  body.appendChild(card('순번제 큐', qWrap, { className: 'card-flush', actions: btn('+ 순번 큐 추가', () => addQueue(), { kind: 'ghost' }) }));
+  body.appendChild(card('순번제 큐', qWrap, { className: 'card-flush', actions: btn('+ 순번 큐 추가', () => addQueue(), { kind: 'ghost', admin: true }) }));
 
   // ── 드랍 기록 ──
   const dropSearch = input({ placeholder: '콘텐츠/아이템 검색', value: dropQ, oninput: (e) => { dropQ = e.target.value; renderRotation(); } });
@@ -59,9 +61,9 @@ export function renderRotation() {
       { key: 'content', label: '콘텐츠', render: (r) => el('b', { text: r.content }) },
       { key: 'item', label: '아이템' },
       { key: 'note', label: '메모', render: (r) => el('span.muted', { text: r.note || '' }) },
-      { label: '', align: 'right', render: (r) => btn('삭제', () => { s.dropLog = s.dropLog.filter((x) => x.id !== r.id); DB.commit(); renderRotation(); }, { kind: 'ghost-danger' }) },
+      { label: '', align: 'right', render: (r) => btn('삭제', () => { s.dropLog = s.dropLog.filter((x) => x.id !== r.id); DB.commit(); renderRotation(); }, { kind: 'ghost-danger', admin: true }) },
     ], drops, { empty: dropQ ? '검색 결과 없음' : '드랍 기록이 없습니다.' })]),
-  ]), { actions: btn('+ 드랍 기록', () => addDrop(), { kind: 'ghost' }) }));
+  ]), { actions: btn('+ 드랍 기록', () => addDrop(), { kind: 'ghost', admin: true }) }));
 
   // ── 분배 기록 ──
   body.appendChild(card('분배 기록', el('div.scroll-tbl', {}, [table([
@@ -72,17 +74,17 @@ export function renderRotation() {
     { key: 'from', label: '인계자', render: (r) => el('span.muted', { text: r.from || '–' }) },
     { key: 'price', label: '내판가', align: 'right', render: (r) => r.price ? fmt(r.price) : '–' },
     { key: 'note', label: '메모', render: (r) => el('span.muted', { text: r.note || '' }) },
-    { label: '', align: 'right', render: (r) => btn('삭제', () => { s.distributionLog = s.distributionLog.filter((x) => x.id !== r.id); DB.commit(); renderRotation(); }, { kind: 'ghost-danger' }) },
-  ], s.distributionLog, { empty: '분배 내역이 없습니다.' })]), { actions: btn('+ 분배 기록', () => logDist(), { kind: 'ghost' }) }));
+    { label: '', align: 'right', render: (r) => btn('삭제', () => { s.distributionLog = s.distributionLog.filter((x) => x.id !== r.id); DB.commit(); renderRotation(); }, { kind: 'ghost-danger', admin: true }) },
+  ], s.distributionLog, { empty: '분배 내역이 없습니다.' })]), { actions: btn('+ 분배 기록', () => logDist(), { kind: 'ghost', admin: true }) }));
 
   // ── 분배 기준 (접이식 참고) ──
-  const rulesArea = el('textarea.input', { rows: 11, value: s.distributionRules || '',
+  const rulesArea = el('textarea.input', { rows: 11, value: s.distributionRules || '', readonly: adm ? null : 'readonly',
     style: { width: '100%', fontFamily: 'inherit', lineHeight: '1.7', resize: 'vertical' } });
   body.appendChild(el('details.rules-det', {}, [
-    el('summary', { text: '분배 기준 (클릭해서 보기 / 편집)' }),
+    el('summary', { text: adm ? '분배 기준 (클릭해서 보기 / 편집)' : '분배 기준 (클릭해서 보기)' }),
     el('div.rules-body', {}, [
       rulesArea,
-      el('div.row-actions', {}, [btn('기준 저장', () => { s.distributionRules = rulesArea.value; DB.commit(); toast('분배 기준 저장됨'); }, { kind: 'primary' })]),
+      el('div.row-actions', {}, [btn('기준 저장', () => { s.distributionRules = rulesArea.value; DB.commit(); toast('분배 기준 저장됨'); }, { kind: 'primary', admin: true })]),
     ]),
   ]));
 
@@ -105,15 +107,15 @@ export function renderRotation() {
         { label: '#', align: 'center', width: '34px', render: (r) => r._i + 1 },
         { key: 'name', label: '닉네임' },
         { label: '', align: 'right', width: '180px', render: (r) => el('div.row-actions.nowrap', {}, [
-          r._i === 0 ? btn('지급', () => giveFromQueue(qу, 0), { kind: 'primary' }) : null,
-          btn('▲', () => move(qу, r._i, -1), { kind: 'ghost', title: '위로' }),
-          btn('▼', () => move(qу, r._i, +1), { kind: 'ghost', title: '아래로' }),
-          btn('✕', () => { qу.items.splice(r._i, 1); DB.commit(); renderRotation(); }, { kind: 'ghost-danger', title: '제거' }),
+          r._i === 0 ? btn('지급', () => giveFromQueue(qу, 0), { kind: 'primary', admin: true }) : null,
+          btn('▲', () => move(qу, r._i, -1), { kind: 'ghost', title: '위로', admin: true }),
+          btn('▼', () => move(qу, r._i, +1), { kind: 'ghost', title: '아래로', admin: true }),
+          btn('✕', () => { qу.items.splice(r._i, 1); DB.commit(); renderRotation(); }, { kind: 'ghost-danger', title: '제거', admin: true }),
         ]) },
       ], rows, { className: 'card-compact', empty: '인원이 없습니다.' }),
       el('div.row-actions', {}, [
-        btn('+ 인원 추가', () => addToQueue(qу), { kind: 'ghost' }),
-        btn('큐 삭제', () => confirmDialog(`'${qу.name}' 큐를 삭제할까요?`, () => { s.rotationQueues = s.rotationQueues.filter((x) => x !== qу); openQueues.delete(qу.name); DB.commit(); renderRotation(); }, { danger: true, yesText: '삭제' }), { kind: 'ghost-danger' }),
+        btn('+ 인원 추가', () => addToQueue(qу), { kind: 'ghost', admin: true }),
+        btn('큐 삭제', () => confirmDialog(`'${qу.name}' 큐를 삭제할까요?`, () => { s.rotationQueues = s.rotationQueues.filter((x) => x !== qу); openQueues.delete(qу.name); DB.commit(); renderRotation(); }, { danger: true, yesText: '삭제' }), { kind: 'ghost-danger', admin: true }),
       ]),
     ]));
     return item;
@@ -246,15 +248,18 @@ export function renderRotation() {
       el('span.sale-cd', { dataset: { deadline: String(sale.deadline) }, class: remainClass(rem), text: remainText(rem) }),
     ]);
     const bids = el('div.sale-bids', {}, sale.bids.length
-      ? sale.bids.map((b, i) => el('span.bid-chip', {}, [
+      ? sale.bids.map((b, i) => el('span.bid-chip', { class: b.name === Roles.me() ? 'mine' : '' }, [
         el('span', { text: b.name + (b.amount ? ` · ${fmt(b.amount)}` : '') }),
-        btn('✕', () => { sale.bids.splice(i, 1); DB.commit(); renderRotation(); }, { kind: 'ghost-danger', title: '입찰 취소(관리자)' }),
+        // 취소 ✕: 관리자는 전부, 멤버는 자기 입찰만
+        Roles.canCancelBid(b)
+          ? btn('✕', () => { sale.bids.splice(i, 1); DB.commit(); renderRotation(); }, { kind: 'ghost-danger', title: Roles.isAdmin() ? '입찰 취소(관리자)' : '내 입찰 취소' })
+          : null,
       ]))
       : [el('span.muted', { text: '입찰 없음' })]);
     return el('div.sale-card', {}, [head, bids, el('div.row-actions', {}, [
       btn('+ 입찰', () => addBid(sale), { kind: 'ghost' }),
-      btn('마감 & 정산', () => closeSale(sale)),
-      btn('내판 취소', () => confirmDialog(`'${sale.item}' 내판을 취소(삭제)할까요?`, () => { s.sales = s.sales.filter((x) => x.id !== sale.id); DB.commit(); renderRotation(); }, { danger: true, yesText: '취소' }), { kind: 'ghost-danger' }),
+      btn('마감 & 정산', () => closeSale(sale), { admin: true }),
+      btn('내판 취소', () => confirmDialog(`'${sale.item}' 내판을 취소(삭제)할까요?`, () => { s.sales = s.sales.filter((x) => x.id !== sale.id); DB.commit(); renderRotation(); }, { danger: true, yesText: '취소' }), { kind: 'ghost-danger', admin: true }),
     ])]);
   }
   function postSale() {
@@ -278,14 +283,21 @@ export function renderRotation() {
   }
   function addBid(sale) {
     const active = s.members.filter((m) => m.active !== false);
-    const member = select(active.map((m) => m.name), active[0]?.name);
+    const isAdm = Roles.isAdmin();
+    // 관리자는 누구 이름으로든 대리 입찰 가능, 멤버는 본인(닉네임)으로 고정
+    const member = isAdm
+      ? select(active.map((m) => m.name), Roles.me() || active[0]?.name)
+      : input({ value: Roles.me(), readonly: 'readonly', style: { opacity: '.7' } });
     const amount = input({ type: 'number', placeholder: '입찰가' });
+    const bidderName = () => (isAdm ? member.value : Roles.me()).trim();
     modal('입찰 추가', (close) => el('div.form', {}, [
-      field('클랜원', member),
+      field(isAdm ? '클랜원(대리 입찰)' : '입찰자', member),
       sale.bidType === '경매' ? field('입찰가(다이아)', amount) : null,
       el('div.modal-actions', {}, [btn('취소', close), btn('입찰', () => {
-        if (sale.bids.some((b) => b.name === member.value)) return toast('이미 입찰함', 'error');
-        sale.bids.push({ name: member.value, amount: sale.bidType === '경매' ? (+amount.value || 0) : 0 });
+        const name = bidderName();
+        if (!name) return toast('닉네임이 없습니다', 'error');
+        if (sale.bids.some((b) => b.name === name)) return toast('이미 입찰함', 'error');
+        sale.bids.push({ name, amount: sale.bidType === '경매' ? (+amount.value || 0) : 0 });
         DB.commit(); close(); renderRotation();
       }, { kind: 'primary' })]),
     ]));

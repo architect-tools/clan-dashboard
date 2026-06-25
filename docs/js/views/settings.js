@@ -1,6 +1,7 @@
 // settings.js — 사이트 전역 설정: 화면(UI 스케일) · 클랜 정보 · 연동/데이터.
 // (분배 비율·티어컷·고투·운영진·콘텐츠 점수는 distParams.js = '분배 파라미터'로 분리)
 import { DB } from '../db.js';
+import { Roles } from '../roles.js';
 import { el, toast, downloadFile, applyUiScale } from '../util.js';
 import { CONFIG } from '../config.js';
 import { page, card, btn, input, field, confirmDialog } from './ui.js';
@@ -8,6 +9,7 @@ import { page, card, btn, input, field, confirmDialog } from './ui.js';
 export function renderSettings() {
   const s = DB.state;
   const body = page('설정', { subtitle: '화면 · 클랜 정보 · 데이터 — 사이트 전역 설정' });
+  if (!Roles.isAdmin()) { body.appendChild(el('div.empty', { text: '설정은 관리자만 변경할 수 있습니다. (관리자 비밀번호로 입장하세요)' })); return; }
 
   // ── 화면 (UI 스케일) ──
   const cur = s.appSettings.uiScale || 1;

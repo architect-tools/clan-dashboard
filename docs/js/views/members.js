@@ -1,5 +1,6 @@
 // members.js — roster CRUD (이름/직업/전투력/참여점수).
 import { DB, Mutations } from '../db.js';
+import { Roles } from '../roles.js';
 import { tierForScore, attendanceCount } from '../calc.js';
 import { el, fmt, toast } from '../util.js';
 import { CLASS_LIST, CLASSES } from '../config.js';
@@ -11,6 +12,8 @@ let q = '', sortKey = 'power', sortDir = -1, classFilter = '', quickEdit = false
 
 export function renderMembers() {
   const s = DB.state;
+  const adm = Roles.isAdmin();
+  if (!adm) quickEdit = false; // 멤버는 인라인 편집 불가
   const tiers = s.tiers;
   let rows = s.members.map((m) => ({ ...m, tier: tierForScore(m.score, tiers) }));
   if (q) rows = rows.filter((m) => m.name.includes(q));
@@ -28,9 +31,9 @@ export function renderMembers() {
   const body = page('명단 관리', {
     subtitle: `클랜원 ${active.length}명 · 직업/전투력/참여점수 관리`,
     actions: [
-      btn(quickEdit ? '빠른편집 끄기' : '빠른편집', () => { quickEdit = !quickEdit; refresh(); }, { kind: quickEdit ? 'primary' : 'ghost' }),
-      btn('+ 여러명 추가', () => bulkAdd(), { kind: 'ghost' }),
-      btn('+ 클랜원 추가', () => editMember(null), { kind: 'primary' }),
+      btn(quickEdit ? '빠른편집 끄기' : '빠른편집', () => { quickEdit = !quickEdit; refresh(); }, { kind: quickEdit ? 'primary' : 'ghost', admin: true }),
+      btn('+ 여러명 추가', () => bulkAdd(), { kind: 'ghost', admin: true }),
+      btn('+ 클랜원 추가', () => editMember(null), { kind: 'primary', admin: true }),
     ],
   });
 
@@ -68,8 +71,8 @@ export function renderMembers() {
     { label: '티어', align: 'center', render: (m) => tierBadge(m.tier) },
     { label: '상태', align: 'center', render: (m) => el('span.dot', { class: m.active !== false ? 'on' : 'off', title: m.active !== false ? '활동' : '휴면' }) },
     { label: '', align: 'right', render: (m) => el('div.row-actions.nowrap', {}, [
-      btn('수정', () => editMember(m), { kind: 'ghost' }),
-      btn('삭제', () => confirmDialog(`${m.name} 님을 삭제할까요?`, () => { Mutations.removeMember(m.id); DB.commit(); toast('삭제되었습니다'); refresh(); }, { danger: true, yesText: '삭제' }), { kind: 'ghost-danger' }),
+      btn('수정', () => editMember(m), { kind: 'ghost', admin: true }),
+      btn('삭제', () => confirmDialog(`${m.name} 님을 삭제할까요?`, () => { Mutations.removeMember(m.id); DB.commit(); toast('삭제되었습니다'); refresh(); }, { danger: true, yesText: '삭제' }), { kind: 'ghost-danger', admin: true }),
     ]) },
   ], rows, { empty: '클랜원이 없습니다.' })));
 
@@ -200,7 +203,7 @@ function openMemberDetail(m) {
       : el('div.empty.small', { text: '받은 다이아 없음' }),
 
     el('div.modal-sec', { text: '장착 장비' }),
-    equipGrid(m, { editable: true }),
+    equipGrid(m, { editable: Roles.isAdmin() }),
     boards.length ? el('div.modal-sec', { text: '기타 현황' }) : null,
     boards.length ? el('div', {}, boards.map((b) => el('div.md-board', {}, [
       el('b', { text: b.name }),
@@ -208,6 +211,6 @@ function openMemberDetail(m) {
     ]))) : null,
   ]), {
     wide: 'x',
-    headerActions: (close) => [btn('편집', () => { close(); editMember(m); })],
+    headerActions: (close) => Roles.isAdmin() ? [btn('편집', () => { close(); editMember(m); })] : [],
   });
 }

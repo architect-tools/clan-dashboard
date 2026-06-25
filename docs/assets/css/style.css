@@ -36,6 +36,21 @@ a{color:inherit;text-decoration:none}
 .gate-input:focus{border-color:var(--primary)}
 .gate-err{color:var(--bad);font-size:13px;min-height:18px;margin:8px 0}
 .gate-btn{width:100%;margin-top:6px;justify-content:center}
+.gate-who{cursor:pointer;margin-bottom:10px}
+.gate-foot{color:var(--dim);font-size:11px;margin:14px 0 0}
+
+/* ── roles (member/admin gating) ─────────────────────────────────── */
+body[data-role="member"] .admin-only{display:none !important}
+.role-badge{margin-left:14px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px;
+  border:1px solid var(--line2);color:var(--muted);letter-spacing:-.2px;white-space:nowrap}
+.role-badge.admin{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent);
+  background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.role-badge.member{color:var(--primary);border-color:color-mix(in srgb,var(--primary) 40%,transparent);
+  background:color-mix(in srgb,var(--primary) 10%,transparent)}
+.whoami{display:flex;align-items:center;gap:6px;padding:2px 8px 10px;font-size:12px}
+.whoami-role{font-weight:700;font-size:10px;padding:2px 7px;border-radius:5px;color:var(--on-ink);background:var(--primary)}
+.whoami.admin .whoami-role{background:var(--accent)}
+.whoami-name{color:var(--muted);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ── layout ──────────────────────────────────────────────────────── */
 .layout{display:flex;min-height:100vh}
@@ -249,6 +264,7 @@ select.input{cursor:pointer}
 .cd-over{color:var(--dim)}
 .sale-bids{display:flex;flex-wrap:wrap;gap:5px;min-height:22px}
 .bid-chip{display:inline-flex;align-items:center;gap:2px;padding:2px 4px 2px 9px;border-radius:7px;background:var(--panel2);border:1px solid var(--line2);font-size:12px}
+.bid-chip.mine{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 14%,var(--panel2))}
 .bid-chip .btn{padding:2px 5px}
 
 /* ── schedule ────────────────────────────────────────────────────── */

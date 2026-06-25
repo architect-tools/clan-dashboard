@@ -2,6 +2,7 @@
 import { CONFIG } from './config.js';
 import { DB } from './db.js';
 import { Auth } from './auth.js';
+import { Roles } from './roles.js';
 import { Router } from './router.js';
 import { el, $, toast, applyUiScale } from './util.js';
 import { renderDashboard } from './views/dashboard.js';
@@ -22,7 +23,7 @@ const NAV = [
   { path: 'rotation', icon: '🎁', label: '전리품' },
   { path: 'gear', icon: '🛡️', label: '장비/숙련 현황' },
   { path: 'schedule', icon: '🗓️', label: '일정' },
-  { path: 'settings', icon: '⚙️', label: '설정' },
+  { path: 'settings', icon: '⚙️', label: '설정', admin: true },
 ];
 
 let undoBtn, redoBtn;
@@ -38,19 +39,23 @@ function buildShell() {
     el('div.brand', {}, [el('div', {}, [
       el('div.brand-name', { text: CONFIG.appName }), el('div.brand-sub', { text: '관리자 대시보드' })])]),
     el('div.nav-links', {}, NAV.map((n) => el('a.nav-link', {
-      'data-nav': n.path, href: '#/' + n.path,
+      'data-nav': n.path, href: '#/' + n.path, class: n.admin ? 'admin-only' : '',
     }, [el('span', { text: n.label })]))),
     el('div.sidebar-foot', {}, [
+      el('div.whoami', { class: Roles.isAdmin() ? 'admin' : 'member' },
+        [el('span.whoami-role', { text: Roles.isAdmin() ? '관리자' : '멤버' }), el('span.whoami-name', { text: Roles.me() || '?' })]),
       el('div.ver', { text: 'v' + CONFIG.version + (CONFIG.APPS_SCRIPT_URL ? ' · 클라우드' : ' · 로컬') }),
-      el('a.nav-link.logout', { onclick: () => Auth.logout(), text: '잠금' }),
+      el('a.nav-link.logout', { onclick: () => Auth.logout(), text: '잠금 / 전환' }),
     ]),
   ]);
-  undoBtn = el('button.icon-btn', { title: '실행 취소 (Ctrl+Z)', onclick: () => DB.undo(), disabled: true }, ['↶']);
-  redoBtn = el('button.icon-btn', { title: '다시 실행 (Ctrl+Shift+Z)', onclick: () => DB.redo(), disabled: true }, ['↷']);
+  // undo/redo는 공유 상태를 되돌릴 수 있어 관리자 전용
+  undoBtn = el('button.icon-btn.admin-only', { title: '실행 취소 (Ctrl+Z)', onclick: () => DB.undo(), disabled: true }, ['↶']);
+  redoBtn = el('button.icon-btn.admin-only', { title: '다시 실행 (Ctrl+Shift+Z)', onclick: () => DB.redo(), disabled: true }, ['↷']);
   const main = el('main.main', {}, [el('div#app')]);
   const topbar = el('header.topbar', {}, [
     el('button.menu-btn', { text: '☰', onclick: () => document.body.classList.toggle('nav-open') }),
     el('span.topbar-title', { text: CONFIG.appName }),
+    el('span.role-badge', { class: Roles.isAdmin() ? 'admin' : 'member', text: (Roles.isAdmin() ? '관리자' : '멤버') + ' · ' + (Roles.me() || '?') }),
     el('div.topbar-tools', {}, [undoBtn, redoBtn]),
   ]);
   root.appendChild(el('div.layout', {}, [nav, el('div.main-wrap', {}, [topbar, main])]));
@@ -69,6 +74,7 @@ function buildShell() {
 
 async function main() {
   await Auth.gate();
+  document.body.dataset.role = Roles.role(); // CSS가 .admin-only 표시/숨김 결정
   buildShell();
   try { await DB.init(); }
   catch (e) { console.error(e); toast('데이터 로드 실패: ' + e.message, 'error'); return; }

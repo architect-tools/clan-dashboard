@@ -2,6 +2,7 @@
 // Covers the source sheets' tracking tabs (무기 숙련, 장비 현황, 주문석,
 // 성좌/탈것/표본, 엘릭서&패시브 …) as editable boards: rows = members, custom columns.
 import { DB } from '../db.js';
+import { Roles } from '../roles.js';
 import { el, toast, uid } from '../util.js';
 import { page, card, btn, input, select, modal, field, confirmDialog } from './ui.js';
 import { equipGrid } from './equip.js';
@@ -10,6 +11,7 @@ let activeBoard = 0, gearMember = null;
 
 export function renderGear() {
   const s = DB.state;
+  const adm = Roles.isAdmin();
   if (!s.statusBoards) s.statusBoards = [];
   if (!s.statusBoards.length) seedDefaultBoards(s); // first run
 
@@ -18,7 +20,7 @@ export function renderGear() {
 
   const body = page('장비/숙련 현황', {
     subtitle: '장착 장비(슬롯) + 무기 숙련·주문석·성좌 등 클랜원별 현황',
-    actions: [btn('+ 보드 추가', () => addBoard(), { kind: 'primary' })],
+    actions: [btn('+ 보드 추가', () => addBoard(), { kind: 'primary', admin: true })],
   });
 
   // ── 장착 장비 (구조화 슬롯, 게임 장비창 레이아웃) ──
@@ -29,8 +31,8 @@ export function renderGear() {
     const picker = select(activeMembers.map((m) => ({ value: String(m.id), label: m.name })), String(gearMember),
       { onchange: (e) => { gearMember = +e.target.value; renderGear(); } });
     body.appendChild(card('장착 장비', el('div', {}, [
-      el('div.toolbar', {}, [el('span.muted', { text: '클랜원' }), picker, el('span.hint', { text: '슬롯을 클릭해 등급·티어·강화 입력' })]),
-      equipGrid(selMember, { editable: true }),
+      el('div.toolbar', {}, [el('span.muted', { text: '클랜원' }), picker, adm ? el('span.hint', { text: '슬롯을 클릭해 등급·티어·강화 입력' }) : null]),
+      equipGrid(selMember, { editable: adm }),
     ])));
   }
 
@@ -51,10 +53,10 @@ export function renderGear() {
   const headCells = [el('th.sticky-col', { text: '닉네임' }), el('th', { text: '직업', style: { width: '80px' } })];
   board.columns.forEach((col) => headCells.push(el('th', {}, [
     el('span', { text: col }),
-    el('button.col-x', { title: '열 삭제', text: '✕', onclick: () => { board.columns = board.columns.filter((c) => c !== col); DB.commit(); renderGear(); } }),
+    adm ? el('button.col-x', { title: '열 삭제', text: '✕', onclick: () => { board.columns = board.columns.filter((c) => c !== col); DB.commit(); renderGear(); } }) : null,
   ])));
   headCells.push(el('th', { style: { width: '40px' } }, [
-    el('button.col-add', { title: '열 추가', text: '+', onclick: () => addColumn(board) })]));
+    adm ? el('button.col-add', { title: '열 추가', text: '+', onclick: () => addColumn(board) }) : null]));
   tbl.appendChild(el('thead', {}, el('tr', {}, headCells)));
 
   const tb = el('tbody');
@@ -65,11 +67,10 @@ export function renderGear() {
     ]);
     const rec = (board.data[m.id] ||= {});
     board.columns.forEach((col) => {
-      const inp = input({
-        value: rec[col] ?? '', placeholder: '-', class: 'cell-input',
-        onchange: (e) => { rec[col] = e.target.value; DB.commit(); },
-      });
-      row.appendChild(el('td', {}, [inp]));
+      const cell = adm
+        ? input({ value: rec[col] ?? '', placeholder: '-', class: 'cell-input', onchange: (e) => { rec[col] = e.target.value; DB.commit(); } })
+        : el('span', { class: rec[col] ? '' : 'muted', text: rec[col] || '-' });
+      row.appendChild(el('td', {}, [cell]));
     });
     row.appendChild(el('td'));
     tb.appendChild(row);
@@ -78,9 +79,9 @@ export function renderGear() {
 
   body.appendChild(card(null, el('div.table-wrap', {}, [tbl]), { className: 'card-flush' }));
   body.appendChild(el('div.toolbar', {}, [
-    btn('+ 열 추가', () => addColumn(board), { kind: 'ghost' }),
-    btn('이름 변경', () => renameBoard(board), { kind: 'ghost' }),
-    btn('보드 삭제', () => confirmDialog(`'${board.name}' 보드를 삭제할까요?`, () => { s.statusBoards.splice(activeBoard, 1); activeBoard = 0; DB.commit(); renderGear(); }, { danger: true, yesText: '삭제' }), { kind: 'ghost-danger' }),
+    btn('+ 열 추가', () => addColumn(board), { kind: 'ghost', admin: true }),
+    btn('이름 변경', () => renameBoard(board), { kind: 'ghost', admin: true }),
+    btn('보드 삭제', () => confirmDialog(`'${board.name}' 보드를 삭제할까요?`, () => { s.statusBoards.splice(activeBoard, 1); activeBoard = 0; DB.commit(); renderGear(); }, { danger: true, yesText: '삭제' }), { kind: 'ghost-danger', admin: true }),
   ]));
 }
 

@@ -1,5 +1,6 @@
 // schedule.js — weekly clan content schedule (editable event list by weekday).
 import { DB } from '../db.js';
+import { Roles } from '../roles.js';
 import { el, toast, uid } from '../util.js';
 import { page, card, btn, modal, input, select, field, confirmDialog } from './ui.js';
 
@@ -19,9 +20,10 @@ export function renderSchedule() {
     DAYS.forEach((d) => DEFAULTS.forEach((e) => s.schedule.push({ id: uid(), day: d, ...e, note: '' })));
     DB.commit();
   }
+  const adm = Roles.isAdmin();
   const body = page('일정', { subtitle: '클랜 콘텐츠 주간 일정', actions: [
-    btn('+ 일정 추가', () => editEvent(null), { kind: 'primary' }),
-    btn('초기화', () => confirmDialog('일정을 모두 지울까요?', () => { s.schedule = []; DB.commit(); renderSchedule(); }, { danger: true, yesText: '초기화' }), { kind: 'ghost-danger' }),
+    btn('+ 일정 추가', () => editEvent(null), { kind: 'primary', admin: true }),
+    btn('초기화', () => confirmDialog('일정을 모두 지울까요?', () => { s.schedule = []; DB.commit(); renderSchedule(); }, { danger: true, yesText: '초기화' }), { kind: 'ghost-danger', admin: true }),
   ] });
 
   const grid = el('div.sched-grid');
@@ -31,12 +33,12 @@ export function renderSchedule() {
       el('div.sched-day', { class: (day === '토' || day === '일') ? 'weekend' : '', text: day + '요일' }),
     ]);
     if (!items.length) col.appendChild(el('div.empty.small', { text: '일정 없음' }));
-    items.forEach((e) => col.appendChild(el('div.sched-event', { onclick: () => editEvent(e) }, [
+    items.forEach((e) => col.appendChild(el('div.sched-event', { class: adm ? 'clickable' : '', onclick: adm ? () => editEvent(e) : null }, [
       el('span.sched-time', { text: e.time || '' }),
       el('span.sched-name', { text: e.name }),
       e.group && e.group !== '전체' ? el('span.sched-group', { text: e.group }) : null,
     ])));
-    col.appendChild(el('button.sched-add', { text: '+', title: day + '요일 일정 추가', onclick: () => editEvent({ day }) }));
+    if (adm) col.appendChild(el('button.sched-add', { text: '+', title: day + '요일 일정 추가', onclick: () => editEvent({ day }) }));
     grid.appendChild(col);
   });
   body.appendChild(card(null, grid, { className: 'card-flush' }));

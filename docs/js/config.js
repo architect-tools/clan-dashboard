@@ -13,11 +13,16 @@ export const CONFIG = {
   // Access gate. Change this password. (Obfuscation only — the real write
   // protection is the token checked by the Apps Script backend.)
   GATE_PASSWORD: '7979',
+  // 관리자 비밀번호 — 7979(멤버)와 다르게. 이 비번으로 입장하면 관리자 권한.
+  // (공개 repo라 난독화 수준 — 강제는 클라이언트 UI에서. 원하는 값으로 바꾸세요.)
+  ADMIN_PASSWORD: 'admin7979',
 
   // localStorage keys
   STORE_KEY: 'clandash.v1.data',
   AUTH_KEY: 'clandash.v1.auth',
   TOKEN_KEY: 'clandash.v1.token',
+  ME_KEY: 'clandash.v1.me',       // 내 닉네임(입찰 귀속)
+  ROLE_KEY: 'clandash.v1.role',   // 'admin' | 'member'
 };
 
 // 직업(class) metadata: label + theme color + short tag.
