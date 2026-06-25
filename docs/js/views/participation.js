@@ -7,7 +7,7 @@ import { computeScores, tierForScore } from '../calc.js';
 import { el, fmt, toast, clear } from '../util.js';
 import { CATEGORY_ORDER } from '../config.js';
 import { loadImage, extractLines, consensusMatch, buildAnchor, detectByAnchor } from '../ocr.js';
-import { page, card, btn, tierBadge, classBadge } from './ui.js';
+import { page, card, btn, modal, tierBadge, classBadge } from './ui.js';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 let selDate = todayISO();
@@ -116,21 +116,45 @@ function renderDay(host) {
 function daySummaryPanel() {
   const s = DB.state;
   const day = s.participation.byDate[selDate] || {};
-  const contents = Object.keys(day);
-  if (!contents.length) return el('div.empty', { text: '위에서 콘텐츠를 선택해 참여자를 기록하세요.' });
   const byId = Object.fromEntries(s.members.map((m) => [m.id, m]));
-  const wrap = el('div.day-records');
+  const contents = Object.keys(day).filter((cn) => (day[cn] || []).length);
+  if (!contents.length) return el('div.empty', { text: '위에서 콘텐츠를 선택해 참여자를 기록하세요.' });
+  // arrange recorded contents as slots, ordered by catalog category then name
+  const catIdx = (cn) => { const c = s.contentCatalog.find((x) => x.name === cn); return c ? (CATEGORY_ORDER.indexOf(c.category) + 1 || 99) : 99; };
+  contents.sort((a, b) => catIdx(a) - catIdx(b) || a.localeCompare(b));
+
+  const grid = el('div.slot-grid');
   contents.forEach((cn) => {
     const ids = day[cn];
-    wrap.appendChild(el('div.rec-block', {}, [
-      el('div.rec-head', {}, [
-        el('b', { text: cn }), el('span.rec-count', { text: `${ids.length}명` }),
-        btn('편집', () => { selContent = cn; renderParticipation(); }, { kind: 'ghost' }),
-      ]),
-      el('div.chips', {}, ids.map((id) => el('span.chip', { text: byId[id]?.name || '?' }))),
+    const c = s.contentCatalog.find((x) => x.name === cn);
+    const preview = ids.slice(0, 3).map((id) => byId[id]?.name || '?').join(', ') + (ids.length > 3 ? ` 외 ${ids.length - 3}명` : '');
+    grid.appendChild(el('div.day-slot', {
+      onclick: () => openSlot(cn, ids, byId),
+      title: `${cn} — 참여자 ${ids.length}명 (클릭해서 보기)`,
+    }, [
+      c ? el('span.slot-cat', { text: c.category }) : null,
+      el('div.slot-name', { text: cn }),
+      el('div.slot-count', {}, [el('b', { text: ids.length }), '명']),
+      el('div.slot-preview', { text: preview }),
     ]));
   });
-  return wrap;
+  return el('div', {}, [
+    el('div.slot-hint', { text: '슬롯을 클릭하면 참여자 전체가 보입니다.' }),
+    grid,
+  ]);
+}
+
+// popup the full participant list for a content slot (+ jump to edit)
+function openSlot(cn, ids, byId) {
+  const c = DB.state.contentCatalog.find((x) => x.name === cn);
+  modal(`${cn} · 참여자 ${ids.length}명`, (close) => el('div', {}, [
+    c ? el('div.muted', { text: `${c.points}점 · ${c.category}` }) : null,
+    el('div.chips', { style: { marginTop: '10px' } }, ids.map((id) => el('span.chip', { text: byId[id]?.name || '?' }))),
+    el('div.modal-actions', {}, [
+      btn('닫기', close),
+      btn('✏️ 편집', () => { close(); selContent = cn; renderParticipation(); }, { kind: 'primary' }),
+    ]),
+  ]));
 }
 
 // ── check-in panel for a chosen content ──────────────────────────────

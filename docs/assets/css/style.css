@@ -312,6 +312,17 @@ select.input{cursor:pointer}
 .rec-count{color:var(--accent);font-size:12px;font-weight:700;flex:1}
 .chips{display:flex;flex-wrap:wrap;gap:5px}
 .chip{padding:3px 9px;border-radius:7px;background:var(--panel2);border:1px solid var(--line2);font-size:12px}
+/* day participation slots (one per recorded content; click → participant list) */
+.slot-hint{font-size:12px;color:var(--dim);margin-bottom:10px}
+.slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.day-slot{border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:var(--bg2);
+  cursor:pointer;transition:.13s;display:flex;flex-direction:column;gap:4px;min-height:80px}
+.day-slot:hover{border-color:var(--primary);transform:translateY(-2px);background:var(--panel2)}
+.slot-cat{font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.4px}
+.slot-name{font-size:14px;font-weight:700;color:var(--txt);line-height:1.2}
+.slot-count{font-size:12.5px;color:var(--muted);margin-top:auto}
+.slot-count b{color:var(--good);font-size:16px;margin-right:1px}
+.slot-preview{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .summary-chips{margin-bottom:6px}
 .cls-chip{color:var(--c);border-color:color-mix(in srgb,var(--c) 35%,transparent);background:color-mix(in srgb,var(--c) 12%,transparent);font-weight:600}
 .banner{display:flex;align-items:center;gap:12px;padding:13px 16px;border-radius:12px;font-size:13.5px;
