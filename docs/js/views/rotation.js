@@ -1,9 +1,9 @@
 // rotation.js — 전리품: 순번제 큐(컴팩트 아코디언) + 드랍 기록 + 분배 기록(내판가·인계자) + 분배 기준.
 import { DB, Mutations } from '../db.js';
-import { el, fmt, toast, uid } from '../util.js';
-import { page, card, table, btn, modal, select, input, field, confirmDialog } from './ui.js';
+import { el, fmt, toast, uid, clear } from '../util.js';
+import { page, card, table, btn, modal, select, input, field, classBadge, confirmDialog } from './ui.js';
 
-const DIST_TYPES = ['순번제', '내판', '참여도', '고정', '기타'];
+const DIST_TYPES = ['순번제', '투력', '내판', '참여도', '고정', '기타'];
 let dropQ = '';
 const openQueues = new Set(); // 펼쳐진 큐 이름(재렌더에도 유지)
 
@@ -11,7 +11,7 @@ export function renderRotation() {
   const s = DB.state;
   const body = page('전리품', {
     subtitle: '드랍 · 내판 · 순번제 · 분배 기록',
-    actions: [btn('+ 분배 기록', () => logDist(), { kind: 'primary' })],
+    actions: [btn('내판 도우미', () => saleHelper()), btn('+ 분배 기록', () => logDist(), { kind: 'primary' })],
   });
 
   // ── 순번제 큐 (컴팩트 아코디언) ──
@@ -159,5 +159,52 @@ export function renderRotation() {
         DB.commit(); close(); toast('기록되었습니다'); renderRotation();
       }, { kind: 'primary' })]),
     ]));
+  }
+
+  // 내판/분배 도우미: 희망자(또는 전체)를 투력/참여도 순으로 자동 순위 → 1순위에게 분배 기록.
+  function saleHelper() {
+    modal('내판 / 분배 도우미', (close) => {
+      const item = input({ placeholder: '아이템명' });
+      const sortBy = select([{ value: 'power', label: '투력 순' }, { value: 'score', label: '참여도 순' }], 'power');
+      const threshold = input({ type: 'number', placeholder: '예: 90 (이상=10다이아)' });
+      const salePrice = input({ type: 'number', value: '10' });
+      const active = s.members.filter((mm) => mm.active !== false);
+      const picks = el('div.pick-grid', {}, active.map((mm) => el('label.pick-item', {}, [
+        el('input', { type: 'checkbox', dataset: { id: String(mm.id) } }), el('span', { text: mm.name }),
+      ])));
+      const result = el('div', { style: { marginTop: '12px' } });
+      const compute = () => {
+        const checked = [...picks.querySelectorAll('input:checked')].map((c) => +c.dataset.id);
+        const pool = checked.length ? active.filter((mm) => checked.includes(mm.id)) : active;
+        const key = sortBy.value;
+        const cands = [...pool].sort((a, b) => (b[key] || 0) - (a[key] || 0));
+        const th = +threshold.value || 0;
+        clear(result);
+        if (!cands.length) return result.appendChild(el('div.empty.small', { text: '대상이 없습니다.' }));
+        result.appendChild(el('div.modal-sec', { text: `순위 (${key === 'power' ? '투력' : '참여도'} 순) · ${cands.length}명${checked.length ? '' : ' · 전체'}` }));
+        result.appendChild(table([
+          { label: '#', align: 'center', width: '34px', render: (_, i) => i + 1 },
+          { key: 'name', label: '닉네임', render: (mm) => el('b', { text: mm.name }) },
+          { label: '직업', render: (mm) => classBadge(mm.cls) },
+          { label: key === 'power' ? '전투력' : '참여점수', align: 'right', render: (mm) => key === 'power' ? mm.power.toLocaleString() : fmt(mm.score) },
+          { label: '구분', align: 'center', render: (mm) => (th && mm.power >= th) ? el('span.qstatus.done', { text: '10다이아' }) : el('span.qstatus.wait', { text: '내판' }) },
+          { label: '', align: 'right', render: (mm, i) => btn(i === 0 ? '분배(1순위)' : '분배', () => {
+            const isTop = th && mm.power >= th;
+            Mutations.logDistribution({ date: new Date().toISOString().slice(0, 10), item: item.value.trim() || '(미입력)',
+              type: isTop ? (key === 'power' ? '투력' : '참여도') : '내판', member: mm.name, from: '',
+              price: isTop ? 10 : (+salePrice.value || 0), note: '' });
+            DB.commit(); close(); toast(`${item.value.trim() || '아이템'} → ${mm.name} 분배 기록`); renderRotation();
+          }, { kind: i === 0 ? 'primary' : 'ghost' }) },
+        ], cands));
+      };
+      return el('div.form', {}, [
+        field('아이템명', item),
+        el('div.form-grid', {}, [field('정렬 기준', sortBy), field('기준 투력(만, 선택)', threshold)]),
+        field('내판가(기준 미만, 다이아)', salePrice),
+        field('구매 희망자 (체크 없으면 전체 활동 멤버)', picks),
+        btn('순위 계산', () => compute(), { kind: '' }),
+        result,
+      ]);
+    }, { wide: 'x' });
   }
 }
