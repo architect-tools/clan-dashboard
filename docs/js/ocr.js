@@ -138,18 +138,22 @@ export function preprocess(img, crop = null, scaleHint = SCALE, { invert = false
   return { dataUrl: cv.toDataURL('image/png'), canvas: cv, scale, ox: sx, oy: sy };
 }
 
-const _workers = {};  // cache one worker per language combo
+// Load the Tesseract.js CDN script once.
+async function ensureTesseract(onProgress) {
+  if (window.Tesseract) return;
+  onProgress({ stage: 'OCR 엔진 로딩(최초 1회)', progress: 0.05 });
+  await new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = TESSERACT_CDN; s.onload = res; s.onerror = () => rej(new Error('Tesseract 로드 실패'));
+    document.head.appendChild(s);
+  });
+}
+
+const _workers = {};  // single worker per language (used by experimental extractRefined/extractSlots)
 async function getWorker(onProgress, lang = 'kor+eng') {
   if (_workers[lang]) return _workers[lang];
   _workers[lang] = (async () => {
-    if (!window.Tesseract) {
-      onProgress({ stage: 'OCR 엔진 로딩(최초 1회)', progress: 0.05 });
-      await new Promise((res, rej) => {
-        const s = document.createElement('script');
-        s.src = TESSERACT_CDN; s.onload = res; s.onerror = () => rej(new Error('Tesseract 로드 실패'));
-        document.head.appendChild(s);
-      });
-    }
+    await ensureTesseract(onProgress);
     onProgress({ stage: `OCR 데이터 준비(${lang}, 최초 1회)`, progress: 0.1 });
     return window.Tesseract.createWorker(lang, 1, {
       logger: (m) => { if (m.status === 'recognizing text') onProgress({ stage: '문자 인식 중', progress: 0.3 + m.progress * 0.6 }); },
@@ -158,26 +162,50 @@ async function getWorker(onProgress, lang = 'kor+eng') {
   return _workers[lang];
 }
 
+// Worker POOL (scheduler) so the multi-pass extractLines recognizes passes in
+// parallel instead of one-at-a-time. Pool size = cores-1, clamped to 2..4.
+function poolSize() {
+  const c = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 4;
+  return Math.max(2, Math.min(4, c - 1));
+}
+let _schedulerP = null;
+async function getScheduler(onProgress, lang = 'kor+eng', psm = '11') {
+  if (_schedulerP) return _schedulerP;
+  _schedulerP = (async () => {
+    await ensureTesseract(onProgress);
+    onProgress({ stage: `OCR 데이터 준비(${lang}, 워커 ${poolSize()}개, 최초 1회)`, progress: 0.1 });
+    const scheduler = window.Tesseract.createScheduler();
+    await Promise.all(Array.from({ length: poolSize() }, async () => {
+      const w = await window.Tesseract.createWorker(lang, 1);
+      await w.setParameters({ tessedit_pageseg_mode: psm });
+      scheduler.addWorker(w);
+    }));
+    return scheduler;
+  })();
+  return _schedulerP;
+}
+
 /**
  * Whole-region OCR with MULTI-SCALE union. OCR of small game text is
  * non-monotonic in scale — a name garbled at one zoom level is read cleanly at
  * another. Running a few scales and unioning all recognized text catches names
  * no single pass gets. Combined with confusable-char matching downstream.
  */
-export async function extractLines(img, crop, onProgress = () => {}, { psm = '11', scales = [2.8, 3.6, 4.4, 5.2], lang = 'kor+eng', variants = [{}, { binarize: 132 }, { binarize: 110 }] } = {}) {
-  const worker = await getWorker(onProgress, lang);
-  await worker.setParameters({ tessedit_pageseg_mode: psm });
-  const perScale = [];
+export async function extractLines(img, crop, onProgress = () => {}, { psm = '11', scales = [2.8, 3.6, 4.4], lang = 'kor+eng', variants = [{}, { binarize: 132 }, { binarize: 110 }] } = {}) {
+  const scheduler = await getScheduler(onProgress, lang, psm);
   const passes = [];
   for (const s of scales) for (const v of variants) passes.push({ s, v });
-  for (let i = 0; i < passes.length; i++) {
-    onProgress({ stage: `문자 인식 중 (${i + 1}/${passes.length})`, progress: 0.15 + i / passes.length * 0.8 });
-    const { dataUrl } = preprocess(img, crop, passes[i].s, passes[i].v);
-    const { data } = await worker.recognize(dataUrl);
-    perScale.push(dedup(data.text || ''));
-  }
+  // preprocess on the main thread (cheap), then recognize all passes concurrently
+  // across the worker pool. Promise.all preserves input order in the result.
+  let done = 0;
+  const perScale = await Promise.all(passes.map(async (p) => {
+    const { dataUrl } = preprocess(img, crop, p.s, p.v);
+    const { data } = await scheduler.addJob('recognize', dataUrl);
+    onProgress({ stage: `문자 인식 중 (${++done}/${passes.length})`, progress: 0.15 + done / passes.length * 0.8 });
+    return dedup(data.text || '');
+  }));
   onProgress({ stage: '완료', progress: 1 });
-  return { lines: dedup(perScale.flat().join('\n')), perScale, engine: `tesseract(${lang},${passes.length}pass)` };
+  return { lines: dedup(perScale.flat().join('\n')), perScale, engine: `tesseract(${lang},${passes.length}pass×${poolSize()}w)` };
 }
 
 // Latin-heavy short roster names (KDA, EXE, xooos, Babyee…) attract OCR garbage,

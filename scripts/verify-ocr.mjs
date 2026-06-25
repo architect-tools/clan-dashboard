@@ -18,7 +18,7 @@ const SAMPLES = [
   { file: 'docs/_sample3.png', label: '#5(46)', panel: { x: 0.005, y: 0.07, w: 0.99, h: 0.92 }, gt: GT5 },
   { file: 'docs/_sample4.png', label: '#6(45)', panel: { x: 0.005, y: 0.07, w: 0.99, h: 0.92 }, gt: GT6 },
 ];
-const SCALES = [2.8, 3.6, 4.4, 5.2];
+const SCALES = [2.8, 3.6, 4.4]; // matches ocr.js extractLines default (5.2 dropped for speed)
 const VARIANTS = [{}, { binarize: 132 }, { binarize: 110 }]; // faithful to ocr.js extractLines default
 const MAX_SIDE = 5200;
 const KERNEL = process.env.KERNEL || 'cubic';
