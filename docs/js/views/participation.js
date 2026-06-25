@@ -167,24 +167,25 @@ function checkinPanel(content) {
   async function pick(file) {
     if (!file || !file.type.startsWith('image/')) return;
     try { curImg = await loadImage(file); } catch { return toast('이미지를 열 수 없습니다', 'error'); }
-    crop = null; drop.style.display = 'none'; buildPreview();
-    // 1) OpenCV anchor auto-detect (handles different window size/position).
+    // reset any prior recognition (so replacing the screenshot always starts clean)
+    crop = null; picked.clear(); manual.clear(); clear(ocrResult);
+    drop.style.display = 'none'; buildPreview();
+    // 1) OpenCV anchor auto-detect only POSITIONS the crop region — it does NOT
+    //    recognize. Recognition runs only when the user presses [영역 인식].
     //    Timeout-guarded so a slow/unavailable OpenCV never blocks the check-in.
     if (DB.state.ocrAnchor) {
-      progress.textContent = '패널 자동 탐지 중…';
+      progress.textContent = '패널 영역 자동 지정 중…';
       try {
         const det = await Promise.race([
           detectByAnchor(curImg, DB.state.ocrAnchor, (p) => { progress.textContent = p.stage; }),
           new Promise((r) => setTimeout(() => r('timeout'), 15000)),
         ]);
-        if (det === 'timeout') { progress.textContent = '자동 탐지 지연 — 기억된 영역으로 진행'; }
-        else if (det && det.score >= 0.5) { crop = det; toast(`패널 자동 감지 (신뢰 ${Math.round(det.score * 100)}%)`); }
+        if (det && det !== 'timeout' && det.score >= 0.5) { crop = det; toast(`패널 영역 자동 지정 (신뢰 ${Math.round(det.score * 100)}%)`); }
       } catch (e) { console.warn('auto-detect failed', e); }
     }
     // 2) fall back to remembered fractions
     if (!crop) crop = cropFromMemory();
-    buildControls(); drawMemoryBox();
-    runOcr();
+    buildControls(); drawMemoryBox(); setReadyHint();
   }
   function cropFromMemory() {
     const rc = DB.state.ocrCrop;
@@ -205,6 +206,10 @@ function checkinPanel(content) {
         ? '✅ 패널 영역을 자동으로 잡았습니다(창 크기·위치 달라도 인식). 빗나가면 다시 드래그 후 “이 영역 기억”.'
         : '💡 명단 영역을 드래그한 뒤 “이 영역 기억”을 누르면, 이후 스크린샷에서 패널을 자동 감지합니다(OpenCV).' }));
     previewWrap.appendChild(stage);
+    // drag a new image onto the preview to replace the current screenshot
+    previewWrap.ondragover = (e) => { e.preventDefault(); stage.classList.add('replace-over'); };
+    previewWrap.ondragleave = () => stage.classList.remove('replace-over');
+    previewWrap.ondrop = (e) => { e.preventDefault(); stage.classList.remove('replace-over'); if (e.dataTransfer.files[0]) pick(e.dataTransfer.files[0]); };
     imgEl.onload = drawMemoryBox;
     buildControls();
     const ptr = (e) => { const r = imgEl.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, r }; };
@@ -226,18 +231,26 @@ function checkinPanel(content) {
     const sx = r.width / curImg.naturalWidth, sy = r.height / curImg.naturalHeight;
     Object.assign(selBox.style, { display: 'block', left: crop.x * sx + 'px', top: crop.y * sy + 'px', width: crop.w * sx + 'px', height: crop.h * sy + 'px' });
   }
+  // tell the user recognition is a deliberate step (no auto-run on upload)
+  function setReadyHint() {
+    progress.innerHTML = crop
+      ? '✅ 인식 영역이 지정됐습니다. 필요하면 미리보기에서 <b>드래그로 조정</b>한 뒤 <b>[🔍 영역 인식]</b> 버튼을 누르세요.'
+      : '🖱️ 미리보기에서 인식할 <b>명단 영역을 드래그</b>로 지정한 뒤 <b>[🔍 영역 인식]</b> 버튼을 누르세요. (전체 인식도 가능)';
+  }
 
   function buildControls() {
     clear(controls); controls.style.display = 'flex';
-    controls.appendChild(btn('🔍 선택영역 인식', () => runOcr(), { kind: 'primary' }));
-    controls.appendChild(btn('전체 영역', () => { crop = null; if (selBox) selBox.style.display = 'none'; runOcr(); }, { kind: 'ghost' }));
-    if (crop) controls.appendChild(btn('📌 이 영역 기억(자동감지)', () => {
+    // primary action — OCR runs ONLY on an explicit click (never on upload)
+    controls.appendChild(btn('🔍 영역 인식', () => runOcr(), { kind: 'primary' }));
+    controls.appendChild(btn('전체 인식', () => { crop = null; if (selBox) selBox.style.display = 'none'; runOcr(); }));
+    controls.appendChild(el('span.ocr-ctrl-sep'));
+    controls.appendChild(btn('🔄 다른 스크린샷', () => fileInput.click()));
+    if (crop) controls.appendChild(btn('📌 이 영역 기억', () => {
       DB.state.ocrCrop = { x: crop.x / curImg.naturalWidth, y: crop.y / curImg.naturalHeight, w: crop.w / curImg.naturalWidth, h: crop.h / curImg.naturalHeight };
       try { DB.state.ocrAnchor = buildAnchor(curImg, crop); } catch (e) { console.warn(e); DB.state.ocrAnchor = null; }
       DB.commit(); toast('영역+앵커 기억 — 다음부터 패널 자동 감지');
-    }, { kind: 'ghost' }));
+    }));
     if (DB.state.ocrCrop || DB.state.ocrAnchor) controls.appendChild(btn('기억 해제', () => { DB.state.ocrCrop = null; DB.state.ocrAnchor = null; DB.commit(); toast('영역 기억을 해제했습니다'); }, { kind: 'ghost' }));
-    controls.appendChild(btn('다른 스크린샷', () => fileInput.click(), { kind: 'ghost' }));
   }
 
   const picked = new Map(); // memberId -> {member, score, token, checked}
