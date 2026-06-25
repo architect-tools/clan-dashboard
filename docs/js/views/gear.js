@@ -114,16 +114,20 @@ function addBoard() {
     }, { kind: 'primary' })])]));
 }
 
-// seed boards from source sheets (무기 숙련 from weaponProgress) on first visit
+// seed boards from source sheets (무기 숙련 from weaponProgress) on first visit.
+// 카테고리는 운영 시트 탭과 일치(장착 장비는 위 슬롯 그리드가 담당하므로 보드에서 제외).
 function seedDefaultBoards(s) {
   const wpByName = Object.fromEntries((s.weaponProgress || []).map((w) => [w.name, w]));
-  const weapon = { id: uid(), name: '무기 숙련', columns: ['주무기', '보조', '보조2'], data: {} };
+  const weapon = { id: uid(), name: '무기 숙련', columns: ['주무기', '보조1', '보조2'], data: {} };
   s.members.forEach((m) => {
     const w = wpByName[m.name];
-    if (w) weapon.data[m.id] = { 주무기: w.main || '', 보조: w.sub1 || '', 보조2: w.sub2 || '' };
+    if (w) weapon.data[m.id] = { 주무기: w.main || '', 보조1: w.sub1 || '', 보조2: w.sub2 || '' };
   });
   s.statusBoards.push(weapon);
-  s.statusBoards.push({ id: uid(), name: '장비 현황', columns: ['무기', '방어구', '장신구'], data: {} });
-  s.statusBoards.push({ id: uid(), name: '주문석·성좌·탈것', columns: ['주문석', '성좌', '탈것', '표본'], data: {} });
+  s.statusBoards.push({ id: uid(), name: '주문석', columns: ['주문석'], data: {} });
+  s.statusBoards.push({ id: uid(), name: '엘릭서 & 패시브', columns: ['엘릭서', '패시브'], data: {} });
+  s.statusBoards.push({ id: uid(), name: '성좌·탈것·표본', columns: ['성좌', '탈것', '표본'], data: {} });
+  s.statusBoards.push({ id: uid(), name: '플랫폼 이용 현황', columns: ['PC', '모바일', '디스코드'], data: {} });
+  s.statusBoards.push({ id: uid(), name: 'KDA', columns: ['처치', '도움', '사망', '참여도'], data: {} });
   DB.commit({ history: false });
 }

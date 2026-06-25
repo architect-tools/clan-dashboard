@@ -6,9 +6,10 @@ import { DB } from '../db.js';
 import { el, clear } from '../util.js';
 import { modal, btn, field, input, select } from './ui.js';
 
+// 슬롯명은 운영 시트(장비 현황)와 일치: 주무기/보조1/보조2, 투구/견갑/상의/하의/벨트/장갑/신발/망토.
 export const EQUIP_GROUPS = [
-  { label: '무기', cols: 3, slots: ['무기', '보조무기1', '보조무기2'] },
-  { label: '방어구', cols: 4, slots: ['투구', '견갑', '흉갑', '각반', '허리띠', '장갑', '신발', '망토'] },
+  { label: '무기', cols: 3, slots: ['주무기', '보조1', '보조2'] },
+  { label: '방어구', cols: 4, slots: ['투구', '견갑', '상의', '하의', '벨트', '장갑', '신발', '망토'] },
   { label: '장신구', cols: 4, slots: ['목걸이', '귀걸이', '반지', '팔찌'] },
   { label: '성유물', cols: 4, slots: ['복종', '충성', '무한', '심연'] },
 ];

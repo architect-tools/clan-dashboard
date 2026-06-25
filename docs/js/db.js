@@ -123,6 +123,16 @@ export const DB = {
   },
 };
 
+// 장비 슬롯명 운영 시트 기준으로 교정(기존 데이터 키 이동, 값 보존)
+const EQUIP_RENAME = { '무기': '주무기', '보조무기1': '보조1', '보조무기2': '보조2', '흉갑': '상의', '각반': '하의', '허리띠': '벨트' };
+function migrateEquip(eq) {
+  const out = { ...(eq || {}) };
+  for (const [o, n] of Object.entries(EQUIP_RENAME)) {
+    if (out[o] != null && out[n] == null) { out[n] = out[o]; delete out[o]; }
+  }
+  return out;
+}
+
 // ── state normalization / migration ─────────────────────────────────
 function normalize(d) {
   d = d || {};
@@ -137,7 +147,7 @@ function normalize(d) {
     id: m.id || i + 1, order: m.order ?? i + 1, name: m.name || '',
     cls: m.cls || '', power: +m.power || 0, score: +m.score || 0,
     grade: m.grade || '정회원',        // 등급(멤버십): 운영진/정회원/준회원/신입
-    equip: m.equip || {},              // 장착 장비: {슬롯: {grade,tier,enhance}}
+    equip: migrateEquip(m.equip),      // 장착 장비: {슬롯: {star,tier,enhance}} (슬롯명 시트 기준)
     active: m.active !== false, note: m.note || '',
   }));
   d.contentCatalog ||= [];
@@ -161,7 +171,18 @@ function normalize(d) {
   d.sales ||= [];       // 진행 중 내판: {id, item, bidType, basePrice, deadline(ms), bids:[{name,amount}]}
   d.settlements ||= []; // finalized diamond distributions (다이아 분배 확정 기록)
   d.schedule ||= [];
-  d.statusBoards ||= []; // generic per-member status tracking (장비/주문석/성좌 등)
+  d.statusBoards ||= []; // generic per-member status tracking (주문석/엘릭서/성좌/플랫폼/KDA 등)
+  // 운영 시트에서 관리하는 카테고리 보드가 기존 데이터에 없으면 1회 추가(빈 보드, 값은 유지)
+  if (d.statusBoards.length && !d.appSettings._mgmtBoards2) {
+    const have = new Set(d.statusBoards.map((b) => b && b.name));
+    const ensure = [
+      { name: '엘릭서 & 패시브', columns: ['엘릭서', '패시브'] },
+      { name: '플랫폼 이용 현황', columns: ['PC', '모바일', '디스코드'] },
+      { name: 'KDA', columns: ['처치', '도움', '사망', '참여도'] },
+    ];
+    for (const b of ensure) if (!have.has(b.name)) d.statusBoards.push({ id: uid(), name: b.name, columns: [...b.columns], data: {} });
+    d.appSettings._mgmtBoards2 = true;
+  }
   if (d.distributionRules == null) d.distributionRules = DEFAULT_RULES;
   if (d.ocrCrop === undefined) d.ocrCrop = null;   // remembered OCR crop as image fractions {x,y,w,h}
   if (d.ocrAnchor === undefined) d.ocrAnchor = null; // OpenCV anchor template for auto-detect {tplDataUrl,relW,relH,refImgW}
