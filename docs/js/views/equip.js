@@ -1,6 +1,7 @@
 // equip.js — 구조화된 클랜원 장착 장비 (게임 장비창 슬롯 레이아웃).
 // member.equip = { [슬롯]: { star(1~6 성급), tier(1~8.5, .5단위), enhance } }.
 // 3성↑ & 티어가 x.5 면 '배경템' → 슬롯에 벌집무늬. 성급별 색상.
+// 예외: 성유물 슬롯은 { tier(정수, T1~) }만 — 성급·강화·배경템·분배 없음(거래 불가).
 import { DB } from '../db.js';
 import { el, clear } from '../util.js';
 import { modal, btn, field, input, select } from './ui.js';
@@ -18,6 +19,12 @@ const TIER_OPTS = Array.from({ length: 16 }, (_, i) => 1 + i * 0.5); // 1 ~ 8.5 
 const tierLabel = (t) => (Number.isInteger(t) ? t : t.toFixed(1)) + 'T';
 const isBgItem = (star, tier) => star >= 3 && (tier % 1 === 0.5); // 3성↑ + x.5T = 배경템
 
+// 성유물(복종·충성·무한·심연): 티어만 있는 거래 불가 장비. 성급·강화·배경템 없음, 티어는 정수(T1~).
+const RELIC_SLOTS = new Set(EQUIP_GROUPS.find((g) => g.label === '성유물').slots);
+const isRelic = (slot) => RELIC_SLOTS.has(slot);
+const RELIC_TIERS = Array.from({ length: 10 }, (_, i) => i + 1); // 1T ~ 10T (정수)
+const RELIC_COLOR = '#C9A24B'; // 성유물 전용 색(골드)
+
 /** Render a member's equipment as the game-like slot grid.
  *  editable → click a slot to set 성급/티어/강화 (자동 저장, 그리드 자체 갱신). */
 export function equipGrid(member, { editable = false } = {}) {
@@ -28,21 +35,26 @@ export function equipGrid(member, { editable = false } = {}) {
       const row = el('div.equip-row', { style: { '--cols': String(g.cols) } });
       for (const slot of g.slots) {
         const it = (member.equip || {})[slot];
-        const filled = !!(it && (it.star || it.tier || it.enhance));
+        const relic = isRelic(slot);
+        const filled = relic ? !!(it && it.tier) : !!(it && (it.star || it.tier || it.enhance));
         const star = (it && it.star) || 0;
-        const color = STAR_COLORS[star] || '';
-        const bg = filled && isBgItem(star, it.tier || 0);
+        const color = relic ? (filled ? RELIC_COLOR : '') : (STAR_COLORS[star] || '');
+        const bg = !relic && filled && isBgItem(star, it.tier || 0);
         const box = el('div.equip-box', {
-          class: (filled ? '' : 'empty') + (bg ? ' bg-item' : ''),
+          class: (filled ? '' : 'empty') + (bg ? ' bg-item' : '') + (relic ? ' relic' : ''),
           style: filled && color ? { borderColor: color, background: `linear-gradient(135deg, color-mix(in srgb, ${color} 34%, var(--bg2)), var(--bg2) 72%)` } : {},
           title: editable ? '클릭해서 편집'
-            : (filled ? `${star ? star + '성 ' : ''}${it.tier ? tierLabel(it.tier) + ' ' : ''}${it.enhance ? '+' + it.enhance : ''}`.trim() : '빈 슬롯'),
+            : (filled ? (relic ? tierLabel(it.tier) : `${star ? star + '성 ' : ''}${it.tier ? tierLabel(it.tier) + ' ' : ''}${it.enhance ? '+' + it.enhance : ''}`.trim()) : '빈 슬롯'),
           onclick: editable ? () => editSlot(member, slot, render) : null,
-        }, filled ? [
-          star ? el('span.equip-star', { style: { color }, text: star + '성' }) : null,
-          it.tier ? el('span.equip-tier', { text: tierLabel(it.tier) }) : null,
-          it.enhance ? el('span.equip-enh', { text: '+' + it.enhance }) : null,
-        ] : [el('span.equip-empty-mark', { text: editable ? '＋' : '' })]);
+        }, filled
+          ? (relic
+            ? [el('span.equip-tier', { style: { color: RELIC_COLOR }, text: tierLabel(it.tier) })]
+            : [
+              star ? el('span.equip-star', { style: { color }, text: star + '성' }) : null,
+              it.tier ? el('span.equip-tier', { text: tierLabel(it.tier) }) : null,
+              it.enhance ? el('span.equip-enh', { text: '+' + it.enhance }) : null,
+            ])
+          : [el('span.equip-empty-mark', { text: editable ? '＋' : '' })]);
         row.appendChild(el('div.equip-slot', {}, [box, el('div.equip-name', { text: slot })]));
       }
       wrap.appendChild(el('div.equip-group', {}, [el('div.equip-group-label', { text: g.label }), row]));
@@ -54,6 +66,7 @@ export function equipGrid(member, { editable = false } = {}) {
 
 function editSlot(member, slot, rerender) {
   const cur = (member.equip || {})[slot] || {};
+  if (isRelic(slot)) return editRelic(member, slot, cur, rerender);
   const star = select([{ value: '0', label: '없음' }, ...[1, 2, 3, 4, 5, 6].map((n) => ({ value: String(n), label: n + '성' }))], String(cur.star || 0));
   const tier = select([{ value: '0', label: '없음' }, ...TIER_OPTS.map((t) => ({ value: String(t), label: tierLabel(t) }))], String(cur.tier || 0));
   const enh = input({ type: 'number', value: cur.enhance ?? '', placeholder: '강화 수치' });
@@ -69,6 +82,27 @@ function editSlot(member, slot, rerender) {
         member.equip ||= {};
         if (!st && !t && !e) delete member.equip[slot];
         else member.equip[slot] = { star: st, tier: t, enhance: e };
+        DB.commit(); close(); rerender();
+      }, { kind: 'primary' }),
+    ]),
+  ]));
+}
+
+// 성유물 슬롯 편집: 티어(정수)만. 성급·강화 없음.
+function editRelic(member, slot, cur, rerender) {
+  const tier = select([{ value: '0', label: '없음' }, ...RELIC_TIERS.map((t) => ({ value: String(t), label: t + 'T' }))], String(cur.tier || 0));
+  const filled = !!cur.tier;
+  modal(`${member.name} · ${slot} (성유물)`, (close) => el('div.form', {}, [
+    field('티어', tier),
+    el('p.hint', { text: '성유물은 티어만 있는 거래 불가 장비입니다 (성급·강화 없음).' }),
+    el('div.modal-actions', {}, [
+      filled ? btn('비우기', () => { if (member.equip) delete member.equip[slot]; DB.commit(); close(); rerender(); }, { kind: 'ghost-danger' }) : null,
+      btn('취소', close),
+      btn('저장', () => {
+        const t = +tier.value || 0;
+        member.equip ||= {};
+        if (!t) delete member.equip[slot];
+        else member.equip[slot] = { tier: t }; // 성급·강화 없음
         DB.commit(); close(); rerender();
       }, { kind: 'primary' }),
     ]),
