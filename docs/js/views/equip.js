@@ -34,7 +34,7 @@ export function equipGrid(member, { editable = false } = {}) {
         const bg = filled && isBgItem(star, it.tier || 0);
         const box = el('div.equip-box', {
           class: (filled ? '' : 'empty') + (bg ? ' bg-item' : ''),
-          style: filled && color ? { borderColor: color } : {},
+          style: filled && color ? { borderColor: color, background: `linear-gradient(135deg, color-mix(in srgb, ${color} 34%, var(--bg2)), var(--bg2) 72%)` } : {},
           title: editable ? '클릭해서 편집'
             : (filled ? `${star ? star + '성 ' : ''}${it.tier ? tierLabel(it.tier) + ' ' : ''}${it.enhance ? '+' + it.enhance : ''}`.trim() : '빈 슬롯'),
           onclick: editable ? () => editSlot(member, slot, render) : null,

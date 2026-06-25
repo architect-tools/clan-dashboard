@@ -67,7 +67,7 @@ export function renderMembers() {
     { label: head('score', '참여점수'), align: 'right', render: (m) => numCell(m, 'score') },
     { label: '티어', align: 'center', render: (m) => tierBadge(m.tier) },
     { label: '상태', align: 'center', render: (m) => el('span.dot', { class: m.active !== false ? 'on' : 'off', title: m.active !== false ? '활동' : '휴면' }) },
-    { label: '', align: 'right', width: '92px', render: (m) => el('div.row-actions', {}, [
+    { label: '', align: 'right', render: (m) => el('div.row-actions.nowrap', {}, [
       btn('수정', () => editMember(m), { kind: 'ghost' }),
       btn('삭제', () => confirmDialog(`${m.name} 님을 삭제할까요?`, () => { Mutations.removeMember(m.id); DB.commit(); toast('삭제되었습니다'); refresh(); }, { danger: true, yesText: '삭제' }), { kind: 'ghost-danger' }),
     ]) },
