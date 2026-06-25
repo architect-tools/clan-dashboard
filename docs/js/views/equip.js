@@ -28,6 +28,23 @@ const relicTierLabel = (t) => 'T' + t; // 게임 표기: T10, T7 …
 // 티어 구간별 색: T1~3 동색 · T4~6 은색 · T7~9 금색 · T10~ 프리즘(무지개, CSS 처리)
 const RELIC_BRONZE = '#C0813E', RELIC_SILVER = '#C2CAD6', RELIC_GOLD = '#E7C45A';
 const relicTone = (t) => t >= 10 ? 'prism' : t >= 7 ? RELIC_GOLD : t >= 4 ? RELIC_SILVER : RELIC_BRONZE;
+const PRISM_FLAT = '#C78BFF'; // 표(엑셀)에서 프리즘은 단색으로 표기
+
+/** Compact cell value for the 장비 현황 표(멤버×슬롯). → {text, color}. 빈 슬롯=빈 텍스트. */
+export function equipCell(slot, it) {
+  if (!it) return { text: '', color: '' };
+  if (isRelic(slot)) {
+    if (!it.tier) return { text: '', color: '' };
+    const tone = relicTone(it.tier);
+    return { text: relicTierLabel(it.tier), color: tone === 'prism' ? PRISM_FLAT : tone };
+  }
+  if (!(it.star || it.tier || it.enhance)) return { text: '', color: '' };
+  const parts = [];
+  if (it.tier) parts.push(tierLabel(it.tier));
+  if (it.enhance) parts.push('+' + it.enhance);
+  const text = parts.join(' ') || (it.star ? it.star + '성' : '');
+  return { text, color: STAR_COLORS[it.star || 0] || '' };
+}
 
 /** Render a member's equipment as the game-like slot grid.
  *  editable → click a slot to set 성급/티어/강화 (자동 저장, 그리드 자체 갱신). */

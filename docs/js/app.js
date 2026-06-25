@@ -21,7 +21,7 @@ const NAV = [
   { path: 'participation', icon: '📅', label: '참여 기록' },
   { path: 'diamond', icon: '💎', label: '다이아 정산' },
   { path: 'rotation', icon: '🎁', label: '전리품' },
-  { path: 'gear', icon: '🛡️', label: '장비/숙련 현황' },
+  { path: 'gear', icon: '🛡️', label: '장비/캐릭터 현황' },
   { path: 'schedule', icon: '🗓️', label: '일정' },
   { path: 'settings', icon: '⚙️', label: '설정', admin: true },
 ];

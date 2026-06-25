@@ -354,6 +354,10 @@ select.input{cursor:pointer}
     linear-gradient(135deg,#ff5d6c,#ffd93d,#6bcb77,#4d96ff,#b06bff,#ff5d6c) border-box}
 .equip-tier.relic-tier.prism{background:linear-gradient(120deg,#ff7a86,#ffd93d,#6bcb77,#4d96ff,#c78bff);
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;text-shadow:none}
+/* 장비 현황 표(멤버×슬롯): 좁은 셀·그룹 경계 */
+.equip-status-tbl th,.equip-status-tbl td{padding:5px 7px;font-size:12px;white-space:nowrap}
+.equip-status-tbl .grp-start{border-left:2px solid var(--line2)}
+.equip-status-tbl .equip-tier,.equip-status-tbl td span{font-family:var(--mono)}
 .confirm-msg{margin:0 0 16px;color:var(--muted);font-size:14px}
 @keyframes fade{from{opacity:0}} @keyframes pop{from{transform:scale(.98);opacity:0}}
 

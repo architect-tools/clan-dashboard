@@ -193,17 +193,22 @@ function normalize(d) {
   d.sales ||= [];       // 진행 중 내판: {id, item, bidType, basePrice, deadline(ms), bids:[{name,amount}]}
   d.settlements ||= []; // finalized diamond distributions (다이아 분배 확정 기록)
   d.schedule ||= [];
-  d.statusBoards ||= []; // generic per-member status tracking (주문석/엘릭서/성좌/플랫폼/KDA 등)
-  // 운영 시트에서 관리하는 카테고리 보드가 기존 데이터에 없으면 1회 추가(빈 보드, 값은 유지)
-  if (d.statusBoards.length && !d.appSettings._mgmtBoards2) {
-    const have = new Set(d.statusBoards.map((b) => b && b.name));
+  d.statusBoards ||= []; // 캐릭터 현황 보드: 주문석/성좌/탈것/엘릭서/플랫폼
+  // 관리 보드를 운영 시트 구조로 1회 정비: 부적합 보드 제거(무기 숙련·KDA·통합보드 등) + 분리 카테고리 보장.
+  // (장착 장비는 슬롯 그리드+장비 현황 표가 담당하므로 '장비 현황' 보드는 제거)
+  if (!d.appSettings._mgmtBoards3) {
+    const REMOVE = new Set(['무기 숙련', '장비 현황', '주문석·성좌·탈것', '엘릭서 & 패시브', 'KDA']);
+    d.statusBoards = d.statusBoards.filter((b) => b && !REMOVE.has(b.name));
+    const have = new Set(d.statusBoards.map((b) => b.name));
     const ensure = [
-      { name: '엘릭서 & 패시브', columns: ['엘릭서', '패시브'] },
+      { name: '주문석', columns: ['공용', '전투 스탠스', '특화 스탠스'] },
+      { name: '성좌', columns: ['바위를 삼키는 괴물', '자유로운 여행자', '바다의 괴물'] },
+      { name: '탈것', columns: ['지진발굽', '심연의 수호자', '심연의 환영', '황혼의방랑자'] },
+      { name: '엘릭서', columns: ['집중 호흡', '영웅의 기운'] },
       { name: '플랫폼 이용 현황', columns: ['PC', '모바일', '디스코드'] },
-      { name: 'KDA', columns: ['처치', '도움', '사망', '참여도'] },
     ];
     for (const b of ensure) if (!have.has(b.name)) d.statusBoards.push({ id: uid(), name: b.name, columns: [...b.columns], data: {} });
-    d.appSettings._mgmtBoards2 = true;
+    d.appSettings._mgmtBoards3 = true;
   }
   if (d.distributionRules == null) d.distributionRules = DEFAULT_RULES;
   // 분배 기준을 시트 NEW 기준으로 1회 강제 교체(기존 OLD 텍스트 정리). 이후 운영자 편집은 유지.

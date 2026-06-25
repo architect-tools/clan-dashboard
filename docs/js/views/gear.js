@@ -5,7 +5,7 @@ import { DB } from '../db.js';
 import { Roles } from '../roles.js';
 import { el, toast, uid } from '../util.js';
 import { page, card, btn, input, select, modal, field, confirmDialog } from './ui.js';
-import { equipGrid } from './equip.js';
+import { equipGrid, equipCell, EQUIP_GROUPS } from './equip.js';
 
 let activeBoard = 0, gearMember = null;
 
@@ -18,8 +18,8 @@ export function renderGear() {
   if (activeBoard >= s.statusBoards.length) activeBoard = 0;
   const board = s.statusBoards[activeBoard];
 
-  const body = page('장비/숙련 현황', {
-    subtitle: '장착 장비(슬롯) + 무기 숙련·주문석·성좌 등 클랜원별 현황',
+  const body = page('장비/캐릭터 현황', {
+    subtitle: '장착 장비(슬롯·표) + 주문석·성좌·탈것·엘릭서 등 클랜원별 현황',
     actions: [btn('+ 보드 추가', () => addBoard(), { kind: 'primary', admin: true })],
   });
 
@@ -38,8 +38,29 @@ export function renderGear() {
     ])));
   }
 
-  // ── 기타 현황 보드 (무기 숙련·주문석·성좌 등) ──
-  body.appendChild(el('div.modal-sec', { text: '기타 현황 보드' }));
+  // ── 장비 현황 (장착 장비를 멤버×슬롯 엑셀 표로 — 읽기 전용 개요) ──
+  if (activeMembers.length) {
+    const eqTbl = el('table.tbl.equip-status-tbl');
+    const hcells = [el('th.sticky-col', { text: '닉네임' })];
+    EQUIP_GROUPS.forEach((g) => g.slots.forEach((slot, i) => hcells.push(
+      el('th', { class: i === 0 ? 'grp-start' : '', title: g.label, text: slot }))));
+    eqTbl.appendChild(el('thead', {}, el('tr', {}, hcells)));
+    const tb2 = el('tbody');
+    activeMembers.forEach((m) => {
+      const tr = el('tr', {}, [el('td.sticky-col', {}, [el('b', { text: m.name })])]);
+      EQUIP_GROUPS.forEach((g) => g.slots.forEach((slot, i) => {
+        const c = equipCell(slot, (m.equip || {})[slot]);
+        tr.appendChild(el('td', { class: i === 0 ? 'grp-start' : '', style: { textAlign: 'center' } },
+          [c.text ? el('span', { style: c.color ? { color: c.color, fontWeight: '600' } : {}, text: c.text }) : el('span.muted', { text: '·' })]));
+      }));
+      tb2.appendChild(tr);
+    });
+    eqTbl.appendChild(tb2);
+    body.appendChild(card('장비 현황', el('div.scroll-tbl', {}, [eqTbl]), { className: 'card-flush' }));
+  }
+
+  // ── 캐릭터 현황 보드 (주문석·성좌·탈것·엘릭서·플랫폼) ──
+  body.appendChild(el('div.modal-sec', { text: '캐릭터 현황 보드' }));
 
   // board tabs
   const tabs = el('div.board-tabs', {}, s.statusBoards.map((b, i) =>
@@ -114,20 +135,14 @@ function addBoard() {
     }, { kind: 'primary' })])]));
 }
 
-// seed boards from source sheets (무기 숙련 from weaponProgress) on first visit.
-// 카테고리는 운영 시트 탭과 일치(장착 장비는 위 슬롯 그리드가 담당하므로 보드에서 제외).
+// 운영 시트 탭과 일치하는 기본 보드(첫 방문 시). 주문석·엘릭서는 직업별이라 그룹/공용 컬럼으로,
+// 성좌·탈것은 원문 항목. 장착 장비는 위 슬롯 그리드+장비 현황 표가 담당하므로 보드에서 제외.
 function seedDefaultBoards(s) {
-  const wpByName = Object.fromEntries((s.weaponProgress || []).map((w) => [w.name, w]));
-  const weapon = { id: uid(), name: '무기 숙련', columns: ['주무기', '보조1', '보조2'], data: {} };
-  s.members.forEach((m) => {
-    const w = wpByName[m.name];
-    if (w) weapon.data[m.id] = { 주무기: w.main || '', 보조1: w.sub1 || '', 보조2: w.sub2 || '' };
-  });
-  s.statusBoards.push(weapon);
-  s.statusBoards.push({ id: uid(), name: '주문석', columns: ['주문석'], data: {} });
-  s.statusBoards.push({ id: uid(), name: '엘릭서 & 패시브', columns: ['엘릭서', '패시브'], data: {} });
-  s.statusBoards.push({ id: uid(), name: '성좌·탈것·표본', columns: ['성좌', '탈것', '표본'], data: {} });
-  s.statusBoards.push({ id: uid(), name: '플랫폼 이용 현황', columns: ['PC', '모바일', '디스코드'], data: {} });
-  s.statusBoards.push({ id: uid(), name: 'KDA', columns: ['처치', '도움', '사망', '참여도'], data: {} });
+  const push = (name, columns) => s.statusBoards.push({ id: uid(), name, columns, data: {} });
+  push('주문석', ['공용', '전투 스탠스', '특화 스탠스']);
+  push('성좌', ['바위를 삼키는 괴물', '자유로운 여행자', '바다의 괴물']);
+  push('탈것', ['지진발굽', '심연의 수호자', '심연의 환영', '황혼의방랑자']);
+  push('엘릭서', ['집중 호흡', '영웅의 기운']);
+  push('플랫폼 이용 현황', ['PC', '모바일', '디스코드']);
   DB.commit({ history: false });
 }
