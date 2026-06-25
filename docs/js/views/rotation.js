@@ -60,14 +60,13 @@ export function renderRotation() {
 
   // ── helpers ──
   function renderQueueRow(qу) {
-    const nextIdx = qу.items.findIndex((it) => !it.status);
-    const waiting = qу.items.filter((it) => !it.status).length;
+    const next = qу.items[0];
     const open = openQueues.has(qу.name);
     const head = el('div.q-head', { onclick: () => { open ? openQueues.delete(qу.name) : openQueues.add(qу.name); renderRotation(); } }, [
       el('span.q-caret', { text: open ? '▾' : '▸' }),
       el('b.q-name', { text: qу.name }),
-      nextIdx >= 0 ? el('span.q-next', { text: `다음 ${qу.items[nextIdx].name}` }) : el('span.q-next.done', { text: '완료' }),
-      el('span.q-count', { text: `대기 ${waiting}` }),
+      next ? el('span.q-next', { text: `다음 ${next.name}` }) : el('span.q-next.done', { text: '비어있음' }),
+      el('span.q-count', { text: `대기 ${qу.items.length}` }),
     ]);
     const item = el('div.q-item', {}, [head]);
     if (!open) return item;
@@ -76,13 +75,12 @@ export function renderRotation() {
     item.appendChild(el('div.q-body', {}, [
       table([
         { label: '#', align: 'center', width: '34px', render: (r) => r._i + 1 },
-        { key: 'name', label: '닉네임', render: (r) => el('span', { class: r.status ? 'muted' : '', text: r.name }) },
-        { label: '상태', align: 'center', render: (r) => el('span.qstatus', { class: r.status ? 'done' : 'wait', text: r.status || '대기' }) },
-        { label: '', align: 'right', width: '146px', render: (r) => el('div.row-actions.nowrap', {}, [
+        { key: 'name', label: '닉네임' },
+        { label: '', align: 'right', width: '180px', render: (r) => el('div.row-actions.nowrap', {}, [
+          r._i === 0 ? btn('지급', () => giveFromQueue(qу, 0), { kind: 'primary' }) : null,
           btn('▲', () => move(qу, r._i, -1), { kind: 'ghost', title: '위로' }),
           btn('▼', () => move(qу, r._i, +1), { kind: 'ghost', title: '아래로' }),
-          btn(r.status ? '대기' : '지급', () => { qу.items[r._i].status = r.status ? '' : '지급'; DB.commit(); renderRotation(); }, { kind: 'ghost' }),
-          btn('✕', () => { qу.items.splice(r._i, 1); DB.commit(); renderRotation(); }, { kind: 'ghost-danger' }),
+          btn('✕', () => { qу.items.splice(r._i, 1); DB.commit(); renderRotation(); }, { kind: 'ghost-danger', title: '제거' }),
         ]) },
       ], rows, { className: 'card-compact', empty: '인원이 없습니다.' }),
       el('div.row-actions', {}, [
@@ -92,6 +90,28 @@ export function renderRotation() {
     ]));
     return item;
   }
+
+  // 지급(맨 앞 순번) → 분배 기록 모달(아이템 자동·고정, 내판가 기본 10) → 기록 시 큐에서 제거
+  function giveFromQueue(qу, idx) {
+    const person = qу.items[idx]; if (!person) return;
+    const itemView = el('input.input', { value: qу.name, readonly: 'readonly', style: { opacity: '.6' } });
+    const date = input({ type: 'date', value: new Date().toISOString().slice(0, 10) });
+    const type = select(DIST_TYPES, '순번제');
+    const member = select(s.members.map((m) => m.name), person.name);
+    const from = select(['없음', ...s.members.map((m) => m.name)], '없음');
+    const price = input({ type: 'number', value: '10' });
+    const note = input({ placeholder: '메모(선택)' });
+    modal('순번 분배 기록', (close) => el('div.form', {}, [
+      field('아이템 (자동)', itemView), field('날짜', date), field('구분', type),
+      field('받은 사람', member), field('인계자(선택)', from), field('내판가', price), field('메모', note),
+      el('div.modal-actions', {}, [btn('취소', close), btn('기록', () => {
+        Mutations.logDistribution({ date: date.value, item: qу.name, type: type.value, member: member.value,
+          from: from.value === '없음' ? '' : from.value, price: +price.value || 0, note: note.value.trim() });
+        qу.items.splice(idx, 1); // 지급 완료 → 큐에서 제거
+        DB.commit(); close(); toast(`${qу.name} → ${member.value} 지급`); renderRotation();
+      }, { kind: 'primary' })]),
+    ]));
+  }
   function move(qу, i, d) {
     const j = i + d; if (j < 0 || j >= qу.items.length) return;
     [qу.items[i], qу.items[j]] = [qу.items[j], qу.items[i]]; DB.commit(); renderRotation();
@@ -99,7 +119,7 @@ export function renderRotation() {
   function addToQueue(qу) {
     const nm = select(s.members.map((m) => m.name), s.members[0]?.name);
     modal('큐에 인원 추가', (close) => el('div.form', {}, [field('닉네임', nm),
-      el('div.modal-actions', {}, [btn('취소', close), btn('추가', () => { qу.items.push({ name: nm.value, status: '' }); DB.commit(); close(); renderRotation(); }, { kind: 'primary' })])]));
+      el('div.modal-actions', {}, [btn('취소', close), btn('추가', () => { qу.items.push({ name: nm.value }); DB.commit(); close(); renderRotation(); }, { kind: 'primary' })])]));
   }
   function addQueue() {
     const nm = input({ placeholder: '예: 상급 무기 설계도' });
