@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 /* ── Insomnia dark theme (claude design) ─────────────────────────────
    near-black blue-gray 레이어 · 페리윙클 인디고 포인트(#8A91DE) ·
    따뜻한 램프 앰버 액센트(#DD9A52) · IBM Plex Sans/Mono · 절제 + 은은한 그림자. */
@@ -346,6 +346,14 @@ select.input{cursor:pointer}
 .equip-box.bg-item::after{content:'';position:absolute;inset:0;pointer-events:none;opacity:.5;
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='21' viewBox='0 0 24 21'><path d='M6 0.5 L18 0.5 L23.5 10.5 L18 20.5 L6 20.5 L0.5 10.5 Z' fill='%23DD9A52' fill-opacity='0.05' stroke='%23DD9A52' stroke-opacity='0.18' stroke-width='1'/></svg>");
   background-size:21px 18px}
+/* 성유물 티어: 장식 세리프(게임 느낌) + 구간색(동/은/금/프리즘). 일반 티어보다 크게 우상단. */
+.equip-tier.relic-tier{font-family:'Cinzel',Georgia,serif;font-weight:700;font-size:13px;letter-spacing:.4px;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.equip-box.relic-prism{border-color:transparent;
+  background:
+    linear-gradient(135deg, color-mix(in srgb,#b06bff 16%,var(--bg2)), var(--bg2) 70%) padding-box,
+    linear-gradient(135deg,#ff5d6c,#ffd93d,#6bcb77,#4d96ff,#b06bff,#ff5d6c) border-box}
+.equip-tier.relic-tier.prism{background:linear-gradient(120deg,#ff7a86,#ffd93d,#6bcb77,#4d96ff,#c78bff);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;text-shadow:none}
 .confirm-msg{margin:0 0 16px;color:var(--muted);font-size:14px}
 @keyframes fade{from{opacity:0}} @keyframes pop{from{transform:scale(.98);opacity:0}}
 

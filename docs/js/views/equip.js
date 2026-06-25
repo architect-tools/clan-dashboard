@@ -22,8 +22,11 @@ const isBgItem = (star, tier) => star >= 3 && (tier % 1 === 0.5); // 3성↑ + x
 // 성유물(복종·충성·무한·심연): 티어만 있는 거래 불가 장비. 성급·강화·배경템 없음, 티어는 정수(T1~).
 const RELIC_SLOTS = new Set(EQUIP_GROUPS.find((g) => g.label === '성유물').slots);
 const isRelic = (slot) => RELIC_SLOTS.has(slot);
-const RELIC_TIERS = Array.from({ length: 10 }, (_, i) => i + 1); // 1T ~ 10T (정수)
-const RELIC_COLOR = '#C9A24B'; // 성유물 전용 색(골드)
+const RELIC_TIERS = Array.from({ length: 20 }, (_, i) => i + 1); // T1 ~ T20 (정수)
+const relicTierLabel = (t) => 'T' + t; // 게임 표기: T10, T7 …
+// 티어 구간별 색: T1~3 동색 · T4~6 은색 · T7~9 금색 · T10~ 프리즘(무지개, CSS 처리)
+const RELIC_BRONZE = '#C0813E', RELIC_SILVER = '#C2CAD6', RELIC_GOLD = '#E7C45A';
+const relicTone = (t) => t >= 10 ? 'prism' : t >= 7 ? RELIC_GOLD : t >= 4 ? RELIC_SILVER : RELIC_BRONZE;
 
 /** Render a member's equipment as the game-like slot grid.
  *  editable → click a slot to set 성급/티어/강화 (자동 저장, 그리드 자체 갱신). */
@@ -38,17 +41,19 @@ export function equipGrid(member, { editable = false } = {}) {
         const relic = isRelic(slot);
         const filled = relic ? !!(it && it.tier) : !!(it && (it.star || it.tier || it.enhance));
         const star = (it && it.star) || 0;
-        const color = relic ? (filled ? RELIC_COLOR : '') : (STAR_COLORS[star] || '');
+        const tone = relic && filled ? relicTone(it.tier) : ''; // 색(hex) 또는 'prism'
+        const prism = tone === 'prism';
+        const color = relic ? (prism ? '' : tone) : (STAR_COLORS[star] || '');
         const bg = !relic && filled && isBgItem(star, it.tier || 0);
         const box = el('div.equip-box', {
-          class: (filled ? '' : 'empty') + (bg ? ' bg-item' : '') + (relic ? ' relic' : ''),
+          class: (filled ? '' : 'empty') + (bg ? ' bg-item' : '') + (relic ? ' relic' : '') + (prism ? ' relic-prism' : ''),
           style: filled && color ? { borderColor: color, background: `linear-gradient(135deg, color-mix(in srgb, ${color} 34%, var(--bg2)), var(--bg2) 72%)` } : {},
           title: editable ? '클릭해서 편집'
-            : (filled ? (relic ? tierLabel(it.tier) : `${star ? star + '성 ' : ''}${it.tier ? tierLabel(it.tier) + ' ' : ''}${it.enhance ? '+' + it.enhance : ''}`.trim()) : '빈 슬롯'),
+            : (filled ? (relic ? relicTierLabel(it.tier) : `${star ? star + '성 ' : ''}${it.tier ? tierLabel(it.tier) + ' ' : ''}${it.enhance ? '+' + it.enhance : ''}`.trim()) : '빈 슬롯'),
           onclick: editable ? () => editSlot(member, slot, render) : null,
         }, filled
           ? (relic
-            ? [el('span.equip-tier', { style: { color: RELIC_COLOR }, text: tierLabel(it.tier) })]
+            ? [el('span.equip-tier.relic-tier', prism ? { class: 'prism', text: relicTierLabel(it.tier) } : { style: { color: tone }, text: relicTierLabel(it.tier) })]
             : [
               star ? el('span.equip-star', { style: { color }, text: star + '성' }) : null,
               it.tier ? el('span.equip-tier', { text: tierLabel(it.tier) }) : null,
@@ -90,11 +95,11 @@ function editSlot(member, slot, rerender) {
 
 // 성유물 슬롯 편집: 티어(정수)만. 성급·강화 없음.
 function editRelic(member, slot, cur, rerender) {
-  const tier = select([{ value: '0', label: '없음' }, ...RELIC_TIERS.map((t) => ({ value: String(t), label: t + 'T' }))], String(cur.tier || 0));
+  const tier = select([{ value: '0', label: '없음' }, ...RELIC_TIERS.map((t) => ({ value: String(t), label: relicTierLabel(t) }))], String(cur.tier || 0));
   const filled = !!cur.tier;
   modal(`${member.name} · ${slot} (성유물)`, (close) => el('div.form', {}, [
     field('티어', tier),
-    el('p.hint', { text: '성유물은 티어만 있는 거래 불가 장비입니다 (성급·강화 없음).' }),
+    el('p.hint', { text: '성유물은 티어만 있는 거래 불가 장비입니다 (성급·강화 없음). 색: T1~3 동색 · T4~6 은색 · T7~9 금색 · T10~ 프리즘.' }),
     el('div.modal-actions', {}, [
       filled ? btn('비우기', () => { if (member.equip) delete member.equip[slot]; DB.commit(); close(); rerender(); }, { kind: 'ghost-danger' }) : null,
       btn('취소', close),
