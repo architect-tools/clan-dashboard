@@ -206,23 +206,31 @@ function checkinPanel(content) {
         ? '✅ 패널 영역을 자동으로 잡았습니다(창 크기·위치 달라도 인식). 빗나가면 다시 드래그 후 “이 영역 기억”.'
         : '💡 명단 영역을 드래그한 뒤 “이 영역 기억”을 누르면, 이후 스크린샷에서 패널을 자동 감지합니다(OpenCV).' }));
     previewWrap.appendChild(stage);
-    // drag a new image onto the preview to replace the current screenshot
-    previewWrap.ondragover = (e) => { e.preventDefault(); stage.classList.add('replace-over'); };
+    imgEl.draggable = false; // stop the browser's native image-drag from hijacking region selection
+    // replace the screenshot by dropping an EXTERNAL image file onto the preview
+    // (gated to file drags so it never fires during in-image region dragging)
+    const isFileDrag = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+    previewWrap.ondragover = (e) => { if (!isFileDrag(e)) return; e.preventDefault(); stage.classList.add('replace-over'); };
     previewWrap.ondragleave = () => stage.classList.remove('replace-over');
-    previewWrap.ondrop = (e) => { e.preventDefault(); stage.classList.remove('replace-over'); if (e.dataTransfer.files[0]) pick(e.dataTransfer.files[0]); };
+    previewWrap.ondrop = (e) => { stage.classList.remove('replace-over'); if (e.dataTransfer.files[0]) { e.preventDefault(); pick(e.dataTransfer.files[0]); } };
     imgEl.onload = drawMemoryBox;
     buildControls();
-    const ptr = (e) => { const r = imgEl.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, r }; };
-    stage.onmousedown = (e) => { const p = ptr(e); dragging = { x0: p.x, y0: p.y }; };
-    stage.onmousemove = (e) => {
-      if (!dragging) return; const p = ptr(e);
-      const x = Math.max(0, Math.min(dragging.x0, p.x)), y = Math.max(0, Math.min(dragging.y0, p.y));
-      const w = Math.min(p.r.width, Math.abs(p.x - dragging.x0)), h = Math.min(p.r.height, Math.abs(p.y - dragging.y0));
-      Object.assign(selBox.style, { display: 'block', left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
-      const sx = curImg.naturalWidth / p.r.width, sy = curImg.naturalHeight / p.r.height;
-      if (w > 8 && h > 8) { crop = { x: x * sx, y: y * sy, w: w * sx, h: h * sy }; buildControls(); }
+    // drag on the image to select the name region. Tracked on window (not the
+    // stage) so a fast drag that leaves the image keeps selecting smoothly.
+    const ptr = (e) => { const r = imgEl.getBoundingClientRect(); return { x: Math.max(0, Math.min(r.width, e.clientX - r.left)), y: Math.max(0, Math.min(r.height, e.clientY - r.top)), r }; };
+    stage.onmousedown = (e) => {
+      e.preventDefault(); const s0 = ptr(e); dragging = { x0: s0.x, y0: s0.y };
+      const move = (ev) => {
+        const p = ptr(ev);
+        const x = Math.min(dragging.x0, p.x), y = Math.min(dragging.y0, p.y);
+        const w = Math.abs(p.x - dragging.x0), h = Math.abs(p.y - dragging.y0);
+        Object.assign(selBox.style, { display: 'block', left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
+        const sx = curImg.naturalWidth / p.r.width, sy = curImg.naturalHeight / p.r.height;
+        if (w > 8 && h > 8) crop = { x: x * sx, y: y * sy, w: w * sx, h: h * sy };
+      };
+      const up = () => { dragging = null; window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); buildControls(); setReadyHint(); };
+      window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
     };
-    const end = () => { dragging = null; }; stage.onmouseup = end; stage.onmouseleave = end;
     drawMemoryBox();
   }
   function drawMemoryBox() { // show the (remembered) crop rect on the preview
