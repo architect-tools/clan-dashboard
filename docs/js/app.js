@@ -16,7 +16,7 @@ import { renderSettings } from './views/settings.js';
 const NAV = [
   { path: 'dashboard', icon: '🏠', label: '대시보드' },
   { path: 'members', icon: '👥', label: '명단 관리' },
-  { path: 'participation', icon: '📅', label: '주간 참여도' },
+  { path: 'participation', icon: '📅', label: '참여 기록' },
   { path: 'diamond', icon: '💎', label: '다이아 정산' },
   { path: 'rotation', icon: '🎁', label: '순번제/분배' },
   { path: 'gear', icon: '🛡️', label: '장비/숙련 현황' },

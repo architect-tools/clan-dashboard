@@ -22,8 +22,8 @@ export function renderDiamond() {
   if (activeMembers.length && activeMembers.every((m) => !m.score)) {
     body.appendChild(el('div.banner', {}, [
       el('span', { text: '⚠️' }),
-      el('span', { text: '참여점수가 아직 없습니다(전원 F티어). 주간 참여도에서 콘텐츠 참여를 기록한 뒤 “참여점수 산정 → 명단 반영”을 누르면 티어와 다이아가 반영됩니다.' }),
-      btn('주간 참여도로', () => location.hash = '#/participation', { kind: 'primary' }),
+      el('span', { text: '참여점수가 아직 없습니다(전원 F티어). 참여 기록에서 콘텐츠 참여를 기록한 뒤 “참여점수 집계 → 명단에 반영”을 누르면 티어와 다이아가 반영됩니다.' }),
+      btn('참여 기록으로', () => location.hash = '#/participation', { kind: 'primary' }),
     ]));
   }
 

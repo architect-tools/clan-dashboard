@@ -27,9 +27,9 @@ export function renderParticipation() {
   const s = DB.state;
   if (!viewMonth) { const d = new Date(selDate); viewMonth = { y: d.getFullYear(), m: d.getMonth() }; }
 
-  const body = page('주간 참여도', {
+  const body = page('참여 기록', {
     subtitle: '날짜 선택 → 콘텐츠 선택 → 스크린샷으로 참여자 자동 기록',
-    actions: [btn('📊 참여점수 산정', () => location.hash = '#/participation?score', { kind: 'ghost' })],
+    actions: [btn('📊 참여점수 집계', () => openScorePanel(), { kind: 'primary' })],
   });
 
   // two-column: calendar (left) + day detail (right)
@@ -39,9 +39,6 @@ export function renderParticipation() {
 
   renderCalendar(calCol);
   renderDay(dayCol);
-
-  // score panel toggled via hash query
-  if ((location.hash.split('?')[1] || '') === 'score') body.appendChild(renderScorePanel());
 }
 
 // ── calendar ────────────────────────────────────────────────────────
@@ -371,8 +368,11 @@ function checkinPanel(content) {
   return wrap;
 }
 
-// ── score settlement panel ───────────────────────────────────────────
-function renderScorePanel() {
+// ── 참여점수 집계 (모달) ──────────────────────────────────────────────
+function openScorePanel() {
+  modal('📊 참여점수 집계', (close) => scorePanelContent(close), { wide: true });
+}
+function scorePanelContent(close) {
   const s = DB.state;
   const dates = Mutations.datesWithData();
   const defFrom = s.participation.scoreFrom || dates[0] || todayISO();
@@ -399,20 +399,20 @@ function renderScorePanel() {
   };
   compute();
 
-  return card('참여점수 산정', el('div', {}, [
-    el('p.hint', { text: '선택한 기간의 참여 기록을 합산해 참여점수를 계산합니다. “명단 반영”을 누르면 각 클랜원의 참여점수가 갱신되어 다이아 정산에 반영됩니다.' }),
+  return el('div', {}, [
+    el('p.hint', { text: '선택한 기간의 참여 기록을 합산해 참여점수를 계산합니다. “명단에 반영”을 누르면 각 클랜원의 참여점수가 갱신되어 다이아 정산에 반영됩니다.' }),
     el('div.toolbar', {}, [
       el('label.field-inline', {}, [el('span', { text: '시작' }), from]),
       el('label.field-inline', {}, [el('span', { text: '종료' }), to]),
-      btn('계산', compute, { kind: 'ghost' }),
+      btn('계산', compute),
       btn('명단에 반영', () => {
         const range = { from: from.value, to: to.value };
         const scores = computeScores(s.participation.byDate, s.contentCatalog, s.members, range);
         s.members.forEach((m) => { m.score = scores[m.id] || 0; });
         s.participation.scoreFrom = from.value; s.participation.scoreTo = to.value;
-        DB.commit(); toast('참여점수를 명단에 반영했습니다'); location.hash = '#/diamond';
+        DB.commit(); toast('참여점수를 명단에 반영했습니다'); if (close) close(); location.hash = '#/diamond';
       }, { kind: 'primary' }),
     ]),
     out,
-  ]));
+  ]);
 }
