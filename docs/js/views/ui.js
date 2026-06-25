@@ -81,14 +81,17 @@ export function table(cols, rows, { onRow, empty = '데이터 없음' } = {}) {
 }
 
 /** Modal dialog. Returns {close}. content is a node or (close)=>node. */
-export function modal(title, content, { onClose, wide } = {}) {
+export function modal(title, content, { onClose, wide, headerActions } = {}) {
   const close = () => { overlay.remove(); onClose && onClose(); };
   const body = typeof content === 'function' ? content(close) : content;
+  // header actions render in the sticky header, left of the ✕ (always reachable)
+  const acts = headerActions ? [].concat(typeof headerActions === 'function' ? headerActions(close) : headerActions).filter(Boolean) : [];
+  const widthCls = wide === 'x' ? '.modal-xwide' : wide ? '.modal-wide' : '';
   const overlay = el('div.modal-overlay', { onclick: (e) => { if (e.target === overlay) close(); } }, [
-    el('div.modal' + (wide ? '.modal-wide' : ''), {}, [
+    el('div.modal' + widthCls, {}, [
       el('div.modal-head', {}, [
         el('h3', { text: title }),
-        el('button.modal-x', { text: '✕', onclick: close }),
+        el('div.modal-head-right', {}, [...acts, el('button.modal-x', { text: '✕', onclick: close })]),
       ]),
       el('div.modal-body', {}, [body]),
     ]),

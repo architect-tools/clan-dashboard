@@ -241,9 +241,11 @@ select.input{cursor:pointer}
 .modal{background:var(--panel);border:1px solid var(--line2);border-radius:16px;
   width:min(440px,94vw);max-height:90vh;overflow:auto;box-shadow:var(--shadow);animation:pop .16s}
 .modal-wide{width:min(640px,94vw)}
-.modal-head{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;
-  border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}
+.modal-xwide{width:min(880px,94vw)}
+.modal-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 20px;
+  border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:1}
 .modal-head h3{margin:0;font-size:16px}
+.modal-head-right{display:flex;align-items:center;gap:8px;flex:0 0 auto}
 .modal-x{background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;padding:4px}
 .modal-x:hover{color:var(--txt)}
 .modal-body{padding:18px 20px}

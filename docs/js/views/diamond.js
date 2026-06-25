@@ -115,26 +115,23 @@ function openHistory() {
           }, { kind: 'ghost-danger' }),
         ]),
       ])))
-  ));
+  ), { wide: 'x' });
 }
 
 // ── 회차 상세 모달: 멤버별 내역 + 이 회차 CSV 내보내기 ──
 function openSettlementDetail(st) {
-  modal(`분배 상세 · ${st.from || '?'} ~ ${st.to || '?'}`, (close) => el('div', {}, [
-    table([
-      { label: '#', align: 'center', width: '42px', render: (_, i) => i + 1 },
-      { key: 'name', label: '닉네임', render: (r) => el('b', { text: r.name }) },
-      { label: '티어', align: 'center', render: (r) => tierBadge(r.tier) },
-      { key: 'powerDia', label: '투력', align: 'right', render: (r) => fmt(r.powerDia) },
-      { key: 'partDia', label: '참여', align: 'right', render: (r) => fmt(r.partDia) },
-      { key: 'staffDia', label: '운영진', align: 'right', render: (r) => r.staffDia ? fmt(r.staffDia) : '–' },
-      { key: 'total', label: '총', align: 'right', render: (r) => el('b', { style: { color: '#38bdf8' }, text: fmt(r.total) }) },
-    ], [...st.entries].sort((a, b) => b.total - a.total)),
-    el('div.modal-actions', {}, [
-      btn('📄 CSV 내보내기', () => exportSettlementCsv(st), { kind: 'primary' }),
-      btn('닫기', close, { kind: 'ghost' }),
-    ]),
-  ]), { wide: true });
+  modal(`분배 상세 · ${st.from || '?'} ~ ${st.to || '?'}`, table([
+    { label: '#', align: 'center', width: '42px', render: (_, i) => i + 1 },
+    { key: 'name', label: '닉네임', render: (r) => el('b', { text: r.name }) },
+    { label: '티어', align: 'center', render: (r) => tierBadge(r.tier) },
+    { key: 'powerDia', label: '투력', align: 'right', render: (r) => fmt(r.powerDia) },
+    { key: 'partDia', label: '참여', align: 'right', render: (r) => fmt(r.partDia) },
+    { key: 'staffDia', label: '운영진', align: 'right', render: (r) => r.staffDia ? fmt(r.staffDia) : '–' },
+    { key: 'total', label: '총', align: 'right', render: (r) => el('b', { style: { color: '#38bdf8' }, text: fmt(r.total) }) },
+  ], [...st.entries].sort((a, b) => b.total - a.total)), {
+    wide: true,
+    headerActions: [btn('📄 CSV 내보내기', () => exportSettlementCsv(st))],
+  });
 }
 
 // CSV of one confirmed settlement record.
