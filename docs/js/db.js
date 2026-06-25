@@ -10,15 +10,37 @@ import { uid, toast } from './util.js';
 const LIVE = () => !!CONFIG.APPS_SCRIPT_URL;
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
-const DEFAULT_RULES = `1. 필요 시 최우선 분배 대상 우선
+// 분배 기준(운영 시트 '분배 기준(NEW)' 기준)
+const DEFAULT_RULES = `1. 보스님·페커리님·붉으래님 필요 시 최우선 분배
 2. 전용 주문석·엘릭서·탈것·성좌: 투력 순 분배
-3. 공용 주문석·마부핵: 고투(상위) 제외, 내판가 적용 (기준 투력 필요)
+3. 공용 주문석·마부핵: 고투 제외, 내판가 적용 (기준 투력 필요)
+
 4. 드랍템
-   · 무기   4티(60만↑ 투력순) / 3티(50만↑ 내판가·참여도) / 2티(65만↓ 내판가·참여도)
-   · 방어구 4티(60만 투력순) / 3티(50만 내판가·참여도) / 2티(65만↓ 내판가·참여도)
-   · 장신구 4티(70만↑ 순번제) / 3티(65만 순번제·내판가) / 2티↓(내판가·참여도)
-   · 설계도(상급/중급/하급): 상급 순번제, 중급·하급 내판가·참여도
-* 참여도 우선, 중복 입찰 시 1가지 상품만 (몰림 방지) — 직전 입찰자는 다음 순번으로`;
+   · 무기   5.5티 (직업별 투력순 90만↑ 10원, 이하 내판)
+            4.5티 (직업별 투력순 80만↑ 10원, 이하 내판)
+            3.5티~3티 (내판·외판, 내판 시 참여도 우선)
+   · 방어구 5성 1티 (최상위 우선 10원)
+            5.5티 (투력순 90만↑ 10원, 이하 내판)
+            4.5티 (투력순 80만↑ 10원, 이하 내판)
+            3.5티~3티 (내판·외판, 내판 시 참여도 우선)
+   · 장신구 4.5티 (투력순 90만↑ 10원, 이하 내판)
+            3.5티 (투력순 80만↑ 10원, 이하 내판)
+            3티 (투력순 80만↑ 10원, 이하 내판)
+
+5. 설계도(도면)
+   · 무기   5성 하급 (최상위 우선 10원)
+            상급 (구간별 로테, 80만↑ 10원, 이하 내판)
+            중급~하급 (내판·외판, 내판 시 참여도 우선)
+   · 방어구 5성 하급 (최상위 우선 10원)
+            상급 (구간별 로테, 80만↑ 10원, 이하 내판)
+            중급~하급 (내판·외판, 내판 시 참여도 우선)
+   · 장신구 상급 (구간별 투력순 로테, 90만↑ 10원, 이하 내판)
+            중급 (구간별 투력순 로테, 80만↑ 10원, 이하 내판)
+            하급 (내판·외판)
+
+* 투표: 1순위 투력, 2순위 참여도
+* 참여도 우선, 중복 입찰 시 1가지 상품만 (몰림 방지)
+  — 시트 확인 후 직전 입찰자는 다음 순번으로`;
 
 export const DB = {
   state: null,
@@ -184,6 +206,8 @@ function normalize(d) {
     d.appSettings._mgmtBoards2 = true;
   }
   if (d.distributionRules == null) d.distributionRules = DEFAULT_RULES;
+  // 분배 기준을 시트 NEW 기준으로 1회 강제 교체(기존 OLD 텍스트 정리). 이후 운영자 편집은 유지.
+  if (!d.appSettings._rulesNEW) { d.distributionRules = DEFAULT_RULES; d.appSettings._rulesNEW = true; }
   if (d.ocrCrop === undefined) d.ocrCrop = null;   // remembered OCR crop as image fractions {x,y,w,h}
   if (d.ocrAnchor === undefined) d.ocrAnchor = null; // OpenCV anchor template for auto-detect {tplDataUrl,relW,relH,refImgW}
   return d;
