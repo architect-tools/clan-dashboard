@@ -4,7 +4,7 @@
 import { COMMON_SPELLSTONE_ICONS } from './common-stones.js';
 export const ITEM_ICON_BASE = 'assets/items/';
 // ?v= 캐시 무효화 — 아이콘 재크롭 시 숫자 올려 브라우저가 새로 받게(파일명 동일이라 캐시됨)
-export const iconFile = (id) => ITEM_ICON_BASE + 'item_' + String(id).padStart(3, '0') + '.webp?v=3';
+export const iconFile = (id) => ITEM_ICON_BASE + 'item_' + String(id).padStart(3, '0') + '.webp?v=4';
 const norm = (s) => String(s || '').replace(/[\s:\-]/g, '');
 
 export const SPELLSTONE_ICONS = {
