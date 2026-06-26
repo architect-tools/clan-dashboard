@@ -73,7 +73,7 @@ body[data-role="member"] .admin-only{display:none !important}
 .logout:hover{color:var(--bad)}
 .main-wrap{flex:1;min-width:0;display:flex;flex-direction:column}
 .main{flex:1;min-width:0}
-.topbar{display:flex;align-items:center;gap:12px;padding:10px 8px;border-bottom:1px solid var(--line);
+.topbar{display:flex;align-items:center;gap:12px;padding:10px 64px;border-bottom:1px solid var(--line);
   position:sticky;top:0;background:rgba(13,16,21,.82);backdrop-filter:blur(8px);z-index:60}
 .menu-btn{display:none}
 .topbar-title{display:none}
@@ -84,7 +84,7 @@ body[data-role="member"] .admin-only{display:none !important}
 .icon-btn:disabled{opacity:.3;cursor:default}
 
 /* ── page ────────────────────────────────────────────────────────── */
-.page{padding:26px 8px 60px}
+.page{padding:26px 64px 60px}
 .page-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:22px;flex-wrap:wrap;
   padding-bottom:14px;border-bottom:1px solid var(--line)}
 .page-title{margin:0;font-size:24px;font-weight:600;letter-spacing:-.3px}
@@ -355,10 +355,11 @@ select.input{cursor:pointer}
 .equip-tier.relic-tier.prism{background:linear-gradient(120deg,#ff7a86,#ffd93d,#6bcb77,#4d96ff,#c78bff);
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;text-shadow:none}
 /* 장비 현황 표(멤버×슬롯): 고정 셀폭(colgroup) + 그룹 헤더(무기/방어구/장신구/성유물). 성유물은 좁게. */
-.equip-status-tbl{table-layout:fixed}
-.equip-status-tbl col{width:64px}
-.equip-status-tbl col.col-relic{width:40px}
-.equip-status-tbl col.col-name{width:84px}
+/* 고정 열폭(내용 안 잘리게) + 화면 좁으면 .scroll-tbl이 가로 스크롤 */
+.equip-status-tbl{table-layout:fixed;min-width:max-content}
+.equip-status-tbl col{width:72px}
+.equip-status-tbl col.col-relic{width:44px}
+.equip-status-tbl col.col-name{width:92px}
 .equip-status-tbl th,.equip-status-tbl td{padding:4px 5px;font-size:12px;white-space:nowrap;text-align:center;
   overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
 .equip-status-tbl .col-name{text-align:left}
