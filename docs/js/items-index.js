@@ -1,9 +1,10 @@
 // items-index.js — 아이템 아이콘 인덱스(자동 크롭 라이브러리 docs/assets/items/item_NNN.webp).
 // ~item_references 스크린샷에서 크롭·밝기보정 후 이름→직업으로 인덱싱. 키는 공백 제거한 스킬명.
 // 주문석: 이름에 ':직업'이 있어 직업별 매핑. (트래킹 12종 + 미트래킹 extra 포함)
+import { COMMON_SPELLSTONE_ICONS } from './common-stones.js';
 export const ITEM_ICON_BASE = 'assets/items/';
 export const iconFile = (id) => ITEM_ICON_BASE + 'item_' + String(id).padStart(3, '0') + '.webp';
-const norm = (s) => String(s || '').replace(/\s/g, '');
+const norm = (s) => String(s || '').replace(/[\s:\-]/g, '');
 
 export const SPELLSTONE_ICONS = {
   전사: { 칼날쇄도: 139, 분노방출: 145, 정신집중: 151, 파열의칼날: 152, 파멸: 155, 다중궤적: 159, 신체강화: 153, 철갑의분노: 156, 사슬구속: 157, 도약베기: 158, 전투선포: 154, 검의낙인: 147, 패왕의투지: 160, 검의포효: 161, 철의수호: 162 },
@@ -31,8 +32,12 @@ export function elixirIcon(cls, name) {
   const id = (ELIXIR_ICONS[cls] && ELIXIR_ICONS[cls][norm(name)]) || (ELIXIR_ICONS['공용'] && ELIXIR_ICONS['공용'][norm(name)]);
   return id ? iconFile(id) : null;
 }
-/** 주문석/엘릭서 표 헤더용 아이콘 경로(없으면 null). */
+export function commonStoneIcon(name) {
+  const id = COMMON_SPELLSTONE_ICONS[norm(name)];
+  return id ? iconFile(id) : null;
+}
+/** 주문석/엘릭서 표 헤더용 아이콘 경로(없으면 null). 주문석 공용 탭 = 공용 주문석(범용 효과석). */
 export function skillIcon(cat, classKey, name) {
-  if (cat === '주문석') return classKey === '공용' ? null : stoneIcon(classKey, name);
+  if (cat === '주문석') return classKey === '공용' ? commonStoneIcon(name) : stoneIcon(classKey, name);
   return elixirIcon(classKey, name);
 }

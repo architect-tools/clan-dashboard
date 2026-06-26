@@ -1,3 +1,4 @@
+import { COMMON_SPELLSTONES } from './common-stones.js';
 // skills-data.js — 운영 시트(주문석 / 엘릭서 & 패시브) 원문 그대로의 직업별 항목.
 // 직업별로 컬럼이 완전히 다르므로(직업별 스킬), 보드를 직업 섹션으로 나눠 보여준다.
 // 값은 시트와 동일하게 자유 입력(o, 5성, "5성 2개", 숫자 …).
@@ -47,15 +48,16 @@ export const PASSIVES = {
 export const COMMON_SPELL = ['정신 집중', '신체 강화']; // 모든 직업 주문석에 공통
 export const COMMON_ELIXIR = ELIXIR_COMMON;             // 집중 호흡·영웅의 기운
 
-/** 직업(또는 '공용')의 그룹 목록 → [{label, cols:[…]}]. kind: 'spellstone' | 'elixir' */
+/** 직업(또는 '공용')의 그룹 목록 → [{label, cols:[…]}]. cols 원소는 문자열 또는 {key,label}.
+ *  주문석 공용 탭 = 공용 주문석(범용 효과석, 클래스 공용스킬과 별개). 엘릭서 공용 탭 = 공용 엘릭서. */
 export function classGroups(kind, cls) {
   if (cls === '공용') {
-    return [{ label: '공용', cols: kind === 'spellstone' ? COMMON_SPELL : COMMON_ELIXIR }];
+    return kind === 'spellstone' ? COMMON_SPELLSTONES : [{ label: '공용 엘릭서', cols: COMMON_ELIXIR }];
   }
   if (kind === 'spellstone') {
     const s = SPELLSTONES[cls];
     if (!s) return [];
     return Object.keys(s).map((label) => ({ label, cols: s[label] }));
   }
-  return [{ label: '공용', cols: ELIXIR_COMMON }, { label: '패시브', cols: PASSIVES[cls] || [] }];
+  return [{ label: '패시브', cols: PASSIVES[cls] || [] }]; // 직업 탭엔 공용 엘릭서 제외(공용 탭에 있음)
 }

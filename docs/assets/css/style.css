@@ -377,24 +377,33 @@ select.input{cursor:pointer}
 .skill-tab.active{background:var(--primary);border-color:var(--primary);color:var(--on-ink)}
 .skill-arrow{width:28px;height:28px;border-radius:7px;border:1px solid var(--line2);background:var(--panel);
   color:var(--txt);cursor:pointer;font-size:17px;line-height:1;display:grid;place-items:center}
-.skill-panel{display:flex;justify-content:center;align-items:flex-start;overflow:hidden}
-@keyframes skill-in-r{from{opacity:0;transform:translateX(26px)}to{opacity:1;transform:none}}
-@keyframes skill-in-l{from{opacity:0;transform:translateX(-26px)}to{opacity:1;transform:none}}
-.skill-tbl.slide-r{animation:skill-in-r .2s ease}
-.skill-tbl.slide-l{animation:skill-in-l .2s ease}
-.skill-tbl{border-collapse:collapse;table-layout:fixed}
-.skill-tbl col{width:50px}
-.skill-tbl col.col-name{width:78px}
-.skill-tbl th,.skill-tbl td{border:1px solid var(--line);height:26px;padding:3px 4px;font-size:11px;
-  white-space:nowrap;text-align:center;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis}
+/* 폭이 넓으면(공용 주문석 81종) 가로 스크롤. 좁은 표는 그대로. */
+.skill-panel{overflow-x:auto;padding-bottom:2px}
+@keyframes skill-fade{from{opacity:0}to{opacity:1}}
+.skill-tbl.slide-r,.skill-tbl.slide-l{animation:skill-fade .18s ease}
+.skill-tbl{border-collapse:collapse;table-layout:fixed;margin:0 auto}
+.skill-tbl col{width:62px}
+.skill-tbl col.col-name{width:80px}
+.skill-tbl th,.skill-tbl td{border:1px solid var(--line);padding:3px 3px;font-size:11px;text-align:center;box-sizing:border-box;vertical-align:middle}
 .skill-tbl thead th{background:var(--panel);color:var(--muted);font-weight:600}
 .skill-tbl .grp-start{border-left:2px solid var(--line2)}
-.skill-tbl .skill-name{width:78px;text-align:left;background:var(--panel)}
+.skill-tbl .skill-name{width:80px;text-align:left;background:var(--panel);white-space:nowrap}
 .skill-tbl tbody .skill-name{background:var(--panel2)}
-.skill-cell{width:42px;text-align:center;padding:2px 3px;font-size:11px}
-.sk-h{display:flex;flex-direction:column;align-items:center;gap:1px}
-.sk-ic{width:26px;height:26px;border-radius:5px;border:1px solid var(--line2)}
-.sk-hn{font-size:10px;line-height:1.15;max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 헤더: 아이콘 + 이름(잘림 없이 줄바꿈) */
+.sk-h{display:flex;flex-direction:column;align-items:center;gap:2px;padding:2px 0}
+.sk-ic{width:28px;height:28px;border-radius:5px;border:1px solid var(--line2);flex:none}
+.sk-hn{font-size:9.5px;line-height:1.12;white-space:normal;word-break:keep-all;text-align:center}
+/* 아이콘 없음 = 금지(정지) 표지 */
+.sk-none{position:relative;background:var(--bg2);border:3px solid #d4504e;border-radius:50%}
+.sk-none::after{content:'';position:absolute;left:50%;top:50%;width:18px;height:3px;background:#d4504e;transform:translate(-50%,-50%) rotate(-45deg)}
+/* 보유 토글: ON=녹색 체크 */
+.sk-toggle{width:24px;height:24px;border-radius:6px;border:1px solid var(--line2);background:var(--panel2);
+  cursor:pointer;display:inline-grid;place-items:center;padding:0;transition:.1s}
+.sk-toggle:hover{border-color:var(--good)}
+.sk-toggle .sk-check{visibility:hidden;color:var(--good);font-weight:800;font-size:14px;line-height:1}
+.sk-toggle.on{background:color-mix(in srgb,var(--good) 22%,var(--panel2));border-color:var(--good)}
+.sk-toggle.on .sk-check{visibility:visible}
+.sk-check.on{color:var(--good);font-weight:800}
 .confirm-msg{margin:0 0 16px;color:var(--muted);font-size:14px}
 @keyframes fade{from{opacity:0}} @keyframes pop{from{transform:scale(.98);opacity:0}}
 

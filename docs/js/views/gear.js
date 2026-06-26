@@ -113,19 +113,21 @@ export function renderGear() {
     const mem = key === '공용'
       ? Roles.selfFirst(s.members.filter((m) => m.active !== false))
       : Roles.selfFirst(s.members.filter((m) => m.active !== false && m.cls === key));
-    const groups = classGroups(kind, key);
+    // cols 원소: 문자열 또는 {key,label} → 통일
+    const groups = classGroups(kind, key).map((g) => ({ label: g.label, cols: g.cols.map((c) => (typeof c === 'string' ? { key: c, label: c } : c)) }));
     const tbl = el('table.tbl.skill-tbl');
-    const ncols = groups.reduce((a, g) => a + g.cols.length, 0); // 고정 컬럼 폭(직업 무관 동일)
+    const ncols = groups.reduce((a, g) => a + g.cols.length, 0);
     tbl.appendChild(el('colgroup', {}, [el('col.col-name'), ...Array.from({ length: ncols }, () => el('col'))]));
     const h1 = [el('th.skill-name', { rowspan: '2', text: key })];
     groups.forEach((g) => h1.push(el('th', { class: 'grp-start', colspan: String(g.cols.length), text: g.label })));
     const h2 = [];
     groups.forEach((g) => g.cols.forEach((c, i) => {
-      const ic = skillIcon(cat, key, c);
-      const head = ic
-        ? el('div.sk-h', {}, [el('img.sk-ic', { src: ic, alt: '', title: c, loading: 'lazy' }), el('span.sk-hn', { text: c })])
-        : el('span.sk-hn', { text: c });
-      h2.push(el('th', { class: i === 0 ? 'grp-start' : '', title: c }, [head]));
+      const ic = skillIcon(cat, key, c.key);
+      // 아이콘 없으면 금지(정지) 표지로 대체
+      const icoEl = ic
+        ? el('img.sk-ic', { src: ic, alt: '', title: c.label, loading: 'lazy' })
+        : el('span.sk-ic.sk-none', { title: '아이콘 없음' });
+      h2.push(el('th', { class: i === 0 ? 'grp-start' : '', title: c.key }, [el('div.sk-h', {}, [icoEl, el('span.sk-hn', { text: c.label })])]));
     }));
     tbl.appendChild(el('thead', {}, [el('tr', {}, h1), el('tr', {}, h2)]));
     const tb = el('tbody');
@@ -133,10 +135,11 @@ export function renderGear() {
       const canEdit = adm || Roles.isMe(m.name);
       const tr = el('tr', {}, [el('td.skill-name', {}, [el('b', { text: m.name })])]);
       groups.forEach((g) => g.cols.forEach((c, i) => {
-        const v = ((m.skills || {})[cat] || {})[c] || '';
+        const owned = !!((m.skills || {})[cat] || {})[c.key]; // 보유 여부(토글)
         const cell = canEdit
-          ? input({ value: v, class: 'cell-input skill-cell', placeholder: '·', onchange: (e) => { setSkill(m, cat, c, e.target.value.trim()); DB.commit(); } })
-          : el('span', { class: v ? '' : 'muted', text: v || '·' });
+          ? el('button.sk-toggle', { class: owned ? 'on' : '', type: 'button', title: owned ? '보유 (클릭해 해제)' : '미보유 (클릭해 보유)',
+              onclick: (e) => { const on = toggleSkill(m, cat, c.key); const b = e.currentTarget; b.classList.toggle('on', on); b.title = on ? '보유 (클릭해 해제)' : '미보유 (클릭해 보유)'; } }, [el('span.sk-check', { text: '✓' })])
+          : el('span.sk-check', { class: owned ? 'on' : '', text: owned ? '✓' : '' });
         tr.appendChild(el('td', { class: i === 0 ? 'grp-start' : '', style: { textAlign: 'center' } }, [cell]));
       }));
       tb.appendChild(tr);
@@ -144,9 +147,13 @@ export function renderGear() {
     tbl.appendChild(tb);
     return tbl;
   }
-  function setSkill(m, cat, key, val) {
+  // 보유 여부 토글(있으면 true, 해제 시 삭제). 기존 텍스트값도 truthy라 보유로 표시.
+  function toggleSkill(m, cat, key) {
     m.skills ||= {}; m.skills[cat] ||= {};
-    if (val) m.skills[cat][key] = val; else delete m.skills[cat][key];
+    let on;
+    if (m.skills[cat][key]) { delete m.skills[cat][key]; on = false; } else { m.skills[cat][key] = true; on = true; }
+    DB.commit();
+    return on;
   }
 
   // board tabs
