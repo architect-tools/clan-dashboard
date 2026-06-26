@@ -11,7 +11,6 @@ import { renderParticipation } from './views/participation.js';
 import { renderDiamond } from './views/diamond.js';
 import { renderRotation } from './views/rotation.js';
 import { renderGear } from './views/gear.js';
-import { renderSchedule } from './views/schedule.js';
 import { renderSettings } from './views/settings.js';
 import { renderDistParams } from './views/distParams.js';
 
@@ -22,7 +21,6 @@ const NAV = [
   { path: 'diamond', icon: '💎', label: '다이아 정산' },
   { path: 'rotation', icon: '🎁', label: '전리품' },
   { path: 'gear', icon: '🛡️', label: '장비/캐릭터 현황' },
-  { path: 'schedule', icon: '🗓️', label: '일정' },
   { path: 'settings', icon: '⚙️', label: '설정', admin: true },
 ];
 
@@ -90,7 +88,6 @@ async function main() {
     .on('diamond', renderDiamond)
     .on('rotation', renderRotation)
     .on('gear', renderGear)
-    .on('schedule', renderSchedule)
     .on('settings', renderSettings)
     .on('dist-params', renderDistParams)
     .start('dashboard');

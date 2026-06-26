@@ -40,7 +40,6 @@ const views = {
   diamond: (await import('../docs/js/views/diamond.js')).renderDiamond,
   rotation: (await import('../docs/js/views/rotation.js')).renderRotation,
   gear: (await import('../docs/js/views/gear.js')).renderGear,
-  schedule: (await import('../docs/js/views/schedule.js')).renderSchedule,
   settings: (await import('../docs/js/views/settings.js')).renderSettings,
   distParams: (await import('../docs/js/views/distParams.js')).renderDistParams,
 };

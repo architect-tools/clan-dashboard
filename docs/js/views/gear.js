@@ -8,7 +8,8 @@ import { el, toast, uid, clear } from '../util.js';
 import { page, card, btn, input, select, modal, field, confirmDialog } from './ui.js';
 import { equipGrid, equipCell, editSlot, EQUIP_GROUPS } from './equip.js';
 import { classGroups } from '../skills-data.js';
-import { skillIcon } from '../items-index.js';
+import { COMMON_SPELLSTONES } from '../common-stones.js';
+import { skillIcon, commonStoneIcon } from '../items-index.js';
 
 let activeBoard = 0, gearMember = null;
 const skillIdx = {}; // 주문석·엘릭서 캐러셀에서 선택한 직업 인덱스(재렌더에도 유지)
@@ -106,10 +107,12 @@ export function renderGear() {
       el('button.skill-arrow', { text: '‹', title: '이전', onclick: () => show(idx - 1, -1) }), tabs,
       el('button.skill-arrow', { text: '›', title: '다음', onclick: () => show(idx + 1, 1) }),
     ]);
-    body.appendChild(card(cat, el('div', {}, [head, panel]), { className: 'card-flush' }));
+    const acts = (cat === '주문석' && adm) ? btn('공용 주문석 지정', () => openStoneSelect(), { kind: 'ghost', admin: true }) : null;
+    body.appendChild(card(cat, el('div', {}, [head, panel]), { className: 'card-flush', actions: acts }));
     show(idx, 1);
   }
   function buildClassTable(cat, kind, key) {
+    if (cat === '주문석' && key === '공용') return buildCommonStoneTable(); // 공용 주문석 = 지정+개수 관리
     const mem = key === '공용'
       ? Roles.selfFirst(s.members.filter((m) => m.active !== false))
       : Roles.selfFirst(s.members.filter((m) => m.active !== false && m.cls === key));
@@ -154,6 +157,79 @@ export function renderGear() {
     if (m.skills[cat][key]) { delete m.skills[cat][key]; on = false; } else { m.skills[cat][key] = true; on = true; }
     DB.commit();
     return on;
+  }
+
+  // ── 공용 주문석: 관리자가 지정한 항목만 + 개수(2개 이상 보유) 스테퍼, 성급별 ──
+  function shortStone(full) { return String(full).replace(/\s*[:\-]\s*(일반 공격|대시)\s*$/, ''); }
+  function buildCommonStoneTable() {
+    const cat = '공용주문석';
+    const managed = s.appSettings.managedStones || [];
+    const mem = Roles.selfFirst(s.members.filter((m) => m.active !== false));
+    if (!managed.length) {
+      return el('div.empty.small', { text: adm ? '“공용 주문석 지정”으로 관리할 주문석을 먼저 선택하세요.' : '아직 지정된 공용 주문석이 없습니다.' });
+    }
+    const tbl = el('table.tbl.skill-tbl');
+    tbl.appendChild(el('colgroup', {}, [el('col.col-name'), ...managed.map(() => el('col.col-cnt'))]));
+    const hr = [el('th.skill-name', { text: '닉네임' })];
+    managed.forEach((mc) => {
+      const ic = mc.star === 5 ? commonStoneIcon(mc.name) : null;
+      const icoEl = ic ? el('img.sk-ic', { src: ic, alt: '', title: mc.name, loading: 'lazy' }) : el('span.sk-ic.sk-none', { title: '4성 아이콘 추가 예정' });
+      hr.push(el('th', { title: mc.name }, [el('div.sk-h', {}, [icoEl, el('span.sk-hn', { text: shortStone(mc.name) }), el('span.sk-star', { text: mc.star + '성' })])]));
+    });
+    tbl.appendChild(el('thead', {}, el('tr', {}, hr)));
+    const tb = el('tbody');
+    mem.forEach((m) => {
+      const canEdit = adm || Roles.isMe(m.name);
+      const tr = el('tr', {}, [el('td.skill-name', {}, [el('b', { text: m.name })])]);
+      managed.forEach((mc) => {
+        const key = mc.name + '__' + mc.star;
+        const cur = ((m.skills || {})[cat] || {})[key] || 0;
+        tr.appendChild(el('td', {}, [countCell(m, cat, key, cur, canEdit)]));
+      });
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb);
+    return tbl;
+  }
+  function countCell(m, cat, key, cur, canEdit) {
+    if (!canEdit) return el('span.sk-count', { class: cur ? 'on' : '', text: cur ? String(cur) : '·' });
+    const num = el('span.sk-count', { class: cur ? 'on' : '', text: String(cur) });
+    const step = (d) => () => setCount(m, cat, key, d, num);
+    return el('div.sk-stepper', {}, [
+      el('button.sk-step', { type: 'button', text: '−', title: '1 줄이기', onclick: step(-1) }),
+      num,
+      el('button.sk-step', { type: 'button', text: '+', title: '1 늘리기', onclick: step(+1) }),
+    ]);
+  }
+  function setCount(m, cat, key, delta, numEl) {
+    m.skills ||= {}; m.skills[cat] ||= {};
+    let v = (m.skills[cat][key] || 0) + delta;
+    if (v <= 0) { delete m.skills[cat][key]; v = 0; } else m.skills[cat][key] = v;
+    DB.commit();
+    numEl.textContent = String(v); numEl.classList.toggle('on', v > 0);
+  }
+  // 관리자: 81종 중 관리할 공용 주문석을 성급별로 지정
+  function openStoneSelect() {
+    const managed = (s.appSettings.managedStones ||= []);
+    const has = (name, star) => managed.some((x) => x.name === name && x.star === star);
+    const toggle = (name, star, on) => {
+      const i = managed.findIndex((x) => x.name === name && x.star === star);
+      if (on && i < 0) managed.push({ name, star });
+      else if (!on && i >= 0) managed.splice(i, 1);
+      DB.commit();
+    };
+    modal('공용 주문석 지정', (close) => el('div', {}, [
+      el('p.hint', { text: '관리할 공용 주문석을 선택하세요. 선택 항목이 공용 탭에 개수 관리로 표시됩니다. (지금은 5성 아이콘 보유, 4성은 추후 아이콘 추가 예정)' }),
+      ...COMMON_SPELLSTONES.map((g) => el('div', {}, [
+        el('div.modal-sec', { text: g.label }),
+        el('div.stone-pick', {}, g.cols.map((c) => el('div.stone-row', {}, [
+          el('span.stone-name', { text: c.label }),
+          el('label.stone-star', {}, [el('input', { type: 'checkbox', checked: has(c.key, 5), onchange: (e) => toggle(c.key, 5, e.target.checked) }), el('span', { text: '5성' })]),
+          el('label.stone-star', {}, [el('input', { type: 'checkbox', checked: has(c.key, 4), onchange: (e) => toggle(c.key, 4, e.target.checked) }), el('span', { text: '4성' })]),
+        ]))),
+      ])),
+      el('div.modal-actions', {}, [btn('완료', () => { close(); renderGear(); }, { kind: 'primary' })]),
+    ]), { wide: 'x' });
   }
 
   // board tabs

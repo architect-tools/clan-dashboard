@@ -404,6 +404,19 @@ select.input{cursor:pointer}
 .sk-toggle.on{background:color-mix(in srgb,var(--good) 22%,var(--panel2));border-color:var(--good)}
 .sk-toggle.on .sk-check{visibility:visible}
 .sk-check.on{color:var(--good);font-weight:800}
+/* 공용 주문석: 성급 라벨 + 개수 스테퍼(2개 이상 보유) */
+.sk-star{display:block;font-size:8px;color:var(--dim);font-family:var(--mono);margin-top:1px}
+.skill-tbl col.col-cnt{width:66px}
+.sk-stepper{display:inline-flex;align-items:center;gap:1px;justify-content:center}
+.sk-step{width:16px;height:20px;border:1px solid var(--line2);background:var(--panel2);color:var(--muted);
+  cursor:pointer;font-size:13px;line-height:1;padding:0;border-radius:4px}
+.sk-step:hover{color:var(--txt);border-color:var(--primary)}
+.sk-count{display:inline-block;min-width:16px;text-align:center;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--dim)}
+.sk-count.on{color:var(--good)}
+.stone-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:3px 16px;margin-bottom:10px}
+.stone-row{display:flex;align-items:center;gap:8px;font-size:12px;padding:2px 0}
+.stone-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stone-star{display:flex;align-items:center;gap:3px;color:var(--muted);font-size:11px;cursor:pointer;white-space:nowrap}
 .confirm-msg{margin:0 0 16px;color:var(--muted);font-size:14px}
 @keyframes fade{from{opacity:0}} @keyframes pop{from{transform:scale(.98);opacity:0}}
 
