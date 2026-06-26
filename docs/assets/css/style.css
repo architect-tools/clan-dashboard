@@ -73,7 +73,7 @@ body[data-role="member"] .admin-only{display:none !important}
 .logout:hover{color:var(--bad)}
 .main-wrap{flex:1;min-width:0;display:flex;flex-direction:column}
 .main{flex:1;min-width:0}
-.topbar{display:flex;align-items:center;gap:12px;padding:10px 30px;border-bottom:1px solid var(--line);
+.topbar{display:flex;align-items:center;gap:12px;padding:10px 15px;border-bottom:1px solid var(--line);
   position:sticky;top:0;background:rgba(13,16,21,.82);backdrop-filter:blur(8px);z-index:60}
 .menu-btn{display:none}
 .topbar-title{display:none}
@@ -84,7 +84,7 @@ body[data-role="member"] .admin-only{display:none !important}
 .icon-btn:disabled{opacity:.3;cursor:default}
 
 /* ── page ────────────────────────────────────────────────────────── */
-.page{padding:26px 30px 60px;max-width:1240px;margin:0 auto}
+.page{padding:26px 15px 60px;max-width:1240px;margin:0 auto}
 .page-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:22px;flex-wrap:wrap;
   padding-bottom:14px;border-bottom:1px solid var(--line)}
 .page-title{margin:0;font-size:24px;font-weight:600;letter-spacing:-.3px}
@@ -356,9 +356,9 @@ select.input{cursor:pointer}
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;text-shadow:none}
 /* 장비 현황 표(멤버×슬롯): 고정 셀폭(colgroup) + 그룹 헤더(무기/방어구/장신구/성유물). 성유물은 좁게. */
 .equip-status-tbl{table-layout:fixed}
-.equip-status-tbl col{width:58px}
+.equip-status-tbl col{width:64px}
 .equip-status-tbl col.col-relic{width:40px}
-.equip-status-tbl col.col-name{width:80px}
+.equip-status-tbl col.col-name{width:84px}
 .equip-status-tbl th,.equip-status-tbl td{padding:4px 5px;font-size:12px;white-space:nowrap;text-align:center;
   overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
 .equip-status-tbl .col-name{text-align:left}
