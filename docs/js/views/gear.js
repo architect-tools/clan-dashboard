@@ -10,6 +10,7 @@ import { equipGrid, equipCell, editSlot, EQUIP_GROUPS } from './equip.js';
 import { classGroups } from '../skills-data.js';
 
 let activeBoard = 0, gearMember = null;
+const skillIdx = {}; // 주문석·엘릭서 캐러셀에서 선택한 직업 인덱스(재렌더에도 유지)
 
 export function renderGear() {
   const s = DB.state;
@@ -74,39 +75,55 @@ export function renderGear() {
   // ── 기타 현황 보드 (성좌·탈것·플랫폼) ──
   body.appendChild(el('div.modal-sec', { text: '기타 현황 보드' }));
 
-  // 직업별 섹션으로 나눠 그리는 스킬 표(주문석·엘릭서) — 직업마다 컬럼이 다르므로
+  // 주문석·엘릭서: 직업별 표를 가로 슬라이드(탭·화살표)로 전환. 스크롤뷰 없이 모든 직업 표를
+  // 한 트랙에 두고 translateX로 이동 → 트랙 높이=최다 인원 직업에 맞춰 고정. 셀·행 간격은
+  // CSS로 직업 무관 동일.
   function renderSkillSection(cat, kind) {
-    const wrap = el('div');
-    let any = false;
-    for (const cls of CLASS_LIST) {
-      const mem = Roles.selfFirst(s.members.filter((mm) => mm.active !== false && mm.cls === cls));
-      const groups = classGroups(kind, cls);
-      if (!mem.length || !groups.length) continue;
-      any = true;
-      const tbl = el('table.tbl.skill-tbl');
-      const h1 = [el('th.sticky-col', { rowspan: '2', text: cls })];
-      groups.forEach((g) => h1.push(el('th', { class: 'grp-start', colspan: String(g.cols.length), text: g.label })));
-      const h2 = [];
-      groups.forEach((g) => g.cols.forEach((c, i) => h2.push(el('th', { class: i === 0 ? 'grp-start' : '', title: c, text: c }))));
-      tbl.appendChild(el('thead', {}, [el('tr', {}, h1), el('tr', {}, h2)]));
-      const tb = el('tbody');
-      mem.forEach((m) => {
-        const canEdit = adm || Roles.isMe(m.name);
-        const tr = el('tr', {}, [el('td.sticky-col', {}, [el('b', { text: m.name })])]);
-        groups.forEach((g) => g.cols.forEach((c, i) => {
-          const v = ((m.skills || {})[cat] || {})[c] || '';
-          const cell = canEdit
-            ? input({ value: v, class: 'cell-input skill-cell', placeholder: '·', onchange: (e) => { setSkill(m, cat, c, e.target.value.trim()); DB.commit(); } })
-            : el('span', { class: v ? '' : 'muted', text: v || '·' });
-          tr.appendChild(el('td', { class: i === 0 ? 'grp-start' : '', style: { textAlign: 'center' } }, [cell]));
-        }));
-        tb.appendChild(tr);
-      });
-      tbl.appendChild(tb);
-      wrap.appendChild(el('div.scroll-tbl', { style: { marginBottom: '14px' } }, [tbl]));
-    }
-    if (!any) wrap.appendChild(el('div.empty.small', { text: '활동 클랜원이 없습니다.' }));
-    body.appendChild(card(cat, wrap, { className: 'card-flush' }));
+    const classes = CLASS_LIST.filter((cls) =>
+      classGroups(kind, cls).length && s.members.some((m) => m.active !== false && m.cls === cls));
+    if (!classes.length) { body.appendChild(card(cat, el('div.empty.small', { text: '활동 클랜원이 없습니다.' }), { className: 'card-flush' })); return; }
+    let idx = Math.min(skillIdx[cat] || 0, classes.length - 1); skillIdx[cat] = idx;
+    const track = el('div.skill-track', {}, classes.map((cls) => el('div.skill-slide', {}, [buildClassTable(cat, kind, cls)])));
+    const tabs = el('div.skill-tabs');
+    const go = (n) => {
+      idx = (n + classes.length) % classes.length; skillIdx[cat] = idx;
+      track.style.transform = `translateX(-${idx * 100}%)`;
+      [...tabs.children].forEach((t, i) => t.classList.toggle('active', i === idx));
+    };
+    classes.forEach((cls, i) => tabs.appendChild(el('button.skill-tab', { class: i === idx ? 'active' : '', text: cls, onclick: () => go(i) })));
+    const head = el('div.skill-head', {}, [
+      el('button.skill-arrow', { text: '‹', title: '이전 직업', onclick: () => go(idx - 1) }), tabs,
+      el('button.skill-arrow', { text: '›', title: '다음 직업', onclick: () => go(idx + 1) }),
+    ]);
+    track.style.transform = `translateX(-${idx * 100}%)`;
+    body.appendChild(card(cat, el('div', {}, [head, el('div.skill-viewport', {}, [track])]), { className: 'card-flush' }));
+  }
+  function buildClassTable(cat, kind, cls) {
+    const mem = Roles.selfFirst(s.members.filter((m) => m.active !== false && m.cls === cls));
+    const groups = classGroups(kind, cls);
+    const tbl = el('table.tbl.skill-tbl');
+    const ncols = groups.reduce((a, g) => a + g.cols.length, 0); // 고정 컬럼 폭(직업 무관 동일)
+    tbl.appendChild(el('colgroup', {}, [el('col.col-name'), ...Array.from({ length: ncols }, () => el('col'))]));
+    const h1 = [el('th.skill-name', { rowspan: '2', text: cls })];
+    groups.forEach((g) => h1.push(el('th', { class: 'grp-start', colspan: String(g.cols.length), text: g.label })));
+    const h2 = [];
+    groups.forEach((g) => g.cols.forEach((c, i) => h2.push(el('th', { class: i === 0 ? 'grp-start' : '', title: c, text: c }))));
+    tbl.appendChild(el('thead', {}, [el('tr', {}, h1), el('tr', {}, h2)]));
+    const tb = el('tbody');
+    mem.forEach((m) => {
+      const canEdit = adm || Roles.isMe(m.name);
+      const tr = el('tr', {}, [el('td.skill-name', {}, [el('b', { text: m.name })])]);
+      groups.forEach((g) => g.cols.forEach((c, i) => {
+        const v = ((m.skills || {})[cat] || {})[c] || '';
+        const cell = canEdit
+          ? input({ value: v, class: 'cell-input skill-cell', placeholder: '·', onchange: (e) => { setSkill(m, cat, c, e.target.value.trim()); DB.commit(); } })
+          : el('span', { class: v ? '' : 'muted', text: v || '·' });
+        tr.appendChild(el('td', { class: i === 0 ? 'grp-start' : '', style: { textAlign: 'center' } }, [cell]));
+      }));
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb);
+    return tbl;
   }
   function setSkill(m, cat, key, val) {
     m.skills ||= {}; m.skills[cat] ||= {};

@@ -359,11 +359,28 @@ select.input{cursor:pointer}
 .equip-status-tbl .grp-start{border-left:2px solid var(--line2)}
 .equip-status-tbl td span{font-family:var(--mono)}
 .equip-status-tbl td.editable:hover{background:color-mix(in srgb,var(--primary) 13%,transparent)}
-/* 주문석·엘릭서 직업별 표 */
-.skill-tbl th,.skill-tbl td{padding:4px 6px;font-size:11px;white-space:nowrap;text-align:center}
-.skill-tbl thead th{position:sticky;top:0;background:var(--panel)}
+/* 주문석·엘릭서: 직업별 표를 가로 슬라이드(탭·화살표)로. 셀·행 간격은 직업 무관 동일(고정). */
+.skill-head{display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 0 12px;flex-wrap:wrap}
+.skill-tabs{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}
+.skill-tab{padding:4px 13px;border-radius:999px;border:1px solid var(--line2);background:var(--panel2);
+  color:var(--muted);cursor:pointer;font-size:12px;font-weight:600;transition:.12s}
+.skill-tab:hover{color:var(--txt)}
+.skill-tab.active{background:var(--primary);border-color:var(--primary);color:var(--on-ink)}
+.skill-arrow{width:28px;height:28px;border-radius:7px;border:1px solid var(--line2);background:var(--panel);
+  color:var(--txt);cursor:pointer;font-size:17px;line-height:1;display:grid;place-items:center}
+.skill-viewport{overflow:hidden}
+.skill-track{display:flex;align-items:flex-start;transition:transform .25s ease}
+.skill-slide{flex:0 0 100%;min-width:100%;display:flex;justify-content:center}
+.skill-tbl{border-collapse:collapse;table-layout:fixed}
+.skill-tbl col{width:50px}
+.skill-tbl col.col-name{width:78px}
+.skill-tbl th,.skill-tbl td{border:1px solid var(--line);height:26px;padding:3px 4px;font-size:11px;
+  white-space:nowrap;text-align:center;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis}
+.skill-tbl thead th{background:var(--panel);color:var(--muted);font-weight:600}
 .skill-tbl .grp-start{border-left:2px solid var(--line2)}
-.skill-cell{width:56px;text-align:center;padding:2px 4px;font-size:11px}
+.skill-tbl .skill-name{width:78px;text-align:left;background:var(--panel)}
+.skill-tbl tbody .skill-name{background:var(--panel2)}
+.skill-cell{width:42px;text-align:center;padding:2px 3px;font-size:11px}
 .confirm-msg{margin:0 0 16px;color:var(--muted);font-size:14px}
 @keyframes fade{from{opacity:0}} @keyframes pop{from{transform:scale(.98);opacity:0}}
 
