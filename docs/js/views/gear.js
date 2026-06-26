@@ -8,6 +8,7 @@ import { el, toast, uid, clear } from '../util.js';
 import { page, card, btn, input, select, modal, field, confirmDialog } from './ui.js';
 import { equipGrid, equipCell, editSlot, EQUIP_GROUPS } from './equip.js';
 import { classGroups } from '../skills-data.js';
+import { skillIcon } from '../items-index.js';
 
 let activeBoard = 0, gearMember = null;
 const skillIdx = {}; // 주문석·엘릭서 캐러셀에서 선택한 직업 인덱스(재렌더에도 유지)
@@ -119,7 +120,13 @@ export function renderGear() {
     const h1 = [el('th.skill-name', { rowspan: '2', text: key })];
     groups.forEach((g) => h1.push(el('th', { class: 'grp-start', colspan: String(g.cols.length), text: g.label })));
     const h2 = [];
-    groups.forEach((g) => g.cols.forEach((c, i) => h2.push(el('th', { class: i === 0 ? 'grp-start' : '', title: c, text: c }))));
+    groups.forEach((g) => g.cols.forEach((c, i) => {
+      const ic = skillIcon(cat, key, c);
+      const head = ic
+        ? el('div.sk-h', {}, [el('img.sk-ic', { src: ic, alt: '', title: c, loading: 'lazy' }), el('span.sk-hn', { text: c })])
+        : el('span.sk-hn', { text: c });
+      h2.push(el('th', { class: i === 0 ? 'grp-start' : '', title: c }, [head]));
+    }));
     tbl.appendChild(el('thead', {}, [el('tr', {}, h1), el('tr', {}, h2)]));
     const tb = el('tbody');
     mem.forEach((m) => {

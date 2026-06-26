@@ -392,6 +392,9 @@ select.input{cursor:pointer}
 .skill-tbl .skill-name{width:78px;text-align:left;background:var(--panel)}
 .skill-tbl tbody .skill-name{background:var(--panel2)}
 .skill-cell{width:42px;text-align:center;padding:2px 3px;font-size:11px}
+.sk-h{display:flex;flex-direction:column;align-items:center;gap:1px}
+.sk-ic{width:26px;height:26px;border-radius:5px;border:1px solid var(--line2)}
+.sk-hn{font-size:10px;line-height:1.15;max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .confirm-msg{margin:0 0 16px;color:var(--muted);font-size:14px}
 @keyframes fade{from{opacity:0}} @keyframes pop{from{transform:scale(.98);opacity:0}}
 
