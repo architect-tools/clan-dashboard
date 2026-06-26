@@ -170,6 +170,7 @@ function normalize(d) {
     cls: m.cls || '', power: +m.power || 0, score: +m.score || 0,
     grade: m.grade || '정회원',        // 등급(멤버십): 운영진/정회원/준회원/신입
     equip: migrateEquip(m.equip),      // 장착 장비: {슬롯: {star,tier,enhance}} (슬롯명 시트 기준)
+    skills: m.skills || {},            // 주문석/엘릭서: { 주문석:{스킬:값}, 엘릭서:{항목:값} }
     active: m.active !== false, note: m.note || '',
   }));
   d.contentCatalog ||= [];
@@ -196,19 +197,18 @@ function normalize(d) {
   d.statusBoards ||= []; // 캐릭터 현황 보드: 주문석/성좌/탈것/엘릭서/플랫폼
   // 관리 보드를 운영 시트 구조로 1회 정비: 부적합 보드 제거(무기 숙련·KDA·통합보드 등) + 분리 카테고리 보장.
   // (장착 장비는 슬롯 그리드+장비 현황 표가 담당하므로 '장비 현황' 보드는 제거)
-  if (!d.appSettings._mgmtBoards3) {
-    const REMOVE = new Set(['무기 숙련', '장비 현황', '주문석·성좌·탈것', '엘릭서 & 패시브', 'KDA']);
+  if (!d.appSettings._mgmtBoards4) {
+    // 주문석·엘릭서는 직업별 전용 표(gear.js)로 분리 → 제네릭 보드에서 제외.
+    const REMOVE = new Set(['무기 숙련', '장비 현황', '주문석·성좌·탈것', '엘릭서 & 패시브', 'KDA', '주문석', '엘릭서']);
     d.statusBoards = d.statusBoards.filter((b) => b && !REMOVE.has(b.name));
     const have = new Set(d.statusBoards.map((b) => b.name));
     const ensure = [
-      { name: '주문석', columns: ['공용', '전투 스탠스', '특화 스탠스'] },
       { name: '성좌', columns: ['바위를 삼키는 괴물', '자유로운 여행자', '바다의 괴물'] },
       { name: '탈것', columns: ['지진발굽', '심연의 수호자', '심연의 환영', '황혼의방랑자'] },
-      { name: '엘릭서', columns: ['집중 호흡', '영웅의 기운'] },
       { name: '플랫폼 이용 현황', columns: ['PC', '모바일', '디스코드'] },
     ];
     for (const b of ensure) if (!have.has(b.name)) d.statusBoards.push({ id: uid(), name: b.name, columns: [...b.columns], data: {} });
-    d.appSettings._mgmtBoards3 = true;
+    d.appSettings._mgmtBoards4 = true;
   }
   if (d.distributionRules == null) d.distributionRules = DEFAULT_RULES;
   // 분배 기준을 시트 NEW 기준으로 1회 강제 교체(기존 OLD 텍스트 정리). 이후 운영자 편집은 유지.

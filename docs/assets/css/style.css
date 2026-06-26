@@ -357,7 +357,13 @@ select.input{cursor:pointer}
 /* 장비 현황 표(멤버×슬롯): 좁은 셀·그룹 경계 */
 .equip-status-tbl th,.equip-status-tbl td{padding:5px 7px;font-size:12px;white-space:nowrap}
 .equip-status-tbl .grp-start{border-left:2px solid var(--line2)}
-.equip-status-tbl .equip-tier,.equip-status-tbl td span{font-family:var(--mono)}
+.equip-status-tbl td span{font-family:var(--mono)}
+.equip-status-tbl td.editable:hover{background:color-mix(in srgb,var(--primary) 13%,transparent)}
+/* 주문석·엘릭서 직업별 표 */
+.skill-tbl th,.skill-tbl td{padding:4px 6px;font-size:11px;white-space:nowrap;text-align:center}
+.skill-tbl thead th{position:sticky;top:0;background:var(--panel)}
+.skill-tbl .grp-start{border-left:2px solid var(--line2)}
+.skill-cell{width:56px;text-align:center;padding:2px 4px;font-size:11px}
 .confirm-msg{margin:0 0 16px;color:var(--muted);font-size:14px}
 @keyframes fade{from{opacity:0}} @keyframes pop{from{transform:scale(.98);opacity:0}}
 

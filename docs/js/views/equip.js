@@ -87,7 +87,7 @@ export function equipGrid(member, { editable = false } = {}) {
   return wrap;
 }
 
-function editSlot(member, slot, rerender) {
+export function editSlot(member, slot, rerender) {
   const cur = (member.equip || {})[slot] || {};
   if (isRelic(slot)) return editRelic(member, slot, cur, rerender);
   const star = select([{ value: '0', label: '없음' }, ...[1, 2, 3, 4, 5, 6].map((n) => ({ value: String(n), label: n + '성' }))], String(cur.star || 0));

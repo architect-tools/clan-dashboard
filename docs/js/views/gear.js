@@ -3,9 +3,11 @@
 // 성좌/탈것/표본, 엘릭서&패시브 …) as editable boards: rows = members, custom columns.
 import { DB } from '../db.js';
 import { Roles } from '../roles.js';
+import { CLASS_LIST } from '../config.js';
 import { el, toast, uid } from '../util.js';
 import { page, card, btn, input, select, modal, field, confirmDialog } from './ui.js';
-import { equipGrid, equipCell, EQUIP_GROUPS } from './equip.js';
+import { equipGrid, equipCell, editSlot, EQUIP_GROUPS } from './equip.js';
+import { classGroups } from '../skills-data.js';
 
 let activeBoard = 0, gearMember = null;
 
@@ -38,7 +40,7 @@ export function renderGear() {
     ])));
   }
 
-  // ── 장비 현황 (장착 장비를 멤버×슬롯 엑셀 표로 — 읽기 전용 개요) ──
+  // ── 장비 현황 (장착 장비를 멤버×슬롯 엑셀 표로 — 셀 클릭해 편집) ──
   if (activeMembers.length) {
     const eqTbl = el('table.tbl.equip-status-tbl');
     const hcells = [el('th.sticky-col', { text: '닉네임' })];
@@ -47,20 +49,69 @@ export function renderGear() {
     eqTbl.appendChild(el('thead', {}, el('tr', {}, hcells)));
     const tb2 = el('tbody');
     activeMembers.forEach((m) => {
+      const canEditRow = adm || Roles.isMe(m.name); // 관리자 전체, 멤버는 본인 행
       const tr = el('tr', {}, [el('td.sticky-col', {}, [el('b', { text: m.name })])]);
       EQUIP_GROUPS.forEach((g) => g.slots.forEach((slot, i) => {
         const c = equipCell(slot, (m.equip || {})[slot]);
-        tr.appendChild(el('td', { class: i === 0 ? 'grp-start' : '', style: { textAlign: 'center' } },
-          [c.text ? el('span', { style: c.color ? { color: c.color, fontWeight: '600' } : {}, text: c.text }) : el('span.muted', { text: '·' })]));
+        tr.appendChild(el('td', {
+          class: (i === 0 ? 'grp-start' : '') + (canEditRow ? ' editable' : ''),
+          style: { textAlign: 'center', cursor: canEditRow ? 'pointer' : 'default' },
+          title: canEditRow ? `${slot} 편집` : '',
+          onclick: canEditRow ? () => editSlot(m, slot, () => renderGear()) : null,
+        }, [c.text ? el('span', { style: c.color ? { color: c.color, fontWeight: '600' } : {}, text: c.text }) : el('span.muted', { text: canEditRow ? '＋' : '·' })]));
       }));
       tb2.appendChild(tr);
     });
     eqTbl.appendChild(tb2);
-    body.appendChild(card('장비 현황', el('div.scroll-tbl', {}, [eqTbl]), { className: 'card-flush' }));
+    body.appendChild(card('장비 현황', el('div.scroll-tbl', {}, [eqTbl]),
+      { className: 'card-flush', actions: el('span.hint', { text: adm ? '셀 클릭 → 편집' : '본인 행 클릭 → 편집' }) }));
   }
 
-  // ── 캐릭터 현황 보드 (주문석·성좌·탈것·엘릭서·플랫폼) ──
-  body.appendChild(el('div.modal-sec', { text: '캐릭터 현황 보드' }));
+  // ── 주문석 / 엘릭서 (직업별 전용 표, 원문 시트 그대로) ──
+  renderSkillSection('주문석', 'spellstone');
+  renderSkillSection('엘릭서', 'elixir');
+
+  // ── 기타 현황 보드 (성좌·탈것·플랫폼) ──
+  body.appendChild(el('div.modal-sec', { text: '기타 현황 보드' }));
+
+  // 직업별 섹션으로 나눠 그리는 스킬 표(주문석·엘릭서) — 직업마다 컬럼이 다르므로
+  function renderSkillSection(cat, kind) {
+    const wrap = el('div');
+    let any = false;
+    for (const cls of CLASS_LIST) {
+      const mem = Roles.selfFirst(s.members.filter((mm) => mm.active !== false && mm.cls === cls));
+      const groups = classGroups(kind, cls);
+      if (!mem.length || !groups.length) continue;
+      any = true;
+      const tbl = el('table.tbl.skill-tbl');
+      const h1 = [el('th.sticky-col', { rowspan: '2', text: cls })];
+      groups.forEach((g) => h1.push(el('th', { class: 'grp-start', colspan: String(g.cols.length), text: g.label })));
+      const h2 = [];
+      groups.forEach((g) => g.cols.forEach((c, i) => h2.push(el('th', { class: i === 0 ? 'grp-start' : '', title: c, text: c }))));
+      tbl.appendChild(el('thead', {}, [el('tr', {}, h1), el('tr', {}, h2)]));
+      const tb = el('tbody');
+      mem.forEach((m) => {
+        const canEdit = adm || Roles.isMe(m.name);
+        const tr = el('tr', {}, [el('td.sticky-col', {}, [el('b', { text: m.name })])]);
+        groups.forEach((g) => g.cols.forEach((c, i) => {
+          const v = ((m.skills || {})[cat] || {})[c] || '';
+          const cell = canEdit
+            ? input({ value: v, class: 'cell-input skill-cell', placeholder: '·', onchange: (e) => { setSkill(m, cat, c, e.target.value.trim()); DB.commit(); } })
+            : el('span', { class: v ? '' : 'muted', text: v || '·' });
+          tr.appendChild(el('td', { class: i === 0 ? 'grp-start' : '', style: { textAlign: 'center' } }, [cell]));
+        }));
+        tb.appendChild(tr);
+      });
+      tbl.appendChild(tb);
+      wrap.appendChild(el('div.scroll-tbl', { style: { marginBottom: '14px' } }, [tbl]));
+    }
+    if (!any) wrap.appendChild(el('div.empty.small', { text: '활동 클랜원이 없습니다.' }));
+    body.appendChild(card(cat, wrap, { className: 'card-flush' }));
+  }
+  function setSkill(m, cat, key, val) {
+    m.skills ||= {}; m.skills[cat] ||= {};
+    if (val) m.skills[cat][key] = val; else delete m.skills[cat][key];
+  }
 
   // board tabs
   const tabs = el('div.board-tabs', {}, s.statusBoards.map((b, i) =>
@@ -135,14 +186,12 @@ function addBoard() {
     }, { kind: 'primary' })])]));
 }
 
-// 운영 시트 탭과 일치하는 기본 보드(첫 방문 시). 주문석·엘릭서는 직업별이라 그룹/공용 컬럼으로,
-// 성좌·탈것은 원문 항목. 장착 장비는 위 슬롯 그리드+장비 현황 표가 담당하므로 보드에서 제외.
+// 제네릭 보드(첫 방문 시): 성좌·탈것·플랫폼. 주문석·엘릭서는 직업별 전용 표(renderSkillSection),
+// 장착 장비는 슬롯 그리드+장비 현황 표가 담당하므로 보드에서 제외.
 function seedDefaultBoards(s) {
   const push = (name, columns) => s.statusBoards.push({ id: uid(), name, columns, data: {} });
-  push('주문석', ['공용', '전투 스탠스', '특화 스탠스']);
   push('성좌', ['바위를 삼키는 괴물', '자유로운 여행자', '바다의 괴물']);
   push('탈것', ['지진발굽', '심연의 수호자', '심연의 환영', '황혼의방랑자']);
-  push('엘릭서', ['집중 호흡', '영웅의 기운']);
   push('플랫폼 이용 현황', ['PC', '모바일', '디스코드']);
   DB.commit({ history: false });
 }
