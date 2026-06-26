@@ -84,7 +84,7 @@ body[data-role="member"] .admin-only{display:none !important}
 .icon-btn:disabled{opacity:.3;cursor:default}
 
 /* ── page ────────────────────────────────────────────────────────── */
-.page{padding:26px 8px 60px;max-width:1240px;margin:0 auto}
+.page{padding:26px 8px 60px}
 .page-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:22px;flex-wrap:wrap;
   padding-bottom:14px;border-bottom:1px solid var(--line)}
 .page-title{margin:0;font-size:24px;font-weight:600;letter-spacing:-.3px}
