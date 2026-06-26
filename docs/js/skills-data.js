@@ -11,7 +11,7 @@ export const SPELLSTONES = {
   },
   마법사: {
     공용: ['마력 인장', '얼음가시', '정신 집중'],
-    '전투 스탠스': ['지옥불', '공간압축', '서리지옥', '신체강화', '고밀도마력'],
+    '전투 스탠스': ['지옥불', '공간압축', '서리지옥', '신체 강화', '고밀도마력'],
     '특화 스탠스': ['마법 보호막', '얼음 기둥', '마력 순환', '가호'],
     기타: ['보호막량 증가'],
   },
@@ -43,8 +43,15 @@ export const PASSIVES = {
   사냥꾼: ['사냥꾼의 기운', '야수의 송곳니', '혈흔의 본능', '완벽한 자세', '잿빛 화살'],
 };
 
-/** 직업의 그룹 목록 → [{label, cols:[…]}]. kind: 'spellstone' | 'elixir' */
+// 모든 직업 공통(직업군 무관) 항목 → '공용' 탭
+export const COMMON_SPELL = ['정신 집중', '신체 강화']; // 모든 직업 주문석에 공통
+export const COMMON_ELIXIR = ELIXIR_COMMON;             // 집중 호흡·영웅의 기운
+
+/** 직업(또는 '공용')의 그룹 목록 → [{label, cols:[…]}]. kind: 'spellstone' | 'elixir' */
 export function classGroups(kind, cls) {
+  if (cls === '공용') {
+    return [{ label: '공용', cols: kind === 'spellstone' ? COMMON_SPELL : COMMON_ELIXIR }];
+  }
   if (kind === 'spellstone') {
     const s = SPELLSTONES[cls];
     if (!s) return [];

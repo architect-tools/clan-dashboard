@@ -354,10 +354,18 @@ select.input{cursor:pointer}
     linear-gradient(135deg,#ff5d6c,#ffd93d,#6bcb77,#4d96ff,#b06bff,#ff5d6c) border-box}
 .equip-tier.relic-tier.prism{background:linear-gradient(120deg,#ff7a86,#ffd93d,#6bcb77,#4d96ff,#c78bff);
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;text-shadow:none}
-/* 장비 현황 표(멤버×슬롯): 좁은 셀·그룹 경계 */
-.equip-status-tbl th,.equip-status-tbl td{padding:5px 7px;font-size:12px;white-space:nowrap}
+/* 장비 현황 표(멤버×슬롯): 고정 셀폭(colgroup) + 그룹 헤더(무기/방어구/장신구/성유물). 성유물은 좁게. */
+.equip-status-tbl{table-layout:fixed}
+.equip-status-tbl col{width:58px}
+.equip-status-tbl col.col-relic{width:40px}
+.equip-status-tbl col.col-name{width:80px}
+.equip-status-tbl th,.equip-status-tbl td{padding:4px 5px;font-size:12px;white-space:nowrap;text-align:center;
+  overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
+.equip-status-tbl .col-name{text-align:left}
+.equip-status-tbl thead th{background:var(--panel);color:var(--muted);font-weight:600}
 .equip-status-tbl .grp-start{border-left:2px solid var(--line2)}
 .equip-status-tbl td span{font-family:var(--mono)}
+.equip-status-tbl td.editable{cursor:pointer}
 .equip-status-tbl td.editable:hover{background:color-mix(in srgb,var(--primary) 13%,transparent)}
 /* 주문석·엘릭서: 직업별 표를 가로 슬라이드(탭·화살표)로. 셀·행 간격은 직업 무관 동일(고정). */
 .skill-head{display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 0 12px;flex-wrap:wrap}
@@ -368,9 +376,11 @@ select.input{cursor:pointer}
 .skill-tab.active{background:var(--primary);border-color:var(--primary);color:var(--on-ink)}
 .skill-arrow{width:28px;height:28px;border-radius:7px;border:1px solid var(--line2);background:var(--panel);
   color:var(--txt);cursor:pointer;font-size:17px;line-height:1;display:grid;place-items:center}
-.skill-viewport{overflow:hidden}
-.skill-track{display:flex;align-items:flex-start;transition:transform .25s ease}
-.skill-slide{flex:0 0 100%;min-width:100%;display:flex;justify-content:center}
+.skill-panel{display:flex;justify-content:center;align-items:flex-start;overflow:hidden}
+@keyframes skill-in-r{from{opacity:0;transform:translateX(26px)}to{opacity:1;transform:none}}
+@keyframes skill-in-l{from{opacity:0;transform:translateX(-26px)}to{opacity:1;transform:none}}
+.skill-tbl.slide-r{animation:skill-in-r .2s ease}
+.skill-tbl.slide-l{animation:skill-in-l .2s ease}
 .skill-tbl{border-collapse:collapse;table-layout:fixed}
 .skill-tbl col{width:50px}
 .skill-tbl col.col-name{width:78px}

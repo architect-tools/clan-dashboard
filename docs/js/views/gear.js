@@ -4,7 +4,7 @@
 import { DB } from '../db.js';
 import { Roles } from '../roles.js';
 import { CLASS_LIST } from '../config.js';
-import { el, toast, uid } from '../util.js';
+import { el, toast, uid, clear } from '../util.js';
 import { page, card, btn, input, select, modal, field, confirmDialog } from './ui.js';
 import { equipGrid, equipCell, editSlot, EQUIP_GROUPS } from './equip.js';
 import { classGroups } from '../skills-data.js';
@@ -42,16 +42,21 @@ export function renderGear() {
   }
 
   // ── 장비 현황 (장착 장비를 멤버×슬롯 엑셀 표로 — 셀 클릭해 편집) ──
+  // 셀 고정폭(colgroup) + 그룹 헤더(무기/방어구/장신구/성유물). 성유물은 강화가 없어 좁게.
   if (activeMembers.length) {
     const eqTbl = el('table.tbl.equip-status-tbl');
-    const hcells = [el('th.sticky-col', { text: '닉네임' })];
-    EQUIP_GROUPS.forEach((g) => g.slots.forEach((slot, i) => hcells.push(
-      el('th', { class: i === 0 ? 'grp-start' : '', title: g.label, text: slot }))));
-    eqTbl.appendChild(el('thead', {}, el('tr', {}, hcells)));
+    const cg = [el('col.col-name')];
+    EQUIP_GROUPS.forEach((g) => g.slots.forEach(() => cg.push(el('col', { class: g.label === '성유물' ? 'col-relic' : '' }))));
+    eqTbl.appendChild(el('colgroup', {}, cg));
+    const h1 = [el('th.col-name', { rowspan: '2', text: '닉네임' })];
+    EQUIP_GROUPS.forEach((g) => h1.push(el('th', { class: 'grp-start', colspan: String(g.slots.length), text: g.label })));
+    const h2 = [];
+    EQUIP_GROUPS.forEach((g) => g.slots.forEach((slot, i) => h2.push(el('th', { class: i === 0 ? 'grp-start' : '', title: slot, text: slot }))));
+    eqTbl.appendChild(el('thead', {}, [el('tr', {}, h1), el('tr', {}, h2)]));
     const tb2 = el('tbody');
     activeMembers.forEach((m) => {
       const canEditRow = adm || Roles.isMe(m.name); // 관리자 전체, 멤버는 본인 행
-      const tr = el('tr', {}, [el('td.sticky-col', {}, [el('b', { text: m.name })])]);
+      const tr = el('tr', {}, [el('td.col-name', {}, [el('b', { text: m.name })])]);
       EQUIP_GROUPS.forEach((g) => g.slots.forEach((slot, i) => {
         const c = equipCell(slot, (m.equip || {})[slot]);
         tr.appendChild(el('td', {
@@ -75,36 +80,43 @@ export function renderGear() {
   // ── 기타 현황 보드 (성좌·탈것·플랫폼) ──
   body.appendChild(el('div.modal-sec', { text: '기타 현황 보드' }));
 
-  // 주문석·엘릭서: 직업별 표를 가로 슬라이드(탭·화살표)로 전환. 스크롤뷰 없이 모든 직업 표를
-  // 한 트랙에 두고 translateX로 이동 → 트랙 높이=최다 인원 직업에 맞춰 고정. 셀·행 간격은
-  // CSS로 직업 무관 동일.
+  // 주문석·엘릭서: 직업 탭(+ '공용' 탭)으로 한 직업씩 가로 슬라이드 전환. 스크롤뷰 없음.
+  // 직업 탭은 최다 인원 직업에 맞춘 고정 높이(전환 시 안 흔들림). '공용'은 전원 표라 자연 높이.
   function renderSkillSection(cat, kind) {
-    const classes = CLASS_LIST.filter((cls) =>
-      classGroups(kind, cls).length && s.members.some((m) => m.active !== false && m.cls === cls));
-    if (!classes.length) { body.appendChild(card(cat, el('div.empty.small', { text: '활동 클랜원이 없습니다.' }), { className: 'card-flush' })); return; }
-    let idx = Math.min(skillIdx[cat] || 0, classes.length - 1); skillIdx[cat] = idx;
-    const track = el('div.skill-track', {}, classes.map((cls) => el('div.skill-slide', {}, [buildClassTable(cat, kind, cls)])));
+    const withMembers = CLASS_LIST.filter((cls) => s.members.some((m) => m.active !== false && m.cls === cls));
+    if (!withMembers.length) { body.appendChild(card(cat, el('div.empty.small', { text: '활동 클랜원이 없습니다.' }), { className: 'card-flush' })); return; }
+    const keys = ['공용', ...withMembers];
+    const maxRows = Math.max(1, ...withMembers.map((cls) => s.members.filter((m) => m.active !== false && m.cls === cls).length));
+    const fixedH = 56 + maxRows * 27; // 헤더 2행 + 최다 인원 (직업 탭 고정 높이)
+    let idx = Math.min(skillIdx[cat] || 0, keys.length - 1); skillIdx[cat] = idx;
+    const panel = el('div.skill-panel');
     const tabs = el('div.skill-tabs');
-    const go = (n) => {
-      idx = (n + classes.length) % classes.length; skillIdx[cat] = idx;
-      track.style.transform = `translateX(-${idx * 100}%)`;
-      [...tabs.children].forEach((t, i) => t.classList.toggle('active', i === idx));
+    const show = (n, dir) => {
+      idx = (n + keys.length) % keys.length; skillIdx[cat] = idx;
+      clear(panel);
+      const t = buildClassTable(cat, kind, keys[idx]);
+      t.classList.add(dir < 0 ? 'slide-l' : 'slide-r');
+      panel.appendChild(t);
+      panel.style.minHeight = keys[idx] === '공용' ? '' : fixedH + 'px'; // 직업 탭만 고정 높이
+      [...tabs.children].forEach((b, i) => b.classList.toggle('active', i === idx));
     };
-    classes.forEach((cls, i) => tabs.appendChild(el('button.skill-tab', { class: i === idx ? 'active' : '', text: cls, onclick: () => go(i) })));
+    keys.forEach((k, i) => tabs.appendChild(el('button.skill-tab', { class: i === idx ? 'active' : '', text: k, onclick: () => show(i, i < idx ? -1 : 1) })));
     const head = el('div.skill-head', {}, [
-      el('button.skill-arrow', { text: '‹', title: '이전 직업', onclick: () => go(idx - 1) }), tabs,
-      el('button.skill-arrow', { text: '›', title: '다음 직업', onclick: () => go(idx + 1) }),
+      el('button.skill-arrow', { text: '‹', title: '이전', onclick: () => show(idx - 1, -1) }), tabs,
+      el('button.skill-arrow', { text: '›', title: '다음', onclick: () => show(idx + 1, 1) }),
     ]);
-    track.style.transform = `translateX(-${idx * 100}%)`;
-    body.appendChild(card(cat, el('div', {}, [head, el('div.skill-viewport', {}, [track])]), { className: 'card-flush' }));
+    body.appendChild(card(cat, el('div', {}, [head, panel]), { className: 'card-flush' }));
+    show(idx, 1);
   }
-  function buildClassTable(cat, kind, cls) {
-    const mem = Roles.selfFirst(s.members.filter((m) => m.active !== false && m.cls === cls));
-    const groups = classGroups(kind, cls);
+  function buildClassTable(cat, kind, key) {
+    const mem = key === '공용'
+      ? Roles.selfFirst(s.members.filter((m) => m.active !== false))
+      : Roles.selfFirst(s.members.filter((m) => m.active !== false && m.cls === key));
+    const groups = classGroups(kind, key);
     const tbl = el('table.tbl.skill-tbl');
     const ncols = groups.reduce((a, g) => a + g.cols.length, 0); // 고정 컬럼 폭(직업 무관 동일)
     tbl.appendChild(el('colgroup', {}, [el('col.col-name'), ...Array.from({ length: ncols }, () => el('col'))]));
-    const h1 = [el('th.skill-name', { rowspan: '2', text: cls })];
+    const h1 = [el('th.skill-name', { rowspan: '2', text: key })];
     groups.forEach((g) => h1.push(el('th', { class: 'grp-start', colspan: String(g.cols.length), text: g.label })));
     const h2 = [];
     groups.forEach((g) => g.cols.forEach((c, i) => h2.push(el('th', { class: i === 0 ? 'grp-start' : '', title: c, text: c }))));
