@@ -385,7 +385,7 @@ select.input{cursor:pointer}
 .skill-tbl col{width:62px}
 .skill-tbl col.col-name{width:80px}
 .skill-tbl th,.skill-tbl td{border:1px solid var(--line);padding:3px 3px;font-size:11px;text-align:center;box-sizing:border-box;vertical-align:middle}
-.skill-tbl thead th{background:var(--panel);color:var(--muted);font-weight:600}
+.skill-tbl thead th{background:var(--panel);color:var(--muted);font-weight:600;vertical-align:top}
 .skill-tbl .grp-start{border-left:2px solid var(--line2)}
 .skill-tbl .skill-name{width:80px;text-align:left;background:var(--panel);white-space:nowrap}
 .skill-tbl tbody .skill-name{background:var(--panel2)}

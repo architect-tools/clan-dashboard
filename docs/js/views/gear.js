@@ -185,10 +185,12 @@ export function renderGear() {
     const rec = (board.data[m.id] ||= {});
     const canEditRow = adm || Roles.isMe(m.name); // 멤버는 본인 행만 편집
     board.columns.forEach((col) => {
+      const owned = !!rec[col]; // 보유/가능 여부 토글(성좌·탈것·플랫폼 등)
       const cell = canEditRow
-        ? input({ value: rec[col] ?? '', placeholder: '-', class: 'cell-input', onchange: (e) => { rec[col] = e.target.value; DB.commit(); } })
-        : el('span', { class: rec[col] ? '' : 'muted', text: rec[col] || '-' });
-      row.appendChild(el('td', {}, [cell]));
+        ? el('button.sk-toggle', { class: owned ? 'on' : '', type: 'button', title: owned ? '있음 (클릭해 해제)' : '없음 (클릭해 표시)',
+            onclick: (e) => { if (rec[col]) delete rec[col]; else rec[col] = true; DB.commit(); const on = !!rec[col]; const b = e.currentTarget; b.classList.toggle('on', on); b.title = on ? '있음 (클릭해 해제)' : '없음 (클릭해 표시)'; } }, [el('span.sk-check', { text: '✓' })])
+        : el('span.sk-check', { class: owned ? 'on' : '', text: owned ? '✓' : '' });
+      row.appendChild(el('td', { style: { textAlign: 'center' } }, [cell]));
     });
     row.appendChild(el('td'));
     tb.appendChild(row);
