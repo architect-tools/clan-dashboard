@@ -49,7 +49,9 @@ export const DB = {
   _undo: [],
   _redo: [],
   _snapshot: null,         // state as of the last commit (for building undo entries)
-  _loadToken: 0,           // 백그라운드 merge 적용 가드용(새 로드 시 증가)
+  _loadToken: 0,           // 백그라운드 새로고침 적용 가드용(새 로드/새 새로고침 시 증가)
+  _pendingSave: false,     // 미저장(또는 저장 중) 로컬 편집 있음 → 새로고침이 덮어쓰지 않도록
+  _saveSeq: 0,
   _maxHistory: 80,
   _onHistory: null,        // () => update undo/redo button states
   _onRefresh: null,        // () => re-render current view (after undo/redo)
@@ -77,7 +79,7 @@ export const DB = {
     // 라이브 첫 연결인데 백엔드가 비어 있으면, 로컬/시드 데이터를 클라우드로 1회 이관(데이터 유실 방지)
     else if (!fromBackend) { try { await this._fetch('save', { data: this.state }); toast('현재 데이터를 클라우드로 옮겼습니다'); } catch (e) { console.warn('초기 이관 실패', e); } }
     this._emit(); this._onHistory && this._onHistory();
-    if (LIVE() && fromBackend) this._bgMerge();   // 백그라운드로 시트 편집 병합본 동기화
+    if (LIVE() && fromBackend) this.refresh({ merge: true });   // 백그라운드로 시트 편집 병합본 동기화
     return this.state;
   },
 
@@ -97,8 +99,13 @@ export const DB = {
 
   _scheduleSave(immediate) {
     clearTimeout(this._saveTimer);
-    const doSave = () => this._fetch('save', { data: this.state })
-      .catch((e) => { console.error(e); toast('동기화 실패 (변경은 로컬에 보관됨)', 'error'); });
+    this._pendingSave = true;   // 저장 완료 전까지 백그라운드 새로고침이 내 편집을 덮지 않게
+    const doSave = () => {
+      const seq = ++this._saveSeq;
+      this._fetch('save', { data: this.state })
+        .then(() => { if (seq === this._saveSeq) this._pendingSave = false; })  // 최신 저장 성공 시에만 해제
+        .catch((e) => { console.error(e); toast('동기화 실패 (변경은 로컬에 보관됨)', 'error'); });
+    };
     if (immediate) doSave(); else this._saveTimer = setTimeout(doSave, 1200);
   },
 
@@ -147,13 +154,17 @@ export const DB = {
     return json.data;
   },
 
-  // 백그라운드 시트 동기화: getAll?merge=1 로 편집 탭 병합본을 받아, 로컬 편집이 없을 때만 반영.
-  _bgMerge() {
+  // 백그라운드 새로고침: 다른 사용자/시트 변경을 반영. merge=true 면 시트 편집까지(느림), false 면 대시보드 편집만(빠름).
+  // 내 미저장 편집(_pendingSave)·열린 모달 중에는 스킵(클로버/방해 방지). 데이터 동일하면 재렌더 안 함.
+  refresh({ merge = false } = {}) {
+    if (!LIVE() || this._pendingSave) return;
+    if (typeof document !== 'undefined' && document.querySelector('.modal-overlay')) return;
     const token = ++this._loadToken;
-    this._fetch('getAll', null, { merge: 1 }).then((merged) => {
-      if (!merged || token !== this._loadToken || this._undo.length) return;  // 새 로드/로컬편집 있으면 스킵(클로버 방지)
-      const next = normalize(merged);
-      if (JSON.stringify(next) === JSON.stringify(this.state)) return;        // 변화 없으면 재렌더 안 함
+    const saveSeqAtStart = this._saveSeq;   // 조회 중 내가 편집·저장하면 시퀀스가 바뀜 → 옛 응답 폐기(편집 되돌림 방지)
+    this._fetch('getAll', null, merge ? { merge: 1 } : undefined).then((data) => {
+      if (!data || token !== this._loadToken || this._pendingSave || saveSeqAtStart !== this._saveSeq) return;
+      const next = normalize(data);
+      if (JSON.stringify(next) === JSON.stringify(this.state)) return;
       this.state = next; this._snapshot = clone(this.state);
       this._persistLocal(); this._emit(); this._onRefresh && this._onRefresh();
     }).catch(() => { /* 백그라운드 — 실패 무시 */ });

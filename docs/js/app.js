@@ -98,8 +98,13 @@ async function main() {
 
   // 소프트 락: 현재 편집 페이지를 백엔드에 등록 + 같은 페이지 다른 관리자 표시
   const route = () => (location.hash.replace(/^#\/?/, '') || 'dashboard').split('/')[0];
-  window.addEventListener('hashchange', () => Locks.enter(route()));
+  window.addEventListener('hashchange', () => { Locks.enter(route()); DB.refresh(); });
   Locks.enter(route());
+
+  // 다중 사용자 신선도: 페이지 전환·탭 복귀·30초 폴링 시 백그라운드 새로고침(내 편집/모달 중엔 자동 스킵).
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') DB.refresh({ merge: true }); });
+  let _poll = 0;
+  setInterval(() => { if (document.visibilityState === 'visible') DB.refresh({ merge: (++_poll % 4 === 0) }); }, 30000);
 }
 
 main();
