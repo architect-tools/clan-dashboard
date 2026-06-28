@@ -85,9 +85,11 @@ body[data-role="member"] .admin-only{display:none !important}
   color:var(--txt);font-size:15px;cursor:pointer;transition:.13s;display:inline-grid;place-items:center}
 .icon-btn:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
 .icon-btn:disabled{opacity:.3;cursor:default}
-/* 사이드바 타이틀 우측 끝 새로고침 버튼 */
+/* 사이드바 타이틀 우측 끝 새로고침 버튼 — 아이콘(글리프)만 회전 */
 .brand .refresh-btn{margin-left:auto;width:30px;height:30px;font-size:16px;flex:none}
-.icon-btn.spinning{animation:busy-spin .8s linear infinite;pointer-events:none;color:var(--primary)}
+.refresh-ico{display:inline-block;line-height:1}
+.refresh-btn.spinning{pointer-events:none;color:var(--primary)}
+.refresh-btn.spinning .refresh-ico{animation:busy-spin .8s linear infinite}
 
 /* ── page ────────────────────────────────────────────────────────── */
 .page{padding:26px 64px 60px}
@@ -530,13 +532,19 @@ select.input{cursor:pointer}
 .board-tab{padding:8px 15px;border-radius:8px 8px 0 0;border:1px solid var(--line);border-bottom:none;
   background:var(--bg2);color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit}
 .board-tab.active{background:var(--panel);color:var(--txt);border-color:var(--line2)}
-/* 장비 페이지: 상단 고정 섹션 네비(스크롤 위치 무관, 토픽바 아래) + 섹션 점프 오프셋 */
-.gear-nav{position:sticky;top:54px;z-index:50;display:flex;flex-wrap:wrap;gap:6px;
-  padding:9px 0;margin-bottom:6px;background:var(--bg);border-bottom:1px solid var(--line)}
-.gear-nav-link{padding:5px 12px;border:1px solid var(--line2);border-radius:7px;background:var(--panel);
+/* 장비 페이지: 상단 고정 섹션 네비(topbar 바로 아래 갭 없이) — 눈에 띄는 띠 + 섹션 점프 오프셋 */
+.gear-nav{position:sticky;top:var(--topbar-h,52px);z-index:50;display:flex;flex-wrap:wrap;align-items:center;gap:7px;
+  padding:10px 13px;margin:0 0 16px;background:var(--panel);border:1px solid var(--line2);
+  border-bottom:2px solid var(--primary);border-radius:9px;box-shadow:0 6px 14px -6px rgba(0,0,0,.5)}
+.gear-nav-label{font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.3px;margin-right:3px}
+.gear-nav-link{padding:6px 13px;border:1px solid var(--line2);border-radius:7px;background:var(--bg2);
   color:var(--muted);font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;transition:.12s}
-.gear-nav-link:hover{border-color:var(--primary);color:var(--primary)}
-.gear-section{scroll-margin-top:104px}
+.gear-nav-link:hover{border-color:var(--primary);color:var(--primary);background:var(--panel2)}
+.gear-section{scroll-margin-top:calc(var(--topbar-h,52px) + 58px)}
+/* 각 현황 표에서 '본인' 행 하이라이트 */
+tbody tr.me-row td{background:color-mix(in srgb,var(--primary) 15%,var(--bg2))}
+tbody tr.me-row .skill-name,tbody tr.me-row .sticky-col,tbody tr.me-row .col-name{background:color-mix(in srgb,var(--primary) 24%,var(--panel))}
+tbody tr.me-row td:first-child{box-shadow:inset 3px 0 0 var(--primary)}
 .cell-input{width:100%;min-width:70px;padding:6px 8px;font-size:12.5px}
 .col-x{background:none;border:none;color:var(--dim);cursor:pointer;font-size:10px;margin-left:6px;opacity:.6}
 .col-x:hover{color:var(--bad);opacity:1}

@@ -45,7 +45,7 @@ async function manualRefresh() {
 function buildShell() {
   const root = $('#root');
   root.innerHTML = '';
-  refreshBtn = el('button.icon-btn.refresh-btn', { title: '새로고침 (최신 데이터 불러오기)', onclick: () => manualRefresh() }, ['⟳']);
+  refreshBtn = el('button.icon-btn.refresh-btn', { title: '새로고침 (최신 데이터 불러오기)', onclick: () => manualRefresh() }, [el('span.refresh-ico', { text: '⟳' })]);
   const nav = el('nav.sidebar', {}, [
     el('div.brand', {}, [
       el('div', {}, [el('div.brand-name', { text: CONFIG.appName }), el('div.brand-sub', { text: '관리자 대시보드' })]),
@@ -91,6 +91,9 @@ async function main() {
   await Auth.gate();
   document.body.dataset.role = Roles.role(); // CSS가 .admin-only 표시/숨김 결정
   buildShell();
+  // topbar 실제 높이를 CSS 변수로 → 장비 페이지 고정 네비가 topbar 바로 아래 갭 없이 붙도록
+  const setTopbarH = () => { const tb = document.querySelector('.topbar'); if (tb) document.documentElement.style.setProperty('--topbar-h', tb.offsetHeight + 'px'); };
+  setTopbarH(); window.addEventListener('resize', setTopbarH);
   const boot = busyOverlay('데이터 불러오는 중…');
   try { await DB.init(); }
   catch (e) { console.error(e); toast('데이터 로드 실패: ' + e.message, 'error'); boot.close(); return; }

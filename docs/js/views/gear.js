@@ -66,7 +66,7 @@ export function renderGear() {
     const tb2 = el('tbody');
     activeMembers.forEach((m) => {
       const canEditRow = adm || Roles.isMe(m.name); // 관리자 전체, 멤버는 본인 행
-      const tr = el('tr', {}, [el('td.col-name', {}, [el('b', { text: m.name })])]);
+      const tr = el('tr', { class: Roles.isMe(m.name) ? 'me-row' : '' }, [el('td.col-name', {}, [el('b', { text: m.name })])]);
       EQUIP_GROUPS.forEach((g) => g.slots.forEach((slot, i) => {
         const c = equipCell(slot, (m.equip || {})[slot]);
         tr.appendChild(el('td', {
@@ -91,6 +91,7 @@ export function renderGear() {
   s.statusBoards.forEach((board, i) => addSection('gear-board-' + i, board.name, renderBoardCard(board, i)));
 
   // ── 상단 네비 채우기 ──
+  navBar.appendChild(el('span.gear-nav-label', { text: '바로가기' }));
   sections.forEach((sec) => navBar.appendChild(el('button.gear-nav-link', {
     type: 'button', text: sec.label,
     onclick: () => { const t = document.getElementById(sec.id); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
@@ -140,7 +141,7 @@ export function renderGear() {
     tbl.appendChild(el('thead', {}, el('tr', {}, headCells)));
     const tb = el('tbody');
     members.forEach((m) => {
-      const row = el('tr', {}, [el('td.sticky-col', {}, [el('b', { text: m.name })]), el('td', { class: 'muted', text: m.cls || '-' })]);
+      const row = el('tr', { class: Roles.isMe(m.name) ? 'me-row' : '' }, [el('td.sticky-col', {}, [el('b', { text: m.name })]), el('td', { class: 'muted', text: m.cls || '-' })]);
       const rec = (board.data[m.id] ||= {});
       const canEditRow = adm || Roles.isMe(m.name); // 멤버는 본인 행만 편집
       board.columns.forEach((col) => {
@@ -187,7 +188,7 @@ export function renderGear() {
     const tb = el('tbody');
     mem.forEach((m) => {
       const canEdit = adm || Roles.isMe(m.name);
-      const tr = el('tr', {}, [el('td.skill-name', {}, [el('b', { text: m.name })])]);
+      const tr = el('tr', { class: Roles.isMe(m.name) ? 'me-row' : '' }, [el('td.skill-name', {}, [el('b', { text: m.name })])]);
       groups.forEach((g) => g.cols.forEach((c, i) => {
         const owned = !!((m.skills || {})[cat] || {})[c.key]; // 보유 여부(토글)
         const cell = canEdit
@@ -231,7 +232,7 @@ export function renderGear() {
     const tb = el('tbody');
     mem.forEach((m) => {
       const canEdit = adm || Roles.isMe(m.name);
-      const tr = el('tr', {}, [el('td.skill-name', {}, [el('b', { text: m.name })])]);
+      const tr = el('tr', { class: Roles.isMe(m.name) ? 'me-row' : '' }, [el('td.skill-name', {}, [el('b', { text: m.name })])]);
       managed.forEach((mc) => {
         const key = mc.name + '__' + mc.star;
         const cur = ((m.skills || {})[cat] || {})[key] || 0;
