@@ -25,7 +25,8 @@ function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || 'ping';
   try {
     if (action === 'ping') return json({ data: { ok: true, ts: Date.now() } });
-    if (action === 'getAll') return json({ data: loadState() });
+    // merge=1 일 때만 편집 탭 병합(느림). 기본은 _state 만 빠르게 반환(시트 13탭 read 생략).
+    if (action === 'getAll') return json({ data: loadState(e.parameter && e.parameter.merge) });
     if (action === 'getLocks') return json({ data: activeLocks() });
     return json({ error: 'unknown action: ' + action });
   } catch (err) { return json({ error: String(err) }); }
@@ -55,7 +56,7 @@ function checkToken(token) {
 /* ── state store + 양방향 병합 ───────────────────────────────────── */
 function ss() { return SpreadsheetApp.getActiveSpreadsheet(); }
 
-function loadState() {
+function loadState(doMerge) {
   var sh = ss().getSheetByName(STATE_SHEET);
   if (!sh) return null;
   var last = sh.getLastRow();
@@ -68,7 +69,8 @@ function loadState() {
   if (!raw) return null;
   var state;
   try { state = JSON.parse(raw); } catch (_) { return null; }
-  try { mergeTabs(ss(), state); } catch (e) { /* 병합 실패 시 _state 그대로 */ }
+  // 편집 탭 병합은 비용이 큼(13탭 read ~수초) → merge 요청 시에만. 기본 getAll 은 _state 만 빠르게 반환.
+  if (doMerge) { try { mergeTabs(ss(), state); } catch (e) { /* 병합 실패 시 _state 그대로 */ } }
   return state;
 }
 

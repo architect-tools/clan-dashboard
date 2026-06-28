@@ -49,6 +49,7 @@ export const DB = {
   _undo: [],
   _redo: [],
   _snapshot: null,         // state as of the last commit (for building undo entries)
+  _loadToken: 0,           // 백그라운드 merge 적용 가드용(새 로드 시 증가)
   _maxHistory: 80,
   _onHistory: null,        // () => update undo/redo button states
   _onRefresh: null,        // () => re-render current view (after undo/redo)
@@ -60,6 +61,7 @@ export const DB = {
   async init() {
     let data, fromBackend = false;
     if (LIVE()) {
+      // 빠른 1차 로드: _state 만(merge 생략). 시트 편집은 아래 _bgMerge 로 곧이어 반영.
       try { data = await this._fetch('getAll'); fromBackend = !!data; }
       catch (e) { console.error('backend load failed, falling back to local', e); toast('백엔드 연결 실패 — 로컬 모드로 표시', 'error'); }
     }
@@ -75,6 +77,7 @@ export const DB = {
     // 라이브 첫 연결인데 백엔드가 비어 있으면, 로컬/시드 데이터를 클라우드로 1회 이관(데이터 유실 방지)
     else if (!fromBackend) { try { await this._fetch('save', { data: this.state }); toast('현재 데이터를 클라우드로 옮겼습니다'); } catch (e) { console.warn('초기 이관 실패', e); } }
     this._emit(); this._onHistory && this._onHistory();
+    if (LIVE() && fromBackend) this._bgMerge();   // 백그라운드로 시트 편집 병합본 동기화
     return this.state;
   },
 
@@ -130,18 +133,30 @@ export const DB = {
     catch (e) { console.error('localStorage full?', e); }
   },
 
-  async _fetch(action, payload) {
+  async _fetch(action, payload, query) {
     const url = CONFIG.APPS_SCRIPT_URL;
     const token = localStorage.getItem(CONFIG.TOKEN_KEY) || '';
     const opts = payload
       ? { method: 'POST', body: JSON.stringify({ action, token, ...payload }),
           headers: { 'Content-Type': 'text/plain;charset=utf-8' } } // text/plain avoids CORS preflight
       : { method: 'GET' };
-    const u = payload ? url : `${url}?action=${encodeURIComponent(action)}&token=${encodeURIComponent(token)}`;
+    const u = payload ? url : `${url}?${new URLSearchParams({ action, token, ...(query || {}) })}`;
     const res = await fetch(u, opts);
     const json = await res.json();
     if (json.error) throw new Error(json.error);
     return json.data;
+  },
+
+  // 백그라운드 시트 동기화: getAll?merge=1 로 편집 탭 병합본을 받아, 로컬 편집이 없을 때만 반영.
+  _bgMerge() {
+    const token = ++this._loadToken;
+    this._fetch('getAll', null, { merge: 1 }).then((merged) => {
+      if (!merged || token !== this._loadToken || this._undo.length) return;  // 새 로드/로컬편집 있으면 스킵(클로버 방지)
+      const next = normalize(merged);
+      if (JSON.stringify(next) === JSON.stringify(this.state)) return;        // 변화 없으면 재렌더 안 함
+      this.state = next; this._snapshot = clone(this.state);
+      this._persistLocal(); this._emit(); this._onRefresh && this._onRefresh();
+    }).catch(() => { /* 백그라운드 — 실패 무시 */ });
   },
 };
 
