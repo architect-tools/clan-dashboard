@@ -17,7 +17,7 @@ import { renderDistParams } from './views/distParams.js';
 
 const NAV = [
   { path: 'dashboard', icon: '🏠', label: '대시보드' },
-  { path: 'members', icon: '👥', label: '명단 관리' },
+  { path: 'members', icon: '👥', label: '클랜원' },
   { path: 'participation', icon: '📅', label: '참여 기록' },
   { path: 'diamond', icon: '💎', label: '다이아 정산' },
   { path: 'rotation', icon: '🎁', label: '전리품' },

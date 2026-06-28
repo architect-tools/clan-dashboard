@@ -28,7 +28,7 @@ export function renderMembers() {
     { onchange: (e) => { classFilter = e.target.value; refresh(); } });
 
   const active = s.members.filter((m) => m.active !== false);
-  const body = page('명단 관리', {
+  const body = page('클랜원', {
     subtitle: `클랜원 ${active.length}명 · 직업/전투력/참여점수 관리`,
     actions: [
       btn(quickEdit ? '빠른편집 끄기' : '빠른편집', () => { quickEdit = !quickEdit; refresh(); }, { kind: quickEdit ? 'primary' : 'ghost', admin: true }),

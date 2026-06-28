@@ -11,7 +11,7 @@ import { classGroups } from '../skills-data.js';
 import { COMMON_SPELLSTONES } from '../common-stones.js';
 import { skillIcon, commonStoneIcon } from '../items-index.js';
 
-let activeBoard = 0, gearMember = null;
+let gearMember = null;
 const skillIdx = {}; // 주문석·엘릭서 캐러셀에서 선택한 직업 인덱스(재렌더에도 유지)
 
 export function renderGear() {
@@ -20,13 +20,21 @@ export function renderGear() {
   if (!s.statusBoards) s.statusBoards = [];
   if (!s.statusBoards.length) seedDefaultBoards(s); // first run
 
-  if (activeBoard >= s.statusBoards.length) activeBoard = 0;
-  const board = s.statusBoards[activeBoard];
-
   const body = page('장비/캐릭터 현황', {
     subtitle: '장착 장비(슬롯·표) + 주문석·성좌·탈것·엘릭서 등 클랜원별 현황',
     actions: [btn('+ 보드 추가', () => addBoard(), { kind: 'primary', admin: true })],
   });
+
+  // ── 상단 고정 섹션 네비 (스크롤 위치 무관) — 표가 많아 섹션 점프 ──
+  const sections = [];
+  const navBar = el('div.gear-nav');
+  body.appendChild(navBar);
+  const addSection = (id, label, node) => {
+    if (!node) return;
+    node.id = id; node.classList.add('gear-section');
+    sections.push({ id, label });
+    body.appendChild(node);
+  };
 
   // ── 장착 장비 (구조화 슬롯, 게임 장비창 레이아웃) ──
   const me = Roles.me();
@@ -37,7 +45,7 @@ export function renderGear() {
     const canEditSel = adm || Roles.isMe(selMember.name); // 멤버는 본인 장비만 편집
     const picker = select(activeMembers.map((m) => ({ value: String(m.id), label: m.name + (Roles.isMe(m.name) ? ' (나)' : '') })), String(gearMember),
       { onchange: (e) => { gearMember = +e.target.value; renderGear(); } });
-    body.appendChild(card('장착 장비', el('div', {}, [
+    addSection('gear-equip', '장착 장비', card('장착 장비', el('div', {}, [
       el('div.toolbar', {}, [el('span.muted', { text: '클랜원' }), picker, canEditSel ? el('span.hint', { text: '슬롯을 클릭해 등급·티어·강화 입력' }) : el('span.hint', { text: '본인 장비만 편집할 수 있습니다' })]),
       equipGrid(selMember, { editable: canEditSel }),
     ])));
@@ -71,22 +79,28 @@ export function renderGear() {
       tb2.appendChild(tr);
     });
     eqTbl.appendChild(tb2);
-    body.appendChild(card('장비 현황', el('div.scroll-tbl', {}, [eqTbl]),
+    addSection('gear-equipstatus', '장비 현황', card('장비 현황', el('div.scroll-tbl', {}, [eqTbl]),
       { className: 'card-flush', actions: el('span.hint', { text: adm ? '셀 클릭 → 편집' : '본인 행 클릭 → 편집' }) }));
   }
 
   // ── 주문석 / 엘릭서 (직업별 전용 표, 원문 시트 그대로) ──
-  renderSkillSection('주문석', 'spellstone');
-  renderSkillSection('엘릭서', 'elixir');
+  addSection('gear-spellstone', '주문석', renderSkillSection('주문석', 'spellstone'));
+  addSection('gear-elixir', '엘릭서', renderSkillSection('엘릭서', 'elixir'));
 
-  // ── 기타 현황 보드 (성좌·탈것·플랫폼) ──
-  body.appendChild(el('div.modal-sec', { text: '기타 현황 보드' }));
+  // ── 기타 현황 보드 (성좌·탈것·플랫폼) — 각각 분리된 섹션(멀티탭 아님) ──
+  s.statusBoards.forEach((board, i) => addSection('gear-board-' + i, board.name, renderBoardCard(board, i)));
+
+  // ── 상단 네비 채우기 ──
+  sections.forEach((sec) => navBar.appendChild(el('button.gear-nav-link', {
+    type: 'button', text: sec.label,
+    onclick: () => { const t = document.getElementById(sec.id); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+  })));
 
   // 주문석·엘릭서: 직업 탭(+ '공용' 탭)으로 한 직업씩 가로 슬라이드 전환. 스크롤뷰 없음.
   // 직업 탭은 최다 인원 직업에 맞춘 고정 높이(전환 시 안 흔들림). '공용'은 전원 표라 자연 높이.
   function renderSkillSection(cat, kind) {
     const withMembers = CLASS_LIST.filter((cls) => s.members.some((m) => m.active !== false && m.cls === cls));
-    if (!withMembers.length) { body.appendChild(card(cat, el('div.empty.small', { text: '활동 클랜원이 없습니다.' }), { className: 'card-flush' })); return; }
+    if (!withMembers.length) return card(cat, el('div.empty.small', { text: '활동 클랜원이 없습니다.' }), { className: 'card-flush' });
     const keys = ['공용', ...withMembers];
     const maxRows = Math.max(1, ...withMembers.map((cls) => s.members.filter((m) => m.active !== false && m.cls === cls).length));
     const fixedH = 56 + maxRows * 27; // 헤더 2행 + 최다 인원 (직업 탭 고정 높이)
@@ -108,8 +122,45 @@ export function renderGear() {
       el('button.skill-arrow', { text: '›', title: '다음', onclick: () => show(idx + 1, 1) }),
     ]);
     const acts = (cat === '주문석' && adm) ? btn('공용 주문석 지정', () => openStoneSelect(), { kind: 'ghost', admin: true }) : null;
-    body.appendChild(card(cat, el('div', {}, [head, panel]), { className: 'card-flush', actions: acts }));
+    const cardNode = card(cat, el('div', {}, [head, panel]), { className: 'card-flush', actions: acts });
     show(idx, 1);
+    return cardNode;
+  }
+
+  // 상태 보드 1개 → 카드(멤버×컬럼 토글 표 + 관리자 열/이름/삭제 액션). 성좌·탈것·플랫폼 각각.
+  function renderBoardCard(board, idx) {
+    const members = Roles.selfFirst(s.members.filter((m) => m.active !== false)); // 본인 행 먼저
+    const tbl = el('table.tbl');
+    const headCells = [el('th.sticky-col', { text: '닉네임' }), el('th', { text: '직업', style: { width: '80px' } })];
+    board.columns.forEach((col) => headCells.push(el('th', {}, [
+      el('span', { text: col }),
+      adm ? el('button.col-x', { title: '열 삭제', text: '✕', onclick: () => { board.columns = board.columns.filter((c) => c !== col); DB.commit(); renderGear(); } }) : null,
+    ])));
+    headCells.push(el('th', { style: { width: '40px' } }, [adm ? el('button.col-add', { title: '열 추가', text: '+', onclick: () => addColumn(board) }) : null]));
+    tbl.appendChild(el('thead', {}, el('tr', {}, headCells)));
+    const tb = el('tbody');
+    members.forEach((m) => {
+      const row = el('tr', {}, [el('td.sticky-col', {}, [el('b', { text: m.name })]), el('td', { class: 'muted', text: m.cls || '-' })]);
+      const rec = (board.data[m.id] ||= {});
+      const canEditRow = adm || Roles.isMe(m.name); // 멤버는 본인 행만 편집
+      board.columns.forEach((col) => {
+        const owned = !!rec[col];
+        const cell = canEditRow
+          ? el('button.sk-toggle', { class: owned ? 'on' : '', type: 'button', title: owned ? '있음 (클릭해 해제)' : '없음 (클릭해 표시)',
+              onclick: (e) => { if (rec[col]) delete rec[col]; else rec[col] = true; DB.commit(); const on = !!rec[col]; const b = e.currentTarget; b.classList.toggle('on', on); b.title = on ? '있음 (클릭해 해제)' : '없음 (클릭해 표시)'; } }, [el('span.sk-check', { text: '✓' })])
+          : el('span.sk-check', { class: owned ? 'on' : '', text: owned ? '✓' : '' });
+        row.appendChild(el('td', { style: { textAlign: 'center' } }, [cell]));
+      });
+      row.appendChild(el('td'));
+      tb.appendChild(row);
+    });
+    tbl.appendChild(tb);
+    const acts = adm ? el('div.row-actions', {}, [
+      btn('+ 열', () => addColumn(board), { kind: 'ghost', admin: true }),
+      btn('이름', () => renameBoard(board), { kind: 'ghost', admin: true }),
+      btn('삭제', () => confirmDialog(`'${board.name}' 보드를 삭제할까요?`, () => { s.statusBoards.splice(idx, 1); DB.commit(); renderGear(); }, { danger: true, yesText: '삭제' }), { kind: 'ghost-danger', admin: true }),
+    ]) : null;
+    return card(board.name, el('div.table-wrap', {}, [tbl]), { className: 'card-flush', actions: acts });
   }
   function buildClassTable(cat, kind, key) {
     if (cat === '주문석' && key === '공용') return buildCommonStoneTable(); // 공용 주문석 = 지정+개수 관리
@@ -232,53 +283,6 @@ export function renderGear() {
     ]), { wide: 'x' });
   }
 
-  // board tabs
-  const tabs = el('div.board-tabs', {}, s.statusBoards.map((b, i) =>
-    el('button.board-tab', { class: i === activeBoard ? 'active' : '', onclick: () => { activeBoard = i; renderGear(); } }, [
-      el('span', { text: b.name }),
-    ])));
-  body.appendChild(tabs);
-
-  if (!board) { body.appendChild(el('div.empty', { text: '보드를 추가하세요.' })); return; }
-
-  const members = Roles.selfFirst(s.members.filter((m) => m.active !== false)); // 본인 행 먼저
-  const tbl = el('table.tbl');
-  const headCells = [el('th.sticky-col', { text: '닉네임' }), el('th', { text: '직업', style: { width: '80px' } })];
-  board.columns.forEach((col) => headCells.push(el('th', {}, [
-    el('span', { text: col }),
-    adm ? el('button.col-x', { title: '열 삭제', text: '✕', onclick: () => { board.columns = board.columns.filter((c) => c !== col); DB.commit(); renderGear(); } }) : null,
-  ])));
-  headCells.push(el('th', { style: { width: '40px' } }, [
-    adm ? el('button.col-add', { title: '열 추가', text: '+', onclick: () => addColumn(board) }) : null]));
-  tbl.appendChild(el('thead', {}, el('tr', {}, headCells)));
-
-  const tb = el('tbody');
-  members.forEach((m) => {
-    const row = el('tr', {}, [
-      el('td.sticky-col', {}, [el('b', { text: m.name })]),
-      el('td', { class: 'muted', text: m.cls || '-' }),
-    ]);
-    const rec = (board.data[m.id] ||= {});
-    const canEditRow = adm || Roles.isMe(m.name); // 멤버는 본인 행만 편집
-    board.columns.forEach((col) => {
-      const owned = !!rec[col]; // 보유/가능 여부 토글(성좌·탈것·플랫폼 등)
-      const cell = canEditRow
-        ? el('button.sk-toggle', { class: owned ? 'on' : '', type: 'button', title: owned ? '있음 (클릭해 해제)' : '없음 (클릭해 표시)',
-            onclick: (e) => { if (rec[col]) delete rec[col]; else rec[col] = true; DB.commit(); const on = !!rec[col]; const b = e.currentTarget; b.classList.toggle('on', on); b.title = on ? '있음 (클릭해 해제)' : '없음 (클릭해 표시)'; } }, [el('span.sk-check', { text: '✓' })])
-        : el('span.sk-check', { class: owned ? 'on' : '', text: owned ? '✓' : '' });
-      row.appendChild(el('td', { style: { textAlign: 'center' } }, [cell]));
-    });
-    row.appendChild(el('td'));
-    tb.appendChild(row);
-  });
-  tbl.appendChild(tb);
-
-  body.appendChild(card(null, el('div.table-wrap', {}, [tbl]), { className: 'card-flush' }));
-  body.appendChild(el('div.toolbar', {}, [
-    btn('+ 열 추가', () => addColumn(board), { kind: 'ghost', admin: true }),
-    btn('이름 변경', () => renameBoard(board), { kind: 'ghost', admin: true }),
-    btn('보드 삭제', () => confirmDialog(`'${board.name}' 보드를 삭제할까요?`, () => { s.statusBoards.splice(activeBoard, 1); activeBoard = 0; DB.commit(); renderGear(); }, { danger: true, yesText: '삭제' }), { kind: 'ghost-danger', admin: true }),
-  ]));
 }
 
 function addColumn(board) {
@@ -303,7 +307,7 @@ function addBoard() {
       const v = name.value.trim(); if (!v) return toast('이름 입력', 'error');
       const columns = cols.value.split(',').map((x) => x.trim()).filter(Boolean);
       DB.state.statusBoards.push({ id: uid(), name: v, columns: columns.length ? columns : ['상태'], data: {} });
-      activeBoard = DB.state.statusBoards.length - 1; DB.commit(); close(); renderGear();
+      DB.commit(); close(); renderGear();
     }, { kind: 'primary' })])]));
 }
 

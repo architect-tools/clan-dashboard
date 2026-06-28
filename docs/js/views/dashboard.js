@@ -51,16 +51,16 @@ export function renderDashboard() {
   ]));
 
   // ── top combat power & top participation ──
-  const topPower = [...members].sort((a, b) => b.power - a.power).slice(0, 8);
-  const topPart = [...members].sort((a, b) => b.score - a.score).slice(0, 8);
+  const topPower = [...members].sort((a, b) => b.power - a.power).slice(0, 10);
+  const topPart = [...members].sort((a, b) => b.score - a.score).slice(0, 10);
   body.appendChild(el('div.col-2', {}, [
-    card('전투력 TOP 8', table([
+    card('전투력 TOP 10', table([
       { label: '#', align: 'center', width: '36px', render: (_, i) => i + 1 },
       { key: 'name', label: '닉네임', render: (m) => el('b', { text: m.name }) },
       { label: '직업', render: (m) => classBadge(m.cls) },
       { key: 'power', label: '전투력', align: 'right', render: (m) => m.power.toLocaleString() },
     ], topPower), { className: 'card-compact', actions: btn('명단 전체', () => location.hash = '#/members', { kind: 'ghost' }) }),
-    card('참여점수 TOP 8', table([
+    card('참여점수 TOP 10', table([
       { label: '#', align: 'center', width: '36px', render: (_, i) => i + 1 },
       { key: 'name', label: '닉네임', render: (m) => el('b', { text: m.name }) },
       { label: '티어', align: 'center', render: (m) => tierBadge(tierForScore(m.score, s.tiers)) },

@@ -530,6 +530,13 @@ select.input{cursor:pointer}
 .board-tab{padding:8px 15px;border-radius:8px 8px 0 0;border:1px solid var(--line);border-bottom:none;
   background:var(--bg2);color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit}
 .board-tab.active{background:var(--panel);color:var(--txt);border-color:var(--line2)}
+/* 장비 페이지: 상단 고정 섹션 네비(스크롤 위치 무관, 토픽바 아래) + 섹션 점프 오프셋 */
+.gear-nav{position:sticky;top:54px;z-index:50;display:flex;flex-wrap:wrap;gap:6px;
+  padding:9px 0;margin-bottom:6px;background:var(--bg);border-bottom:1px solid var(--line)}
+.gear-nav-link{padding:5px 12px;border:1px solid var(--line2);border-radius:7px;background:var(--panel);
+  color:var(--muted);font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;transition:.12s}
+.gear-nav-link:hover{border-color:var(--primary);color:var(--primary)}
+.gear-section{scroll-margin-top:104px}
 .cell-input{width:100%;min-width:70px;padding:6px 8px;font-size:12.5px}
 .col-x{background:none;border:none;color:var(--dim);cursor:pointer;font-size:10px;margin-left:6px;opacity:.6}
 .col-x:hover{color:var(--bad);opacity:1}
