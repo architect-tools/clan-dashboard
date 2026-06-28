@@ -41,11 +41,11 @@ jobs:
           set -euo pipefail
           git config user.name "db-snapshot-bot"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # state.json 변동 기준으로만 커밋(summary 는 함께 갱신)
-          if git diff --quiet -- db-snapshots/state.json; then
+          # 스테이징 후 --cached 로 검사(신규 untracked 파일도 감지) → 실제 변동 시에만 커밋
+          git add db-snapshots/state.json db-snapshots/summary.json
+          if git diff --cached --quiet; then
             echo "DB 변동 없음 — 커밋 생략"
           else
-            git add db-snapshots/state.json db-snapshots/summary.json
             git commit -m "chore(db): 스냅샷 $(date -u +'%Y-%m-%d %H:%MZ')"
             git push
           fi
