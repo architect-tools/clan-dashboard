@@ -85,6 +85,9 @@ body[data-role="member"] .admin-only{display:none !important}
   color:var(--txt);font-size:15px;cursor:pointer;transition:.13s;display:inline-grid;place-items:center}
 .icon-btn:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
 .icon-btn:disabled{opacity:.3;cursor:default}
+/* 사이드바 타이틀 우측 끝 새로고침 버튼 */
+.brand .refresh-btn{margin-left:auto;width:30px;height:30px;font-size:16px;flex:none}
+.icon-btn.spinning{animation:busy-spin .8s linear infinite;pointer-events:none;color:var(--primary)}
 
 /* ── page ────────────────────────────────────────────────────────── */
 .page{padding:26px 64px 60px}

@@ -156,18 +156,20 @@ export const DB = {
 
   // 백그라운드 새로고침: 다른 사용자/시트 변경을 반영. merge=true 면 시트 편집까지(느림), false 면 대시보드 편집만(빠름).
   // 내 미저장 편집(_pendingSave)·열린 모달 중에는 스킵(클로버/방해 방지). 데이터 동일하면 재렌더 안 함.
+  // 반환: 'busy'(편집/모달 중 스킵) · true(갱신함) · false(이미 최신) · 'stale'/'error'. 수동 버튼이 피드백에 사용.
   refresh({ merge = false } = {}) {
-    if (!LIVE() || this._pendingSave) return;
-    if (typeof document !== 'undefined' && document.querySelector('.modal-overlay')) return;
+    if (!LIVE() || this._pendingSave) return Promise.resolve('busy');
+    if (typeof document !== 'undefined' && document.querySelector('.modal-overlay')) return Promise.resolve('busy');
     const token = ++this._loadToken;
     const saveSeqAtStart = this._saveSeq;   // 조회 중 내가 편집·저장하면 시퀀스가 바뀜 → 옛 응답 폐기(편집 되돌림 방지)
-    this._fetch('getAll', null, merge ? { merge: 1 } : undefined).then((data) => {
-      if (!data || token !== this._loadToken || this._pendingSave || saveSeqAtStart !== this._saveSeq) return;
+    return this._fetch('getAll', null, merge ? { merge: 1 } : undefined).then((data) => {
+      if (!data || token !== this._loadToken || this._pendingSave || saveSeqAtStart !== this._saveSeq) return 'stale';
       const next = normalize(data);
-      if (JSON.stringify(next) === JSON.stringify(this.state)) return;
+      if (JSON.stringify(next) === JSON.stringify(this.state)) return false;
       this.state = next; this._snapshot = clone(this.state);
       this._persistLocal(); this._emit(); this._onRefresh && this._onRefresh();
-    }).catch(() => { /* 백그라운드 — 실패 무시 */ });
+      return true;
+    }).catch(() => 'error');
   },
 };
 

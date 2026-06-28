@@ -31,12 +31,23 @@ function updateHistoryButtons() {
   if (redoBtn) redoBtn.disabled = !DB.canRedo();
 }
 
+async function manualRefresh(btnEl) {
+  btnEl.classList.add('spinning'); btnEl.disabled = true;
+  let r; try { r = await DB.refresh({ merge: true }); } finally { btnEl.classList.remove('spinning'); btnEl.disabled = false; }
+  if (r === 'busy') toast('편집/저장 중입니다 — 잠시 후 다시 시도하세요', 'error');
+  else if (r === true) toast('최신 데이터로 갱신했습니다');
+  else if (r === false) toast('이미 최신 상태입니다');
+  else toast('새로고침 실패 — 잠시 후 다시 시도', 'error');
+}
+
 function buildShell() {
   const root = $('#root');
   root.innerHTML = '';
+  const refreshBtn = el('button.icon-btn.refresh-btn', { title: '새로고침 (최신 데이터 불러오기)', onclick: () => manualRefresh(refreshBtn) }, ['⟳']);
   const nav = el('nav.sidebar', {}, [
-    el('div.brand', {}, [el('div', {}, [
-      el('div.brand-name', { text: CONFIG.appName }), el('div.brand-sub', { text: '관리자 대시보드' })])]),
+    el('div.brand', {}, [
+      el('div', {}, [el('div.brand-name', { text: CONFIG.appName }), el('div.brand-sub', { text: '관리자 대시보드' })]),
+      refreshBtn]),
     el('div.nav-links', {}, NAV.map((n) => el('a.nav-link', {
       'data-nav': n.path, href: '#/' + n.path, class: n.admin ? 'admin-only' : '',
     }, [el('span', { text: n.label })]))),
