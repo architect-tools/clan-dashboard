@@ -58,7 +58,11 @@ export const DB = {
 
   subscribe(fn) { this._subs.add(fn); return () => this._subs.delete(fn); },
   _emit() { for (const fn of this._subs) try { fn(this.state); } catch (e) { console.error(e); } },
-  setCallbacks({ onHistory, onRefresh }) { this._onHistory = onHistory; this._onRefresh = onRefresh; },
+  setCallbacks({ onHistory, onRefresh, onLoading }) { this._onHistory = onHistory; this._onRefresh = onRefresh; this._onLoading = onLoading; },
+  _setLoading(on) {   // 진행 중 네트워크 새로고침 카운터 → UI 로딩 표시(⟳ 버튼 회전 등)
+    this._loadingN = Math.max(0, (this._loadingN || 0) + (on ? 1 : -1));
+    this._onLoading && this._onLoading(this._loadingN > 0);
+  },
 
   async init() {
     let data, fromBackend = false;
@@ -162,6 +166,7 @@ export const DB = {
     if (typeof document !== 'undefined' && document.querySelector('.modal-overlay')) return Promise.resolve('busy');
     const token = ++this._loadToken;
     const saveSeqAtStart = this._saveSeq;   // 조회 중 내가 편집·저장하면 시퀀스가 바뀜 → 옛 응답 폐기(편집 되돌림 방지)
+    this._setLoading(true);
     return this._fetch('getAll', null, merge ? { merge: 1 } : undefined).then((data) => {
       if (!data || token !== this._loadToken || this._pendingSave || saveSeqAtStart !== this._saveSeq) return 'stale';
       const next = normalize(data);
@@ -169,7 +174,7 @@ export const DB = {
       this.state = next; this._snapshot = clone(this.state);
       this._persistLocal(); this._emit(); this._onRefresh && this._onRefresh();
       return true;
-    }).catch(() => 'error');
+    }).catch(() => 'error').finally(() => this._setLoading(false));
   },
 };
 

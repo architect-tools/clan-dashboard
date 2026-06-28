@@ -6,6 +6,7 @@ import { Roles } from './roles.js';
 import { Locks } from './locks.js';
 import { Router } from './router.js';
 import { el, $, toast, applyUiScale } from './util.js';
+import { busyOverlay } from './views/ui.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderMembers } from './views/members.js';
 import { renderParticipation } from './views/participation.js';
@@ -25,15 +26,16 @@ const NAV = [
   { path: 'settings', icon: '⚙️', label: '설정', admin: true },
 ];
 
-let undoBtn, redoBtn;
+let undoBtn, redoBtn, refreshBtn;
 function updateHistoryButtons() {
   if (undoBtn) undoBtn.disabled = !DB.canUndo();
   if (redoBtn) redoBtn.disabled = !DB.canRedo();
 }
 
-async function manualRefresh(btnEl) {
-  btnEl.classList.add('spinning'); btnEl.disabled = true;
-  let r; try { r = await DB.refresh({ merge: true }); } finally { btnEl.classList.remove('spinning'); btnEl.disabled = false; }
+async function manualRefresh() {
+  if (DB._pendingSave) return toast('편집/저장 중입니다 — 잠시 후 다시 시도하세요', 'error');
+  const busy = busyOverlay('최신 데이터 불러오는 중…', '시트 변경사항 동기화');
+  let r; try { r = await DB.refresh({ merge: true }); } finally { busy.close(); } // ⟳ 버튼 회전은 onLoading 콜백이 담당
   if (r === 'busy') toast('편집/저장 중입니다 — 잠시 후 다시 시도하세요', 'error');
   else if (r === true) toast('최신 데이터로 갱신했습니다');
   else if (r === false) toast('이미 최신 상태입니다');
@@ -43,7 +45,7 @@ async function manualRefresh(btnEl) {
 function buildShell() {
   const root = $('#root');
   root.innerHTML = '';
-  const refreshBtn = el('button.icon-btn.refresh-btn', { title: '새로고침 (최신 데이터 불러오기)', onclick: () => manualRefresh(refreshBtn) }, ['⟳']);
+  refreshBtn = el('button.icon-btn.refresh-btn', { title: '새로고침 (최신 데이터 불러오기)', onclick: () => manualRefresh() }, ['⟳']);
   const nav = el('nav.sidebar', {}, [
     el('div.brand', {}, [
       el('div', {}, [el('div.brand-name', { text: CONFIG.appName }), el('div.brand-sub', { text: '관리자 대시보드' })]),
@@ -89,11 +91,14 @@ async function main() {
   await Auth.gate();
   document.body.dataset.role = Roles.role(); // CSS가 .admin-only 표시/숨김 결정
   buildShell();
+  const boot = busyOverlay('데이터 불러오는 중…');
   try { await DB.init(); }
-  catch (e) { console.error(e); toast('데이터 로드 실패: ' + e.message, 'error'); return; }
+  catch (e) { console.error(e); toast('데이터 로드 실패: ' + e.message, 'error'); boot.close(); return; }
+  boot.close();
 
   applyUiScale(DB.state.appSettings?.uiScale); // restore saved UI scale
-  DB.setCallbacks({ onHistory: updateHistoryButtons, onRefresh: () => Router.refresh() });
+  // onLoading: 백그라운드 새로고침 중 ⟳ 버튼 회전(비차단 표시)
+  DB.setCallbacks({ onHistory: updateHistoryButtons, onRefresh: () => Router.refresh(), onLoading: (active) => { if (refreshBtn) refreshBtn.classList.toggle('spinning', active); } });
 
   Router
     .on('dashboard', renderDashboard)
