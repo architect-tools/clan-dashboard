@@ -1,0 +1,51 @@
+name: DB hourly snapshot
+
+# 매시간 백엔드(_state) 스냅샷을 떠서 변동이 있으면 main 에 커밋 → DB 변경 이력/diff.
+on:
+  schedule:
+    - cron: '0 * * * *'       # 매시 정각(UTC). GitHub 부하로 수~수십 분 지연될 수 있음.
+  workflow_dispatch: {}         # 수동 실행 버튼(Actions 탭)
+
+permissions:
+  contents: write               # 스냅샷 커밋/푸시용
+
+concurrency:
+  group: db-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch live DB state
+        env:
+          # getAll 은 읽기 전용·토큰 불필요. 이 URL 은 이미 docs/js/config.js 에 공개돼 있음.
+          APPS_SCRIPT_URL: https://script.google.com/macros/s/AKfycbx6GJnd7PitETPxym-CZv_LIqL5h_MTEZ0mECcRtk6Rwo0p3f1c7xBZrrhUpoywDB9w/exec
+        run: |
+          set -euo pipefail
+          mkdir -p db-snapshots
+          curl -fsSL "${APPS_SCRIPT_URL}?action=getAll&merge=1" -o /tmp/raw.json
+          # 유효 응답 확인(에러/빈 상태면 기존 스냅샷 덮어쓰지 않음)
+          if ! jq -e '(.data.members | length) > 0' /tmp/raw.json >/dev/null; then
+            echo "::error::유효한 DB 응답이 아님"; head -c 400 /tmp/raw.json; exit 1
+          fi
+          # 키 정렬(jq -S)로 정규화 → 값이 실제 바뀔 때만 깔끔한 diff
+          jq -S '.data' /tmp/raw.json > db-snapshots/state.json
+          jq -S '{members:(.data.members|length), participationDays:(.data.participation.byDate|length), distributions:(.data.distributionLog|length), settlements:(.data.settlements|length), equipMembers:([.data.members[]|select((.equip|length)>0)]|length)}' /tmp/raw.json > db-snapshots/summary.json
+
+      - name: Commit & push if changed
+        run: |
+          set -euo pipefail
+          git config user.name "db-snapshot-bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # state.json 변동 기준으로만 커밋(summary 는 함께 갱신)
+          if git diff --quiet -- db-snapshots/state.json; then
+            echo "DB 변동 없음 — 커밋 생략"
+          else
+            git add db-snapshots/state.json db-snapshots/summary.json
+            git commit -m "chore(db): 스냅샷 $(date -u +'%Y-%m-%d %H:%MZ')"
+            git push
+          fi
