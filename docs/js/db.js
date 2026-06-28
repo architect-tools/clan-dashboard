@@ -196,10 +196,16 @@ function normalize(d) {
   const _toYmd = (s) => {
     if (typeof s !== 'string' || !s) return s || '';
     if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);   // 이미 ISO
-    const t = new Date(s);
-    if (isNaN(t.getTime())) return s;                          // 날짜로 못 읽으면 원본 유지
     const p = (n) => String(n).padStart(2, '0');
-    return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`;
+    // 연도 포함 풀 Date 문자열(시트가 'Mon Jun 01 2026 …'로 변환한 경우)만 Date 파서 신뢰
+    if (/\d{4}/.test(s)) {
+      const t = new Date(s);
+      if (!isNaN(t.getTime())) return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`;
+    }
+    // 한글/축약 표기: "3.30일" · "5월2일" · "6월 1일" · "6월14일" · "4/1" → M·D 추출(연도는 운영시트 기준 2026)
+    const m = s.match(/(\d{1,2})\s*[월./-]\s*(\d{1,2})/);
+    if (m && +m[1] >= 1 && +m[1] <= 12 && +m[2] >= 1 && +m[2] <= 31) return `2026-${p(+m[1])}-${p(+m[2])}`;
+    return s;                                                  // 그 외(못 읽는 표기)는 원본 유지
   };
   d.distributionLog = d.distributionLog.map((x) => (x && x.date ? { ...x, date: _toYmd(x.date) } : x));
   d.dropLog ||= [];     // 드랍 기록: {id, date, content, item, note}

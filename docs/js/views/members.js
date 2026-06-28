@@ -134,10 +134,14 @@ function openMemberDetail(m) {
   }
   const attTotal = attendanceCount(s.participation.byDate, m.id);
 
-  // 장비/현황 (비어있지 않은 보드만)
+  // 장비/현황 (비어있지 않은 보드만). 보드 셀 값은 'O'(문자열)·true(불리언, 백엔드 round-trip 후) 등 혼재 → 타입 안전 처리.
   const boards = (s.statusBoards || []).map((b) => ({
     name: b.name,
-    cells: (b.columns || []).map((c) => ({ col: c, val: ((b.data?.[m.id]?.[c]) || '').trim() })).filter((x) => x.val),
+    cells: (b.columns || []).map((c) => {
+      let v = b.data?.[m.id]?.[c];
+      v = v === true ? 'O' : (v == null ? '' : String(v)).trim();
+      return { col: c, val: v };
+    }).filter((x) => x.val),
   })).filter((b) => b.cells.length);
 
   modal(m.name, (close) => el('div.member-detail', {}, [
@@ -181,7 +185,7 @@ function openMemberDetail(m) {
     boards.length ? el('div.modal-sec', { text: '기타 현황' }) : null,
     boards.length ? el('div', {}, boards.map((b) => el('div.md-board', {}, [
       el('b', { text: b.name }),
-      el('div.chips', {}, b.cells.map((c) => el('span.chip', { text: `${c.col}: ${c.val}` }))),
+      el('div.chips', {}, b.cells.map((c) => el('span.chip', { text: c.val === 'O' ? c.col : `${c.col}: ${c.val}` }))),
     ]))) : null,
   ]), {
     wide: 'x',
