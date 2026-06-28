@@ -18,6 +18,7 @@
 var STATE_SHEET = '_state';
 var LOCK_SHEET = '_locks';
 var LOCK_TTL_MS = 40 * 1000;   // 락 자동 만료(하트비트 없으면 해제)
+var STATE_CHUNK = 45000;       // 셀당 글자 한도(5만) 회피 — _state JSON 을 A1,A2,… 청크로 분할 저장
 var P = PropertiesService.getScriptProperties();
 
 function doGet(e) {
@@ -57,7 +58,13 @@ function ss() { return SpreadsheetApp.getActiveSpreadsheet(); }
 function loadState() {
   var sh = ss().getSheetByName(STATE_SHEET);
   if (!sh) return null;
-  var raw = sh.getRange('A1').getValue();
+  var last = sh.getLastRow();
+  // A 열의 청크들을 순서대로 이어붙임(구버전 단일 A1 도 청크 1개로 호환).
+  var raw = '';
+  if (last >= 1) {
+    var col = sh.getRange(1, 1, last, 1).getValues();
+    for (var i = 0; i < col.length; i++) raw += (col[i][0] == null ? '' : col[i][0]);
+  }
   if (!raw) return null;
   var state;
   try { state = JSON.parse(raw); } catch (_) { return null; }
@@ -68,12 +75,25 @@ function loadState() {
 function saveState(state) {
   var book = ss();
   var sh = book.getSheetByName(STATE_SHEET) || book.insertSheet(STATE_SHEET);
-  sh.getRange('A1').setValue(JSON.stringify(state));
+  var str = JSON.stringify(state);
+  var chunks = [];
+  for (var i = 0; i < str.length; i += STATE_CHUNK) chunks.push([str.substring(i, i + STATE_CHUNK)]);
+  if (!chunks.length) chunks = [['']];
+  var last = sh.getLastRow();
+  if (last >= 1) sh.getRange(1, 1, last, 1).clearContent();   // 이전 청크 모두 비움
+  var rng = sh.getRange(1, 1, chunks.length, 1);
+  rng.setNumberFormat('@');                                    // 텍스트 강제(= + - 등 수식/숫자 해석 방지)
+  rng.setValues(chunks);
   try { writeTabs(book, state); } catch (e) { /* 미러 실패 무시 */ }
 }
 
 /* 편집 탭 정의: [탭이름, 헤더[], 행생성(state)→rows, 병합(state, rows)] */
 function num(v) { var n = parseFloat(String(v).replace(/[^0-9.\-]/g, '')); return isNaN(n) ? 0 : n; }
+// 시트가 날짜형으로 자동 변환한 셀(Date 객체)을 yyyy-MM-dd 로 되돌림. 텍스트면 그대로.
+function ymd(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  return String(v == null ? '' : v).trim();
+}
 function truthyActive(v) { return !(v === '휴면' || v === false || v === 'FALSE' || v === 'x' || v === '' ); }
 
 function readSheet(book, name) {
@@ -92,6 +112,10 @@ function writeSheet(book, name, head, rows) {
 }
 
 function writeTabs(book, s) {
+  // 구버전(읽기전용 미러) 탭 정리 — 더 이상 쓰지 않음.
+  ['명단(미러)', '분배내역(미러)'].forEach(function (n) {
+    var old = book.getSheetByName(n); if (old) book.deleteSheet(old);
+  });
   writeSheet(book, '명단', ['id', '순번', '닉네임', '직업', '전투력', '참여점수', '등급', '활동', '메모'],
     (s.members || []).map(function (m) { return [m.id, m.order, m.name, m.cls, m.power, m.score, m.grade || '정회원', m.active === false ? '휴면' : '활동', m.note || '']; }));
   writeSheet(book, '분배내역', ['id', '날짜', '아이템', '구분', '받은 사람', '인계자', '내판가', '메모'],
@@ -151,7 +175,7 @@ function mergeTabs(book, s) {
   }
   var drows = readSheet(book, '분배내역');
   if (drows && drows.length) s.distributionLog = drows.map(function (r) {
-    return { id: r[0] || ('id' + Math.random().toString(36).slice(2)), date: String(r[1] || ''), item: String(r[2] || ''), type: String(r[3] || ''), member: String(r[4] || ''), from: String(r[5] || ''), price: num(r[6]), note: String(r[7] || '') };
+    return { id: r[0] || ('id' + Math.random().toString(36).slice(2)), date: ymd(r[1]), item: String(r[2] || ''), type: String(r[3] || ''), member: String(r[4] || ''), from: String(r[5] || ''), price: num(r[6]), note: String(r[7] || '') };
   });
   var crows = readSheet(book, '콘텐츠');
   if (crows && crows.length) s.contentCatalog = crows.map(function (r) {

@@ -191,6 +191,17 @@ function normalize(d) {
   d.participation.scoreTo ||= '';
 
   d.distributionLog ||= [];
+  // 분배 날짜 정규화: 백엔드 시트가 날짜 문자열을 자동으로 Date로 변환 → 탭 read-back 시
+  // 'Mon Jun 01 2026 00:00:00 GMT+0900 …' 형태로 돌아옴 → 로드 시 yyyy-MM-dd 로 정리(표시·재저장 모두).
+  const _toYmd = (s) => {
+    if (typeof s !== 'string' || !s) return s || '';
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);   // 이미 ISO
+    const t = new Date(s);
+    if (isNaN(t.getTime())) return s;                          // 날짜로 못 읽으면 원본 유지
+    const p = (n) => String(n).padStart(2, '0');
+    return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`;
+  };
+  d.distributionLog = d.distributionLog.map((x) => (x && x.date ? { ...x, date: _toYmd(x.date) } : x));
   d.dropLog ||= [];     // 드랍 기록: {id, date, content, item, note}
   d.sales ||= [];       // 진행 중 내판: {id, item, bidType, basePrice, deadline(ms), bids:[{name,amount}]}
   d.settlements ||= []; // finalized diamond distributions (다이아 분배 확정 기록)
