@@ -110,7 +110,28 @@ function writeTabs(book, s) {
     ['투력 비율(%)', (sset.powerRatio || 0) * 100], ['참여 비율(%)', (sset.participationRatio || 0) * 100]]);
   var rsh = book.getSheetByName('분배기준') || book.insertSheet('분배기준');
   rsh.clearContents(); rsh.getRange('A1').setValue(s.distributionRules || '');
+  // 보유 현황(롱포맷: 닉네임·직업·스킬 1행씩) — 행 추가/삭제로 보유 관리
+  writeSheet(book, '주문석보유', ['닉네임', '직업', '주문석'], ownRows(s, '주문석'));
+  writeSheet(book, '엘릭서보유', ['닉네임', '직업', '엘릭서'], ownRows(s, '엘릭서'));
+  // 상태 보드(성좌·탈것·플랫폼): 멤버×컬럼 매트릭스, 셀에 O = 보유/가능
+  (s.statusBoards || []).forEach(function (b) {
+    var cols = b.columns || [];
+    var rows = (s.members || []).filter(function (m) { return m.active !== false; }).map(function (m) {
+      var rec = (b.data || {})[m.id] || (b.data || {})[String(m.id)] || {};
+      return [m.name].concat(cols.map(function (c) { return rec[c] ? 'O' : ''; }));
+    });
+    writeSheet(book, '보드-' + b.name, ['닉네임'].concat(cols), rows);
+  });
 }
+function ownRows(s, cat) {
+  var out = [];
+  (s.members || []).forEach(function (m) {
+    var o = (m.skills || {})[cat] || {};
+    Object.keys(o).forEach(function (k) { if (o[k]) out.push([m.name, m.cls || '', k]); });
+  });
+  return out;
+}
+function memberByName(s) { var x = {}; (s.members || []).forEach(function (m) { x[String(m.name)] = m; }); return x; }
 
 /* 시트 편집 → state 병합. 탭이 비어있으면(헤더만) 그 영역은 _state 유지(실수로 전체 삭제 방지). */
 function mergeTabs(book, s) {
@@ -155,6 +176,29 @@ function mergeTabs(book, s) {
   }
   var rsh = book.getSheetByName('분배기준');
   if (rsh) { var rv = rsh.getRange('A1').getValue(); if (rv) s.distributionRules = String(rv); }
+  // 보유 현황 read-back(탭이 권위 → 닉네임으로 멤버 찾아 스킬 재구성)
+  ['주문석', '엘릭서'].forEach(function (cat) {
+    var rows = readSheet(book, cat === '주문석' ? '주문석보유' : '엘릭서보유');
+    if (rows && rows.length) {
+      var mb = memberByName(s);
+      (s.members || []).forEach(function (m) { if (m.skills && m.skills[cat]) m.skills[cat] = {}; });
+      rows.forEach(function (r) {
+        var m = mb[String(r[0]).trim()]; var k = String(r[2]).trim();
+        if (m && k) { m.skills = m.skills || {}; m.skills[cat] = m.skills[cat] || {}; m.skills[cat][k] = true; }
+      });
+    }
+  });
+  (s.statusBoards || []).forEach(function (b) {
+    var rows = readSheet(book, '보드-' + b.name);
+    if (rows && rows.length) {
+      var mb = memberByName(s); var cols = b.columns || []; b.data = {};
+      rows.forEach(function (r) {
+        var m = mb[String(r[0]).trim()]; if (!m) return;
+        var rec = {}; cols.forEach(function (c, ci) { if (String(r[ci + 1] || '').trim()) rec[c] = true; });
+        if (Object.keys(rec).length) b.data[String(m.id)] = rec;
+      });
+    }
+  });
 }
 
 /* ── 소프트 락(편집 중 표시) ─────────────────────────────────────── */
