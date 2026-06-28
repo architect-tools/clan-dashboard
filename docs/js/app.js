@@ -3,6 +3,7 @@ import { CONFIG } from './config.js';
 import { DB } from './db.js';
 import { Auth } from './auth.js';
 import { Roles } from './roles.js';
+import { Locks } from './locks.js';
 import { Router } from './router.js';
 import { el, $, toast, applyUiScale } from './util.js';
 import { renderDashboard } from './views/dashboard.js';
@@ -49,7 +50,9 @@ function buildShell() {
   // undo/redo는 공유 상태를 되돌릴 수 있어 관리자 전용
   undoBtn = el('button.icon-btn.admin-only', { title: '실행 취소 (Ctrl+Z)', onclick: () => DB.undo(), disabled: true }, ['↶']);
   redoBtn = el('button.icon-btn.admin-only', { title: '다시 실행 (Ctrl+Shift+Z)', onclick: () => DB.redo(), disabled: true }, ['↷']);
-  const main = el('main.main', {}, [el('div#app')]);
+  const lockBanner = el('div.lock-banner', { style: { display: 'none' } });
+  Locks.setBanner(lockBanner);
+  const main = el('main.main', {}, [lockBanner, el('div#app')]);
   const topbar = el('header.topbar', {}, [
     el('button.menu-btn', { text: '☰', onclick: () => document.body.classList.toggle('nav-open') }),
     el('span.topbar-title', { text: CONFIG.appName }),
@@ -92,6 +95,11 @@ async function main() {
     .on('dist-params', renderDistParams)
     .start('dashboard');
   updateHistoryButtons();
+
+  // 소프트 락: 현재 편집 페이지를 백엔드에 등록 + 같은 페이지 다른 관리자 표시
+  const route = () => (location.hash.replace(/^#\/?/, '') || 'dashboard').split('/')[0];
+  window.addEventListener('hashchange', () => Locks.enter(route()));
+  Locks.enter(route());
 }
 
 main();
