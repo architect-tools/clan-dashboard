@@ -8933,7 +8933,31 @@
       "rank": 10
     }
   ],
-  "rotationQueues": [],
+  "rotationQueues": [
+    {
+      "items": [
+        {
+          "name": "도베르만"
+        },
+        {
+          "name": "KDA"
+        },
+        {
+          "name": "윤재"
+        },
+        {
+          "name": "해지슬"
+        },
+        {
+          "name": "하도유"
+        },
+        {
+          "name": "Babyee"
+        }
+      ],
+      "name": "상급 무기 설계도"
+    }
+  ],
   "sales": [],
   "schedule": [
     {
