@@ -234,7 +234,7 @@ function bars(name) {
     return _norm(name).length <= 3 ? { show: 0.66, vote: 0.82, auto: 0.90 }
                                    : { show: 0.66, vote: 0.80, auto: 0.86 };
   }
-  return { show: 0.60, vote: 0.68, auto: 0.80 };
+  return { show: 0.56, vote: 0.68, auto: 0.80 };  // show 낮게: 저해상도에서 약하게 읽힌 이름도 '확인필요'로 노출(자동체크는 auto=0.80 유지)
 }
 
 /**

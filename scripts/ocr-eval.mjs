@@ -20,10 +20,12 @@ const roster = seed.members.filter(m => m.active !== false)
 
 const GTA = ['빛싸다','여신민아','리턴','헤라클','배방3','해지슬','승냉','버기','조말순','샬루키','VISVIM','데드','EXE','다무리','딱꽁','카운터펀치','v구름v','s하울s','치느','두비두밥','폭력','헤파이토스','스팔','아싸다','하도유','보스','하나둘셋얍','헤세메','이루릴','붉으래','여름빛','우소츠키','Doberman','돈가츠','냉정','권성준','KDA','oO서영Oo'];
 const GTB = ['하도유','조말순','이루릴','여름빛','카운터펀치','VISVIM','해지슬','승냉','치치','데드','권성준','버기','s하울s','Doberman','헤파이토스','냉정','oO서영Oo','하나둘셋얍','v구름v','윤재','헤세메','아싸다','우소츠키','배방3','빛싸다','두비두밥','KDA','헤라클','잠원동쓰레빠','붉으래','EXE','비타민나라','Babyee','제크로무','샬루키','딱꽁','치느','리턴','여신민아','스팔'];
+const GTC = ['끝판왕랑사부','조말순','치치','oO서영Oo','카운터펀치','EXE','스팔','샬루키','빛싸다','리턴','헤라클','두비두밥','까치','해지슬','헤세메','이루릴','딱꽁','배방3','v구름v','붉으래','s하울s','제크로무','헤파이토스','Doberman','KDA','아싸다','우소츠키','잠원동쓰레빠','하도유','데드','윤재','노획','여신민아','치느','버기','보스','돈가츠','나유','비타민나라'];
 
 const SAMPLES = [
   { file: 'docs/_sampleA.png', label: 'A(38)', gt: GTA, panel: JSON.parse(process.env.CROPA || 'null') || { x: 0.00, y: 0.14, w: 1.00, h: 0.72 } },
   { file: 'docs/_sampleB.png', label: 'B(40)', gt: GTB, panel: JSON.parse(process.env.CROPB || 'null') || { x: 0.12, y: 0.09, w: 0.76, h: 0.80 } },
+  { file: 'docs/_sampleC.png', label: 'C(39)', gt: GTC, panel: JSON.parse(process.env.CROPC || 'null') || { x: 0.00, y: 0.10, w: 1.00, h: 0.86 } },
 ];
 const SCALES = JSON.parse(process.env.SCALES || '[2.8,3.6,4.4]');
 const VARIANTS = JSON.parse(process.env.VARIANTS || '[{},{"binarize":132},{"binarize":110}]');

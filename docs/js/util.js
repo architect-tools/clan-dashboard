@@ -65,6 +65,7 @@ export function toJamo(str) {
 export function normName(s) {
   return String(s || '')
     .replace(/[\s　]/g, '')
+    .replace(/[\\￦]/g, 'v')  // OCR reads a decorative lowercase 'v' (e.g. v구름v) as backslash/₩ → recover it
     .replace(/[^0-9a-z가-힣ㄱ-ㅣ]/gi, '')
     .toLowerCase();
 }
