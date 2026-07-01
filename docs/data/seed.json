@@ -628,6 +628,13 @@
       "active": true
     },
     {
+      "category": "필드 보스",
+      "name": "7그룹",
+      "points": 20,
+      "weekly": 2,
+      "active": true
+    },
+    {
       "category": "월드 보스",
       "name": "아가 +샤흐",
       "points": 3,
