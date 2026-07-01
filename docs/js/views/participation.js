@@ -199,8 +199,10 @@ function checkinPanel(content) {
   async function pick(file) {
     if (!file || !file.type.startsWith('image/')) return;
     try { curImg = await loadImage(file); } catch { return toast('이미지를 열 수 없습니다', 'error'); }
-    // reset any prior recognition (so replacing the screenshot always starts clean)
+    // reset any prior recognition (so replacing the screenshot always starts clean).
+    // selected 도 기존 기록(current) 기준으로 되돌려 이전 인식의 잔여 체크가 누적되지 않게.
     crop = null; picked.clear(); manual.clear(); clear(ocrResult);
+    selected.clear(); current.forEach((id) => selected.add(id)); syncChecks();
     drop.style.display = 'none'; buildPreview();
     // apply the remembered region (resolution-independent fractions) — cheap, no
     // OpenCV. Panel auto-detect is OPT-IN via a button: it loads a ~10MB WASM and
@@ -285,13 +287,23 @@ function checkinPanel(content) {
     if (DB.state.ocrCrop || DB.state.ocrAnchor) controls.appendChild(btn('기억 해제', () => { DB.state.ocrCrop = null; DB.state.ocrAnchor = null; DB.commit(); buildControls(); toast('영역 기억을 해제했습니다'); }, { kind: 'ghost' }));
   }
 
-  const picked = new Map(); // memberId -> {member, score, token, checked}
-  const manual = new Map();
-  // OCR에서 체크된 인원을 '명단에서 직접 선택' 목록에도 반영(체크 동기화)
-  const reflectToManual = (id, on) => {
-    const cb = manualPick.querySelector(`input[data-mid="${id}"]`);
-    if (cb) { cb.checked = on; cb.closest('.pick-item').classList.toggle('on', on); }
-  };
+  // 단일 선택 소스(selected): OCR 결과 목록과 '명단 직접선택' 목록이 "같은" 집합을
+  // 보게 하여, 두 곳의 체크가 서로 다른 사람으로 어긋나던 버그를 없앤다. 이미 기록된
+  // 인원(current)에서 시작. (이전엔 picked.checked ↔ manualPick DOM 이 단방향·재실행
+  // 시 미초기화로 누적돼 어긋났음.)
+  const selected = new Set(current);        // 기록될 최종 memberId 집합 = 단일 진실
+  const picked = new Map();                 // OCR 인식결과 표시용: id -> {member, score, token}
+  const manual = new Map();                 // 미매칭 토큰 드롭다운: token -> memberId
+  const toggle = (id, on) => { if (on) selected.add(id); else selected.delete(id); syncChecks(); };
+  // 두 목록(OCR 결과 · 명단 직접선택)의 모든 체크박스를 selected 기준으로 일치시킴
+  function syncChecks() {
+    ocrResult.querySelectorAll('input[data-mid]').forEach((cb) => {
+      const on = selected.has(+cb.dataset.mid); cb.checked = on; cb.closest('.match-row')?.classList.toggle('on', on);
+    });
+    manualPick.querySelectorAll('input[data-mid]').forEach((cb) => {
+      const on = selected.has(+cb.dataset.mid); cb.checked = on; cb.closest('.pick-item')?.classList.toggle('on', on);
+    });
+  }
   async function runOcr() {
     if (!curImg) return;
     const busy = busyOverlay('참여자 인식 중…', 'OCR 엔진 준비 중');
@@ -303,12 +315,12 @@ function checkinPanel(content) {
       });
       const { matched, maybe } = consensusMatch(out.perScale, roster);
       picked.clear();
-      for (const mm of matched) picked.set(mm.member.id, { ...mm, checked: true });
-      for (const mm of maybe) if (!picked.has(mm.member.id)) picked.set(mm.member.id, { ...mm, checked: false });
-      for (const mm of picked.values()) if (mm.checked) reflectToManual(mm.member.id, true); // 명단 직접선택 목록과 체크 동기화
+      for (const mm of matched) { picked.set(mm.member.id, mm); selected.add(mm.member.id); } // 신뢰 → 자동 선택
+      for (const mm of maybe) if (!picked.has(mm.member.id)) picked.set(mm.member.id, mm);      // 확인필요 → 표시만(선택 X)
       manualPick.open = true; // 동기화된 목록을 바로 펼쳐 보여줌
       progress.textContent = `인식 완료 — 신뢰 ${matched.length}명(자동 체크) · 확인필요 ${maybe.length}명. 못 찾은 인원은 아래 “명단에서 직접 선택”으로 추가하세요.`;
       renderResult([]);
+      syncChecks(); // 두 목록의 체크를 selected 기준으로 일치
     } catch (e) { console.error(e); toast('OCR 실패: ' + e.message, 'error'); progress.textContent = ''; }
     finally { busy.close(); }
   }
@@ -319,7 +331,7 @@ function checkinPanel(content) {
     el('div.pick-grid', {}, Roles.selfFirst(roster).map((m) => {
       const on = current.has(m.id);
       return el('label.pick-item', { class: on ? 'on' : '' }, [
-        el('input', { type: 'checkbox', checked: on, dataset: { mid: m.id }, onchange: (e) => e.target.closest('.pick-item').classList.toggle('on', e.target.checked) }),
+        el('input', { type: 'checkbox', checked: on, dataset: { mid: m.id }, onchange: (e) => toggle(m.id, e.target.checked) }),
         el('span', { text: m.name + (Roles.isMe(m.name) ? ' (나)' : '') }),
       ]);
     })),
@@ -332,14 +344,15 @@ function checkinPanel(content) {
       ocrResult.appendChild(el('div.ocr-head', { text: `인식 ${items.length}명 (체크된 인원만 기록)` }));
       const list = el('div.match-list');
       items.forEach((mm) => {
-        const cb = el('input', { type: 'checkbox', checked: mm.checked, onchange: (e) => { mm.checked = e.target.checked; reflectToManual(mm.member.id, e.target.checked); } });
-        list.appendChild(el('label.match-row', { class: mm.score < 0.72 ? 'low' : '' }, [
+        const on = selected.has(mm.member.id);
+        const cb = el('input', { type: 'checkbox', checked: on, dataset: { mid: mm.member.id }, onchange: (e) => toggle(mm.member.id, e.target.checked) });
+        list.appendChild(el('label.match-row', { class: (mm.score < 0.72 ? 'low' : '') + (on ? ' on' : '') }, [
           cb, el('b', { text: mm.member.name }), el('span.match-token', { text: `“${mm.token}”` }),
           el('span.match-score', { text: Math.round(mm.score * 100) + '%' }),
         ]));
       });
       unmatched.slice(0, 30).forEach((tok) => {
-        const sel = el('select.input', { onchange: (e) => manual.set(tok, e.target.value) }, [
+        const sel = el('select.input', { onchange: (e) => { const prev = manual.get(tok); if (prev) selected.delete(prev); const id = +e.target.value || 0; manual.set(tok, id); if (id) selected.add(id); syncChecks(); } }, [
           el('option', { value: '', text: '— 무시 —' }), ...roster.map((m) => el('option', { value: m.id, text: m.name })),
         ]);
         list.appendChild(el('label.match-row.unmatched', {}, [el('span.match-token', { text: `“${tok}”` }), el('span', { text: '→' }), sel]));
@@ -354,22 +367,11 @@ function checkinPanel(content) {
       ? btn('이 기록 삭제', () => { Mutations.setEventMembers(selDate, content, []); DB.commit(); toast('기록 삭제'); renderParticipation(); }, { kind: 'ghost-danger' })
       : null,
     btn('참여 기록', () => {
-      // members added THIS session (OCR picks + unmatched-dropdown). The manual
-      // roster picker lists EVERY member and starts unchecked for anyone not already
-      // recorded — so without this guard its unchecked boxes would delete the OCR
-      // picks right after we add them (= records silently dropped, no slot).
-      const added = new Set();
-      for (const mm of picked.values()) if (mm.checked) added.add(mm.member.id);
-      for (const [, id] of manual) if (id) added.add(+id);
-      const ids = new Set([...Mutations.getEvent(selDate, content), ...added]); // existing + additions
-      manualPick.querySelectorAll('input[type=checkbox]').forEach((cb) => {
-        const id = +cb.dataset.mid;
-        if (cb.checked) ids.add(id);             // manually picked → include
-        else if (!added.has(id)) ids.delete(id); // unchecked → remove, but never undo this-session additions
-      });
-      Mutations.setEventMembers(selDate, content, [...ids]);
+      // selected 가 단일 진실(기존 기록 + OCR 자동선택 + 수동 체크/해제 반영). 두 목록이
+      // 같은 집합을 보므로 예전의 'added 가드 + DOM 스캔' 병합 로직이 필요 없다.
+      Mutations.setEventMembers(selDate, content, [...selected]);
       DB.commit();
-      toast(`${content}: ${ids.size}명 기록 완료`);
+      toast(`${content}: ${selected.size}명 기록 완료`);
       selContent = null; renderParticipation();
     }, { kind: 'primary' }),
   ]);

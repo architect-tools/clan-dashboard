@@ -81,6 +81,28 @@ try {
   if (DB.state.members.length === before) ok('removeMember'); else bad('removeMember', 'count');
 } catch (e) { bad('mutations', e); }
 
+console.log('\n── 참여 체크인: 단일 선택 소스(두 목록 일치) ──');
+try {
+  localStorage.setItem('clandash.v1.role', 'admin');
+  const renderParticipation = views.participation;
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const roster = DB.state.members.filter((m) => m.active !== false);
+  const [A, B, C] = [roster[0].id, roster[1].id, roster[2].id];
+  const CONTENT = '심연 중앙';
+  Mutations.setEventMembers(todayISO, CONTENT, [A]);            // A 는 이미 기록된 상태
+  app.innerHTML = ''; renderParticipation();
+  const openBtn = [...app.querySelectorAll('.content-btn')].find((b) => b.textContent.includes(CONTENT));
+  openBtn.click();                                             // selContent 설정 → 체크인 패널 렌더
+  const cbOf = (id) => app.querySelector(`.manual-pick input[data-mid="${id}"]`);
+  if (app.querySelector('.checkin') && cbOf(A)?.checked) ok('체크인: 기존 기록(A) 자동 체크'); else bad('checkin open', 'panel/A');
+  const setCb = (id, on) => { const cb = cbOf(id); cb.checked = on; cb.dispatchEvent(new w.Event('change')); };
+  setCb(A, false); setCb(B, true); setCb(C, true);            // A 해제, B·C 추가
+  [...app.querySelectorAll('button')].find((b) => b.textContent.trim() === '참여 기록').click();
+  const rec = new Set(Mutations.getEvent(todayISO, CONTENT));
+  if (rec.size === 2 && !rec.has(A) && rec.has(B) && rec.has(C)) ok('체크인 확정 = selected(단일소스): A제거·B·C추가'); else bad('checkin confirm', `got [${[...rec]}]`);
+  Mutations.setEventMembers(todayISO, CONTENT, []);           // cleanup
+} catch (e) { bad('참여 체크인 단일선택', e); }
+
 console.log('\n── undo / redo ──');
 try {
   const n0 = DB.state.members.length;
