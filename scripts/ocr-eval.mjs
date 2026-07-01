@@ -42,19 +42,26 @@ function dedup(text) {
     }
   return out;
 }
-async function preprocess(file, meta, panel, scale, { binarize = false, invert = false } = {}) {
+// 3×3 ops — identical math to docs/js/ocr.js preprocess (keep in sync).
+function box3(g,w,h){const o=new Float32Array(g.length);for(let y=0;y<h;y++)for(let x=0;x<w;x++){let s=0,c=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=w||yy>=h)continue;s+=g[yy*w+xx];c++;}o[y*w+x]=s/c;}return o;}
+function median3(g,w,h){const o=new Uint8Array(g.length),win=new Array(9);for(let y=0;y<h;y++)for(let x=0;x<w;x++){let k=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=Math.min(w-1,Math.max(0,x+dx)),yy=Math.min(h-1,Math.max(0,y+dy));win[k++]=g[yy*w+xx];}win.sort((a,b)=>a-b);o[y*w+x]=win[4];}return o;}
+function unsharp3(g,w,h,amt){const b=box3(g,w,h),o=new Uint8Array(g.length);for(let i=0;i<g.length;i++){let v=g[i]+amt*(g[i]-b[i]);o[i]=v<0?0:v>255?255:v|0;}return o;}
+async function preprocess(file, meta, panel, scale, { binarize = false, invert = false, ops = [] } = {}) {
   const W = meta.width, H = meta.height;
   const sx = Math.round(panel.x*W), sy = Math.round(panel.y*H), sw = Math.round(panel.w*W), sh = Math.round(panel.h*H);
   const rs = Math.max(1, Math.min(scale, MAX_SIDE / Math.max(sw, sh)));
   const cw = Math.max(1, Math.round(sw*rs)), ch = Math.max(1, Math.round(sh*rs));
   const { data, info } = await sharp(file).extract({ left: sx, top: sy, width: sw, height: sh })
     .resize(cw, ch, { kernel: KERNEL }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-  const n = info.width*info.height, gray = new Uint8Array(n); let min=255,max=0;
+  const w=info.width, h=info.height, n=w*h, gray = new Uint8Array(n); let min=255,max=0;
   for (let i=0,j=0;j<n;i+=info.channels,j++){const g=(data[i]*0.299+data[i+1]*0.587+data[i+2]*0.114)|0;gray[j]=g;if(g<min)min=g;if(g>max)max=g;}
-  const range=Math.max(1,max-min), out=Buffer.allocUnsafe(n);
+  const range=Math.max(1,max-min); let ng=new Uint8Array(n);
+  for(let j=0;j<n;j++)ng[j]=((gray[j]-min)*255/range)|0;
+  for(const op of ops){if(op==='median')ng=median3(ng,w,h);else if(op==='unsharp')ng=unsharp3(ng,w,h,1.0);}
+  const out=Buffer.allocUnsafe(n);
   const binT = binarize===true?132:(typeof binarize==='number'?binarize:null);
-  for(let j=0;j<n;j++){let v=((gray[j]-min)*255/range)|0; if(binT!=null)v=v>binT?0:255; else if(invert)v=255-v; out[j]=v;}
-  return sharp(out,{raw:{width:info.width,height:info.height,channels:1}}).png().toBuffer();
+  for(let j=0;j<n;j++){let v=ng[j]; if(binT!=null)v=v>binT?0:255; else if(invert)v=255-v; out[j]=v;}
+  return sharp(out,{raw:{width:w,height:h,channels:1}}).png().toBuffer();
 }
 
 const TJS = './node_modules';
@@ -68,9 +75,12 @@ const save = () => fs.writeFileSync(CACHE, JSON.stringify(cache));
 for (const smp of SAMPLES) {
   const meta = await sharp(smp.file).metadata();
   const cropKey = `${smp.panel.x},${smp.panel.y},${smp.panel.w},${smp.panel.h}`;
+  // mirror ocr.js extractLines: add denoise+sharpen pass for low-res regions
+  const regionW = smp.panel.w * meta.width;
+  const variants = (process.env.VARIANTS ? VARIANTS : [{}, { binarize: 132 }, { binarize: 110 }, ...(regionW < 1150 ? [{ ops: ['median','unsharp'], binarize: 132 }] : [])]);
   const perScale = [];
-  for (const s of SCALES) for (const v of VARIANTS) {
-    const key = `${KERNEL}|ms${MAX_SIDE}|${smp.file}|${cropKey}|${s}|${v.binarize?'b'+v.binarize:'n'}`;
+  for (const s of SCALES) for (const v of variants) {
+    const key = `${KERNEL}|ms${MAX_SIDE}|${smp.file}|${cropKey}|${s}|${v.binarize?'b'+v.binarize:'n'}|${(v.ops||[]).join('+')}`;
     if (!cache[key]) { const buf = await preprocess(smp.file, meta, smp.panel, s, v); const { data } = await worker.recognize(buf); cache[key]=dedup(data.text||''); save(); process.stderr.write('.'); }
     perScale.push(cache[key]);
   }

@@ -100,13 +100,47 @@ export async function detectByAnchor(img, anchor, onProgress = () => {}) {
   };
 }
 
+// 3×3 filters on a single-channel (Uint8) buffer. Kept as plain raw-pixel math so
+// they are IDENTICAL in the offline harness (scripts/ocr-eval.mjs) — measured gains
+// therefore hold in the real browser pipeline.
+function box3(g, w, h) {
+  const o = new Float32Array(g.length);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let s = 0, c = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue; s += g[yy * w + xx]; c++;
+    }
+    o[y * w + x] = s / c;
+  }
+  return o;
+}
+function median3(g, w, h) {
+  const o = new Uint8Array(g.length), win = new Array(9);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let k = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const xx = Math.min(w - 1, Math.max(0, x + dx)), yy = Math.min(h - 1, Math.max(0, y + dy)); win[k++] = g[yy * w + xx];
+    }
+    win.sort((a, b) => a - b); o[y * w + x] = win[4];
+  }
+  return o;
+}
+function unsharp3(g, w, h, amt) {
+  const b = box3(g, w, h), o = new Uint8Array(g.length);
+  for (let i = 0; i < g.length; i++) { let v = g[i] + amt * (g[i] - b[i]); o[i] = v < 0 ? 0 : v > 255 ? 255 : v | 0; }
+  return o;
+}
+
 /**
- * Preprocess for OCR: optional crop → grayscale → min/max contrast normalize → upscale.
+ * Preprocess for OCR: optional crop → grayscale → min/max contrast normalize →
+ * upscale → [denoise/sharpen ops] → [binarize].
  * @param {HTMLImageElement} img
  * @param {{x,y,w,h}|null} crop in source-image pixels
+ * @param {{invert?:boolean, binarize?:boolean|number, ops?:string[]}} opts
+ *   ops: e.g. ['median','unsharp'] — denoise + edge-sharpen for compressed/low-res shots.
  * @returns {{dataUrl:string, canvas:HTMLCanvasElement}}
  */
-export function preprocess(img, crop = null, scaleHint = SCALE, { invert = false, binarize = false } = {}) {
+export function preprocess(img, crop = null, scaleHint = SCALE, { invert = false, binarize = false, ops = [] } = {}) {
   const sx = crop ? Math.max(0, crop.x) : 0;
   const sy = crop ? Math.max(0, crop.y) : 0;
   const sw = crop ? Math.min(crop.w, img.width - sx) : img.width;
@@ -122,17 +156,21 @@ export function preprocess(img, crop = null, scaleHint = SCALE, { invert = false
   // grayscale + contrast stretch (min/max normalize on luminance)
   const im = ctx.getImageData(0, 0, cv.width, cv.height);
   const p = im.data;
+  const W = cv.width, H = cv.height, N = W * H;
   let min = 255, max = 0;
-  const gray = new Uint8Array(p.length / 4);
+  const gray = new Uint8Array(N);
   for (let i = 0, j = 0; i < p.length; i += 4, j++) {
     const g = (p[i] * 0.299 + p[i + 1] * 0.587 + p[i + 2] * 0.114) | 0;
     gray[j] = g; if (g < min) min = g; if (g > max) max = g;
   }
   const range = Math.max(1, max - min);
+  let ng = new Uint8Array(N);
+  for (let j = 0; j < N; j++) ng[j] = ((gray[j] - min) * 255 / range) | 0;   // normalized
+  for (const op of ops) { if (op === 'median') ng = median3(ng, W, H); else if (op === 'unsharp') ng = unsharp3(ng, W, H, 1.0); }
   // binarize: true → 132 (back-compat); a number → that threshold; else off
   const binT = binarize === true ? 132 : (typeof binarize === 'number' ? binarize : null);
-  for (let i = 0, j = 0; i < p.length; i += 4, j++) {
-    let v = ((gray[j] - min) * 255 / range) | 0;
+  for (let i = 0, j = 0; j < N; i += 4, j++) {
+    let v = ng[j];
     if (binT != null) v = v > binT ? 0 : 255;   // bright text → black on white (Tesseract-friendly)
     else if (invert) v = 255 - v;               // light-on-dark → dark-on-light
     p[i] = p[i + 1] = p[i + 2] = v;
@@ -195,7 +233,17 @@ async function getScheduler(onProgress, lang = 'kor+eng', psm = '11') {
  * another. Running a few scales and unioning all recognized text catches names
  * no single pass gets. Combined with confusable-char matching downstream.
  */
-export async function extractLines(img, crop, onProgress = () => {}, { psm = '11', scales = [2.8, 3.6, 4.4], lang = 'kor+eng', variants = [{}, { binarize: 132 }, { binarize: 110 }] } = {}) {
+export async function extractLines(img, crop, onProgress = () => {}, { psm = '11', scales = [2.8, 3.6, 4.4], lang = 'kor+eng', variants } = {}) {
+  if (!variants) {
+    variants = [{}, { binarize: 132 }, { binarize: 110 }];
+    // Low-res / compressed captures (e.g. KakaoTalk-shared shots): names are only a
+    // few px tall and JPEG/WebP blocking garbles them. Add a denoise+sharpen pass
+    // (unioned with the above) to recover hard glyphs — ONLY when the region is
+    // small, so normal/high-res shots aren't slowed. Validated in scripts/ocr-eval.mjs
+    // (sample C 샬루키 58%→65%: hidden→shown; A/B unchanged; 0 false matches).
+    const regionW = crop ? crop.w : img.naturalWidth;
+    if (regionW < 1150) variants.push({ ops: ['median', 'unsharp'], binarize: 132 });
+  }
   const scheduler = await getScheduler(onProgress, lang, psm);
   const passes = [];
   for (const s of scales) for (const v of variants) passes.push({ s, v });
