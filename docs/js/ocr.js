@@ -212,60 +212,29 @@ export async function extractLines(img, crop, onProgress = () => {}, { psm = '11
   return { lines: dedup(perScale.flat().join('\n')), perScale, engine: `tesseract(${lang},${passes.length}pass×${poolSize()}w)` };
 }
 
-// Per-name confidence bars, aware of length + script:
-//   show — surface for a one-click review (shown but UNCHECKED). Below it → drop.
-//   vote — counts as one consensus vote / consensus auto-check bar.
-//   auto — a single strong scale auto-checks (matched) on its own.
-// On these CLOSED-roster game screenshots a strong single-scale read is almost
-// always the right member, so we auto-check it instead of demanding 2 votes
-// (that rule used to leave 80–90% reads unchecked). A merely-decent read always
-// SHOWS for review instead of being silently dropped (the "70%+ but not listed"
-// bug). Latin-heavy short names (KDA/EXE/xooos) attract OCR garbage → stricter
-// bars; Korean names match reliably via jamo distance → lower bars.
-const _norm = (n) => normName(n);
-const _latinFrac = (n) => { const x = _norm(n); const l = (x.match(/[a-z]/g) || []).length; return x.length ? l / x.length : 0; };
-function bars(name) {
-  // User spec (korean/mixed): AUTO-check at ≥0.80, SHOW anything ≥0.60 for review.
-  // Latin-heavy names (KDA/EXE/xooos/Babyee/VISVIM/Doberman…) need higher bars:
-  // they read near-perfect WHEN truly present, but their substrings get stolen by
-  // decorated names (e.g. "oO"/"Oo" from oO서영Oo ⊂ "xooos" ≈ 0.71). A high `vote`
-  // bar stops two such fragments from forming a false 2-vote auto-check.
-  if (_latinFrac(name) >= 0.6) {
-    return _norm(name).length <= 3 ? { show: 0.66, vote: 0.82, auto: 0.90 }
-                                   : { show: 0.66, vote: 0.80, auto: 0.86 };
-  }
-  return { show: 0.56, vote: 0.68, auto: 0.80 };  // show 낮게: 저해상도에서 약하게 읽힌 이름도 '확인필요'로 노출(자동체크는 auto=0.80 유지)
-}
+// Match rule (per user spec) — the score you SEE is the whole decision, no hidden
+// heuristics:
+//   • score ≥ CHECK_AT (80%) → matched → checkbox auto-checked
+//   • SHOW_AT (60%) ≤ score < CHECK_AT → maybe → shown in the list but UNCHECKED
+//   • score < SHOW_AT → dropped (not shown)
+// `score` is each member's BEST similarity across all passes (multi-scale union).
+// No vote-counting or length/script bars, so a shown 72% is never auto-checked and
+// the colour boundary can line up exactly with the 80% check line.
+export const CHECK_AT = 0.80, SHOW_AT = 0.60;
 
-/**
- * Consensus match across per-scale OCR passes with length/script-aware bars.
- * matched (auto-check): read above `auto` in any single scale, OR above `vote`
- * in ≥minVotes scales. maybe (shown, unchecked): merely clears `show`. Below
- * `show`: discarded. Kills scale-specific / short-name garbage while surfacing
- * every plausible read so nothing is silently dropped.
- */
-export function consensusMatch(perScale, roster, { minVotes = 2 } = {}) {
-  const tally = new Map();
+export function consensusMatch(perScale, roster, { checkAt = CHECK_AT, showAt = SHOW_AT } = {}) {
+  const best = new Map(); // memberId -> {member, score, token} — best read across ALL passes
   for (const lines of perScale) {
-    const perMember = new Map(); // best score for each member within THIS scale
     for (const line of lines) {
-      let best = null, bs = 0;
-      for (const m of roster) { const s = similarity(line, m.name); if (s > bs) { bs = s; best = m; } }
-      if (best) { const cur = perMember.get(best.id); if (!cur || bs > cur.score) perMember.set(best.id, { member: best, score: bs, token: line }); }
-    }
-    for (const v of perMember.values()) {
-      const t = tally.get(v.member.id) || { member: v.member, best: 0, votes: 0, token: v.token };
-      if (v.score >= bars(v.member.name).vote) t.votes++;
-      if (v.score > t.best) { t.best = v.score; t.token = v.token; }
-      tally.set(v.member.id, t);
+      let bm = null, bs = 0;
+      for (const m of roster) { const s = similarity(line, m.name); if (s > bs) { bs = s; bm = m; } }
+      if (bm) { const cur = best.get(bm.id); if (!cur || bs > cur.score) best.set(bm.id, { member: bm, score: bs, token: line }); }
     }
   }
   const matched = [], maybe = [];
-  for (const t of tally.values()) {
-    const b = bars(t.member.name);
-    const e = { member: t.member, score: t.best, token: t.token, votes: t.votes };
-    if (t.best >= b.auto || (t.votes >= minVotes && t.best >= b.vote)) matched.push(e);
-    else if (t.best >= b.show) maybe.push(e);
+  for (const e of best.values()) {
+    if (e.score >= checkAt) matched.push(e);
+    else if (e.score >= showAt) maybe.push(e);
   }
   matched.sort((a, b) => b.score - a.score); maybe.sort((a, b) => b.score - a.score);
   return { matched, maybe };

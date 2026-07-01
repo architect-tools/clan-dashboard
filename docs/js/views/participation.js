@@ -7,7 +7,7 @@ import { Roles } from '../roles.js';
 import { computeScores, tierForScore } from '../calc.js';
 import { el, fmt, toast, clear } from '../util.js';
 import { CATEGORY_ORDER } from '../config.js';
-import { loadImage, extractLines, consensusMatch } from '../ocr.js';
+import { loadImage, extractLines, consensusMatch, CHECK_AT } from '../ocr.js';
 import { page, card, btn, modal, busyOverlay, tierBadge, classBadge } from './ui.js';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -346,7 +346,7 @@ function checkinPanel(content) {
       items.forEach((mm) => {
         const on = selected.has(mm.member.id);
         const cb = el('input', { type: 'checkbox', checked: on, dataset: { mid: mm.member.id }, onchange: (e) => toggle(mm.member.id, e.target.checked) });
-        list.appendChild(el('label.match-row', { class: (mm.score < 0.72 ? 'low' : '') + (on ? ' on' : '') }, [
+        list.appendChild(el('label.match-row', { class: (mm.score < CHECK_AT ? 'low' : '') + (on ? ' on' : '') }, [
           cb, el('b', { text: mm.member.name }), el('span.match-token', { text: `“${mm.token}”` }),
           el('span.match-score', { text: Math.round(mm.score * 100) + '%' }),
         ]));

@@ -121,11 +121,13 @@ function simCore(na, nb) {
   const jam = Math.max(jamFull, jamCJ * 0.99);          // jongsung-insensitive (OCR drops 받침)
   let sim = raw * 0.35 + jam * 0.65;
   // Substring bonus, scaled by coverage. Require the contained string to be ≥2
-  // chars so 1-char fragments (group-number "3", stray "로") can't substring-match
-  // a full name like 배방3 / 제크로무.
+  // chars so short fragments can't fake a high score by mere containment: a 2-char
+  // fragment (e.g. "Kd"⊂"KDA", "da"⊂"KDA") used to hit 0.55+0.4·(2/3)=0.82 and
+  // auto-check the wrong short name. Require ≥3 shared chars for the containment
+  // boost; shorter overlaps fall back to raw/jamo distance (→ shown, not checked).
   if (na.includes(nb) || nb.includes(na)) {
     const minL = Math.min(na.length, nb.length), maxL = Math.max(na.length, nb.length);
-    if (minL >= 2) sim = Math.max(sim, 0.55 + 0.4 * (minL / maxL));
+    if (minL >= 3) sim = Math.max(sim, 0.55 + 0.4 * (minL / maxL));
   }
   return Math.max(0, Math.min(1, sim));
 }
