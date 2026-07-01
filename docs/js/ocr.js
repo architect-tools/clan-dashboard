@@ -5,7 +5,11 @@
 import { matchName, normName, similarity } from './util.js';
 
 const TESSERACT_CDN = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
-const MAX_SIDE = 5200;     // cap upscaled canvas to keep memory sane
+const MAX_SIDE = 6000;     // cap upscaled canvas to keep memory sane. NOTE: too low
+                           // makes a WIDE panel crop clamp every scale to the same
+                           // effective size (redundant passes) so small/hard glyphs
+                           // like 딱꽁 never resolve — 6000 lets the scale ladder
+                           // actually differentiate on full-width clan-부대 shots.
 const SCALE = 3.5;         // default upscale factor (small game-UI text needs enlarging)
 const TARGET_CELL_H = 96;  // slot mode: normalize each cell to ~this text height
                            // (resolution-independent — no fixed-pixel assumptions)
@@ -208,27 +212,37 @@ export async function extractLines(img, crop, onProgress = () => {}, { psm = '11
   return { lines: dedup(perScale.flat().join('\n')), perScale, engine: `tesseract(${lang},${passes.length}pass×${poolSize()}w)` };
 }
 
-// Latin-heavy short roster names (KDA, EXE, xooos, Babyee…) attract OCR garbage,
-// so they must be read near-exactly. Korean names match reliably via jamo
-// distance, so they keep a normal (lower) bar.
+// Per-name confidence bars, aware of length + script:
+//   show — surface for a one-click review (shown but UNCHECKED). Below it → drop.
+//   vote — counts as one consensus vote / consensus auto-check bar.
+//   auto — a single strong scale auto-checks (matched) on its own.
+// On these CLOSED-roster game screenshots a strong single-scale read is almost
+// always the right member, so we auto-check it instead of demanding 2 votes
+// (that rule used to leave 80–90% reads unchecked). A merely-decent read always
+// SHOWS for review instead of being silently dropped (the "70%+ but not listed"
+// bug). Latin-heavy short names (KDA/EXE/xooos) attract OCR garbage → stricter
+// bars; Korean names match reliably via jamo distance → lower bars.
 const _norm = (n) => normName(n);
 const _latinFrac = (n) => { const x = _norm(n); const l = (x.match(/[a-z]/g) || []).length; return x.length ? l / x.length : 0; };
-const loThresh = (n) => {
-  const L = _norm(n).length;
-  if (_latinFrac(n) >= 0.6) return L <= 3 ? 0.88 : L <= 5 ? 0.80 : 0.72; // latin-heavy: strict
-  return L <= 2 ? 0.60 : 0.56;                                          // korean/mixed: normal
-};
-const hiThresh = (n) => {                      // single-scale auto-confirm bar (no consensus)
-  const L = _norm(n).length;
-  if (_latinFrac(n) >= 0.6) return L <= 3 ? 0.97 : 0.92;
-  return 0.92;                                 // korean single-scale must be near-exact too
-};
+function bars(name) {
+  // User spec (korean/mixed): AUTO-check at ≥0.80, SHOW anything ≥0.60 for review.
+  // Latin-heavy names (KDA/EXE/xooos/Babyee/VISVIM/Doberman…) need higher bars:
+  // they read near-perfect WHEN truly present, but their substrings get stolen by
+  // decorated names (e.g. "oO"/"Oo" from oO서영Oo ⊂ "xooos" ≈ 0.71). A high `vote`
+  // bar stops two such fragments from forming a false 2-vote auto-check.
+  if (_latinFrac(name) >= 0.6) {
+    return _norm(name).length <= 3 ? { show: 0.66, vote: 0.82, auto: 0.90 }
+                                   : { show: 0.66, vote: 0.80, auto: 0.86 };
+  }
+  return { show: 0.60, vote: 0.68, auto: 0.80 };
+}
 
 /**
- * Consensus match across per-scale OCR passes + length-aware thresholds.
- * A member is confirmed if read above its low bar in ≥2 scales (consensus) or
- * above its high bar in any single scale. Kills scale-specific & short-name
- * garbage while keeping recall high.
+ * Consensus match across per-scale OCR passes with length/script-aware bars.
+ * matched (auto-check): read above `auto` in any single scale, OR above `vote`
+ * in ≥minVotes scales. maybe (shown, unchecked): merely clears `show`. Below
+ * `show`: discarded. Kills scale-specific / short-name garbage while surfacing
+ * every plausible read so nothing is silently dropped.
  */
 export function consensusMatch(perScale, roster, { minVotes = 2 } = {}) {
   const tally = new Map();
@@ -241,16 +255,17 @@ export function consensusMatch(perScale, roster, { minVotes = 2 } = {}) {
     }
     for (const v of perMember.values()) {
       const t = tally.get(v.member.id) || { member: v.member, best: 0, votes: 0, token: v.token };
-      if (v.score >= loThresh(v.member.name)) t.votes++;
+      if (v.score >= bars(v.member.name).vote) t.votes++;
       if (v.score > t.best) { t.best = v.score; t.token = v.token; }
       tally.set(v.member.id, t);
     }
   }
   const matched = [], maybe = [];
   for (const t of tally.values()) {
+    const b = bars(t.member.name);
     const e = { member: t.member, score: t.best, token: t.token, votes: t.votes };
-    if ((t.votes >= minVotes && t.best >= loThresh(t.member.name)) || t.best >= hiThresh(t.member.name)) matched.push(e);
-    else if (t.best >= loThresh(t.member.name)) maybe.push(e);
+    if (t.best >= b.auto || (t.votes >= minVotes && t.best >= b.vote)) matched.push(e);
+    else if (t.best >= b.show) maybe.push(e);
   }
   matched.sort((a, b) => b.score - a.score); maybe.sort((a, b) => b.score - a.score);
   return { matched, maybe };

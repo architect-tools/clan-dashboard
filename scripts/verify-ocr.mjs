@@ -20,7 +20,7 @@ const SAMPLES = [
 ];
 const SCALES = [2.8, 3.6, 4.4]; // matches ocr.js extractLines default (5.2 dropped for speed)
 const VARIANTS = [{}, { binarize: 132 }, { binarize: 110 }]; // faithful to ocr.js extractLines default
-const MAX_SIDE = 5200;
+const MAX_SIDE = +(process.env.MAXSIDE || 6000); // 6000 = ocr.js default
 const KERNEL = process.env.KERNEL || 'cubic';
 const norm = (s) => normName(s);
 const eq = (a, b) => { const x = norm(a), y = norm(b); return x && (x === y || x.includes(y) || y.includes(x)); };
