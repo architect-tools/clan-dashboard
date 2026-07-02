@@ -71,12 +71,12 @@ try {
   Mutations.upsertMember({ id: m.id, score: 175 });
   if (DB.state.members.find((x) => x.id === m.id).score === 175) ok('upsertMember edits'); else bad('upsertMember edit', 'score');
   const D = '2026-06-24';
-  Mutations.addEventMembers(D, '6그룹', [m.id]);
+  Mutations.addEventMembers(D, '5그룹', [m.id]);
   Mutations.addEventMembers(D, '심연 중앙', [m.id]);
   const scMap = computeScores(DB.state.participation.byDate, DB.state.contentCatalog, [m], {});
-  if (scMap[m.id] === 65) ok(`date events→score 6그룹(15)+심연중앙(50)=${scMap[m.id]}`); else bad('event score', `got ${scMap[m.id]}, want 65`);
-  Mutations.toggleEventMember(D, '6그룹', m.id); // remove
-  if (!Mutations.getEvent(D, '6그룹').includes(m.id)) ok('toggleEventMember removes'); else bad('toggle', 'still present');
+  if (scMap[m.id] === 65) ok(`date events→score 5그룹(15)+심연중앙(50)=${scMap[m.id]}`); else bad('event score', `got ${scMap[m.id]}, want 65`);
+  Mutations.toggleEventMember(D, '5그룹', m.id); // remove
+  if (!Mutations.getEvent(D, '5그룹').includes(m.id)) ok('toggleEventMember removes'); else bad('toggle', 'still present');
   Mutations.removeMember(m.id);
   if (DB.state.members.length === before) ok('removeMember'); else bad('removeMember', 'count');
 } catch (e) { bad('mutations', e); }
