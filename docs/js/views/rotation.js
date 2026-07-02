@@ -2,7 +2,7 @@
 import { DB, Mutations } from '../db.js';
 import { Roles } from '../roles.js';
 import { el, fmt, toast, uid, clear } from '../util.js';
-import { page, card, table, btn, modal, select, input, field, classBadge, confirmDialog } from './ui.js';
+import { page, card, table, btn, modal, select, comboSelect, comboInput, input, field, classBadge, confirmDialog } from './ui.js';
 
 const DIST_TYPES = ['순번제', '투력', '내판', '참여도', '고정', '기타'];
 const BID_TYPES = ['투력순', '참여도순', '경매', '선착순'];
@@ -20,6 +20,14 @@ const remainClass = (ms) => ms <= 0 ? 'cd-over' : ms < 600000 ? 'cd-soon' : ms <
 export function renderRotation() {
   const s = DB.state;
   const adm = Roles.isAdmin();
+  const memberNames = () => Roles.selfFirst(s.members.map((m) => m.name).filter(Boolean));
+  const activeMemberNames = () => Roles.selfFirst(s.members.filter((m) => m.active !== false).map((m) => m.name).filter(Boolean));
+  const itemNames = () => [...new Set([
+    ...(s.dropLog || []).map((d) => d.item),
+    ...(s.distributionLog || []).map((d) => d.item),
+    ...(s.rotationQueues || []).map((q) => q.name),
+    ...(s.sales || []).map((sale) => sale.item),
+  ].map((x) => String(x || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
   const body = page('전리품', {
     subtitle: '드랍 · 내판 · 순번제 · 분배 기록',
     actions: [btn('내판 도우미', () => saleHelper(), { admin: true }), btn('+ 분배 기록', () => logDist(), { kind: 'primary', admin: true })],
@@ -127,8 +135,9 @@ export function renderRotation() {
     const itemView = el('input.input', { value: qу.name, readonly: 'readonly', style: { opacity: '.6' } });
     const date = input({ type: 'date', value: new Date().toISOString().slice(0, 10) });
     const type = select(DIST_TYPES, '순번제');
-    const member = select(Roles.selfFirst(s.members.map((m) => m.name)), person.name);
-    const from = select(['없음', ...Roles.selfFirst(s.members.map((m) => m.name))], '없음');
+    const names = memberNames();
+    const member = comboSelect(names, person.name, { placeholder: '클랜원 검색' });
+    const from = comboSelect(['없음', ...names], '없음', { placeholder: '인계자 검색' });
     const price = input({ type: 'number', value: '10' });
     const note = input({ placeholder: '메모(선택)' });
     modal('순번 분배 기록', (close) => el('div.form', {}, [
@@ -147,12 +156,13 @@ export function renderRotation() {
     [qу.items[i], qу.items[j]] = [qу.items[j], qу.items[i]]; DB.commit(); renderRotation();
   }
   function addToQueue(qу) {
-    const nm = select(Roles.selfFirst(s.members.map((m) => m.name)), Roles.me() || s.members[0]?.name);
+    const names = memberNames();
+    const nm = comboSelect(names, Roles.me() || names[0], { placeholder: '클랜원 검색' });
     modal('큐에 인원 추가', (close) => el('div.form', {}, [field('닉네임', nm),
       el('div.modal-actions', {}, [btn('취소', close), btn('추가', () => { qу.items.push({ name: nm.value }); DB.commit(); close(); renderRotation(); }, { kind: 'primary' })])]));
   }
   function addQueue() {
-    const nm = input({ placeholder: '예: 상급 무기 설계도' });
+    const nm = comboInput(itemNames(), '', { placeholder: '예: 상급 무기 설계도' });
     modal('순번 큐 추가', (close) => el('div.form', {}, [field('큐 이름', nm),
       el('div.modal-actions', {}, [btn('취소', close), btn('추가', () => { if (!nm.value.trim()) return toast('이름 입력', 'error'); s.rotationQueues.push({ name: nm.value.trim(), items: [] }); openQueues.add(nm.value.trim()); DB.commit(); close(); renderRotation(); }, { kind: 'primary' })])]));
   }
@@ -160,7 +170,7 @@ export function renderRotation() {
     const date = input({ type: 'date', value: new Date().toISOString().slice(0, 10) });
     const cats = s.contentCatalog.map((c) => c.name);
     const content = cats.length ? select(cats, cats[0]) : input({ placeholder: '콘텐츠명' });
-    const item = input({ placeholder: '아이템명' });
+    const item = comboInput(itemNames(), '', { placeholder: '아이템명 검색 또는 입력' });
     const note = input({ placeholder: '메모(선택)' });
     modal('드랍 기록', (close) => el('div.form', {}, [
       field('날짜', date), field('콘텐츠', content), field('아이템', item), field('메모', note),
@@ -173,10 +183,11 @@ export function renderRotation() {
   }
   function logDist() {
     const date = input({ type: 'date', value: new Date().toISOString().slice(0, 10) });
-    const item = input({ placeholder: '아이템명' });
+    const item = comboInput(itemNames(), '', { placeholder: '아이템명 검색 또는 입력' });
     const type = select(DIST_TYPES, '순번제');
-    const member = select(Roles.selfFirst(s.members.map((m) => m.name)), Roles.me() || s.members[0]?.name);
-    const from = select(['없음', ...Roles.selfFirst(s.members.map((m) => m.name))], '없음');
+    const names = memberNames();
+    const member = comboSelect(names, Roles.me() || names[0], { placeholder: '클랜원 검색' });
+    const from = comboSelect(['없음', ...names], '없음', { placeholder: '인계자 검색' });
     const price = input({ type: 'number', placeholder: '내판가(다이아, 선택)' });
     const note = input({ placeholder: '메모(선택)' });
     modal('분배 기록', (close) => el('div.form', {}, [
@@ -194,7 +205,7 @@ export function renderRotation() {
   // 내판/분배 도우미: 희망자(또는 전체)를 투력/참여도 순으로 자동 순위 → 1순위에게 분배 기록.
   function saleHelper() {
     modal('내판 / 분배 도우미', (close) => {
-      const item = input({ placeholder: '아이템명' });
+      const item = comboInput(itemNames(), '', { placeholder: '아이템명 검색 또는 입력' });
       const sortBy = select([{ value: 'power', label: '투력 순' }, { value: 'score', label: '참여도 순' }], 'power');
       const threshold = input({ type: 'number', placeholder: '예: 90 (이상=10다이아)' });
       const salePrice = input({ type: 'number', value: '10' });
@@ -263,7 +274,7 @@ export function renderRotation() {
     ])]);
   }
   function postSale() {
-    const item = input({ placeholder: '아이템명' });
+    const item = comboInput(itemNames(), '', { placeholder: '아이템명 검색 또는 입력' });
     const bidType = select(BID_TYPES, '투력순');
     const basePrice = input({ type: 'number', value: '10' });
     const n = new Date(Date.now() + 3600000);
@@ -286,7 +297,7 @@ export function renderRotation() {
     const isAdm = Roles.isAdmin();
     // 관리자는 누구 이름으로든 대리 입찰 가능, 멤버는 본인(닉네임)으로 고정
     const member = isAdm
-      ? select(Roles.selfFirst(active.map((m) => m.name)), Roles.me() || active[0]?.name)
+      ? comboSelect(activeMemberNames(), Roles.me() || active[0]?.name, { placeholder: '클랜원 검색' })
       : input({ value: Roles.me(), readonly: 'readonly', style: { opacity: '.7' } });
     const amount = input({ type: 'number', placeholder: '입찰가' });
     const bidderName = () => (isAdm ? member.value : Roles.me()).trim();

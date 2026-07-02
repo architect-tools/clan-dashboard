@@ -1,5 +1,5 @@
 // ui.js — shared view components.
-import { el, clear, $ } from '../util.js';
+import { el, clear, $, normName } from '../util.js';
 import { classColor, TIER_COLORS } from '../config.js';
 
 export const app = () => document.getElementById('app');
@@ -89,7 +89,7 @@ export function modal(title, content, { onClose, wide, headerActions } = {}) {
   // header actions render in the sticky header, left of the ✕ (always reachable)
   const acts = headerActions ? [].concat(typeof headerActions === 'function' ? headerActions(close) : headerActions).filter(Boolean) : [];
   const widthCls = wide === 'x' ? '.modal-xwide' : wide ? '.modal-wide' : '';
-  const overlay = el('div.modal-overlay', { onclick: (e) => { if (e.target === overlay) close(); } }, [
+  const overlay = el('div.modal-overlay', { onclick: (e) => { if (e.target === overlay && !document.querySelector('.combo.open')) close(); } }, [
     el('div.modal' + widthCls, {}, [
       el('div.modal-head', {}, [
         el('h3', { text: title }),
@@ -142,4 +142,154 @@ export function select(options, value, attrs = {}) {
     s.appendChild(el('option', { value: opt.value, text: opt.label, selected: String(opt.value) === String(value) }));
   }
   return s;
+}
+
+function comboOptions(options) {
+  return (options || []).map((o) => (typeof o === 'string' ? { value: o, label: o } : o))
+    .filter((o) => o && o.value != null)
+    .map((o) => ({ value: String(o.value), label: String(o.label ?? o.value) }));
+}
+function comboMatchText(s) {
+  return (normName(s) || String(s || '').toLowerCase());
+}
+
+function comboBase(options, value, attrs = {}, { allowCustom = false } = {}) {
+  const opts = comboOptions(options);
+  const {
+    placeholder = allowCustom ? '검색 또는 입력' : '검색',
+    max = 8,
+    class: cls = '',
+    style,
+    onchange,
+    oninput,
+    ...rest
+  } = attrs;
+  let selected = opts.find((o) => String(o.value) === String(value));
+  let open = false;
+  let hi = -1;
+  let filtered = [];
+  let menuObserver = null;
+
+  const root = el('div.combo.input', { ...rest, class: cls, style });
+  const search = el('input.combo-search', {
+    value: selected ? selected.label : String(value ?? ''),
+    placeholder,
+    autocomplete: 'off',
+    spellcheck: 'false',
+  });
+  const toggle = el('button.combo-toggle', { type: 'button', text: '▾', title: '열기/닫기' });
+  const menu = el('div.combo-menu');
+  root.append(search, toggle);
+
+  const valueOfText = () => {
+    const exact = opts.find((o) => o.label === search.value || o.value === search.value);
+    if (exact) return exact.value;
+    if (allowCustom) return search.value;
+    return filtered[0]?.value ?? search.value;
+  };
+  Object.defineProperty(root, 'value', {
+    get: valueOfText,
+    set(v) { setValue(v, false); },
+  });
+  root.focus = () => search.focus();
+
+  function dispatch(type) {
+    const Evt = (typeof window !== 'undefined' && window.Event) || Event;
+    root.dispatchEvent(new Evt(type, { bubbles: true }));
+    if (type === 'input' && typeof oninput === 'function') oninput({ target: root, currentTarget: root });
+    if (type === 'change' && typeof onchange === 'function') onchange({ target: root, currentTarget: root });
+  }
+  function setValue(v, notify = true) {
+    selected = opts.find((o) => String(o.value) === String(v) || o.label === String(v));
+    search.value = selected ? selected.label : String(v ?? '');
+    if (notify) dispatch('change');
+  }
+  function score(o, q, raw) {
+    const label = comboMatchText(o.label);
+    const val = comboMatchText(o.value);
+    const hay = `${label} ${val}`;
+    if (!q) return 1;
+    if (label === q || val === q) return 100;
+    if (label.startsWith(q) || val.startsWith(q)) return 80;
+    if (hay.includes(q)) return 60;
+    return o.label.toLowerCase().includes(raw) ? 40 : 0;
+  }
+  function updateFiltered() {
+    const raw = search.value.trim().toLowerCase();
+    const q = comboMatchText(search.value);
+    filtered = opts
+      .map((o) => ({ ...o, _score: score(o, q, raw) }))
+      .filter((o) => !q || o._score > 0)
+      .sort((a, b) => (b._score - a._score) || a.label.localeCompare(b.label, 'ko'))
+      .slice(0, max);
+    hi = filtered.length ? Math.max(0, Math.min(hi, filtered.length - 1)) : -1;
+  }
+  function positionMenu() {
+    if (!open || !menu.isConnected) return;
+    const r = root.getBoundingClientRect();
+    menu.style.left = `${r.left}px`;
+    menu.style.top = `${r.bottom + 4}px`;
+    menu.style.width = `${Math.max(180, r.width)}px`;
+  }
+  function renderMenu() {
+    updateFiltered();
+    clear(menu);
+    if (!filtered.length) {
+      menu.appendChild(el('div.combo-empty', { text: allowCustom ? '기존 항목 없음' : '검색 결과 없음' }));
+    } else {
+      filtered.forEach((o, i) => menu.appendChild(el('button.combo-opt', {
+        type: 'button',
+        class: i === hi ? 'active' : '',
+        text: o.label,
+        onmousedown: (e) => e.preventDefault(),
+        onclick: () => { setValue(o.value); closeMenu(); },
+      })));
+    }
+    positionMenu();
+  }
+  function openMenu() {
+    if (open) return;
+    open = true;
+    root.classList.add('open');
+    toggle.textContent = '▴';
+    document.body.appendChild(menu);
+    window.addEventListener('resize', positionMenu);
+    window.addEventListener('scroll', positionMenu, true);
+    if (typeof MutationObserver !== 'undefined') {
+      menuObserver = new MutationObserver(() => { if (!document.body.contains(root)) closeMenu(); });
+      menuObserver.observe(document.body, { childList: true, subtree: true });
+    }
+    renderMenu();
+  }
+  function closeMenu() {
+    if (!open) return;
+    open = false;
+    root.classList.remove('open');
+    toggle.textContent = '▾';
+    menu.remove();
+    window.removeEventListener('resize', positionMenu);
+    window.removeEventListener('scroll', positionMenu, true);
+    if (menuObserver) { menuObserver.disconnect(); menuObserver = null; }
+  }
+
+  search.addEventListener('focus', openMenu);
+  search.addEventListener('input', () => { selected = null; openMenu(); renderMenu(); dispatch('input'); });
+  search.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { closeMenu(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); openMenu(); hi = Math.min((filtered.length || 1) - 1, hi + 1); renderMenu(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); openMenu(); hi = Math.max(0, hi - 1); renderMenu(); }
+    else if (e.key === 'Enter' && open && hi >= 0 && filtered[hi]) {
+      e.preventDefault(); setValue(filtered[hi].value); closeMenu();
+    }
+  });
+  toggle.addEventListener('click', (e) => { e.preventDefault(); open ? closeMenu() : (search.focus(), openMenu()); });
+
+  return root;
+}
+
+export function comboSelect(options, value, attrs = {}) {
+  return comboBase(options, value, attrs, { allowCustom: false });
+}
+export function comboInput(options, value = '', attrs = {}) {
+  return comboBase(options, value, attrs, { allowCustom: true });
 }

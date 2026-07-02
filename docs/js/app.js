@@ -33,12 +33,21 @@ function updateHistoryButtons() {
 }
 
 async function manualRefresh() {
-  if (DB._pendingSave) return toast('편집/저장 중입니다 — 잠시 후 다시 시도하세요', 'error');
   const busy = busyOverlay('최신 데이터 불러오는 중…', '시트 변경사항 동기화');
-  let r; try { r = await DB.refresh({ merge: true }); } finally { busy.close(); } // ⟳ 버튼 회전은 onLoading 콜백이 담당
+  let r;
+  try {
+    if (DB._pendingSave) {
+      busy.update('변경사항 저장 중…', '대시보드 변경사항을 먼저 DB에 반영');
+      const ok = await DB.flushSave();
+      if (!ok) { toast('저장 실패로 새로고침을 중단했습니다', 'error'); return; }
+      busy.update('최신 데이터 불러오는 중…', '시트 변경사항 동기화');
+    }
+    r = await DB.refresh({ merge: true, force: true });
+  } finally { busy.close(); } // ⟳ 버튼 회전은 onLoading 콜백이 담당
   if (r === 'busy') toast('편집/저장 중입니다 — 잠시 후 다시 시도하세요', 'error');
   else if (r === true) toast('최신 데이터로 갱신했습니다');
   else if (r === false) toast('이미 최신 상태입니다');
+  else if (r === 'save-error') toast('최근 저장 실패가 있어 자동 갱신을 건너뜁니다', 'error');
   else toast('새로고침 실패 — 잠시 후 다시 시도', 'error');
 }
 

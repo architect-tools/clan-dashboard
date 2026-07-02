@@ -3,7 +3,7 @@
 import { DB } from '../db.js';
 import { Roles } from '../roles.js';
 import { el, fmt, toast } from '../util.js';
-import { page, card, table, btn, input, select, field, modal } from './ui.js';
+import { page, card, table, btn, input, comboSelect, field, modal } from './ui.js';
 
 export function renderDistParams() {
   const s = DB.state;
@@ -97,7 +97,8 @@ export function renderDistParams() {
   ]), { className: 'card-compact' }));
 
   function addStaff() {
-    const name = select(Roles.selfFirst(s.members.map((m) => m.name)), Roles.me() || s.members[0]?.name);
+    const names = Roles.selfFirst(s.members.map((m) => m.name).filter(Boolean));
+    const name = comboSelect(names, Roles.me() || names[0], { placeholder: '클랜원 검색' });
     const ratio = input({ type: 'number', step: '0.1', value: '1.3' });
     modal('운영진 추가', (close) => el('div.form', {}, [
       field('닉네임', name), field('비율 (%)', ratio),

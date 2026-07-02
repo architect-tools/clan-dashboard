@@ -51,6 +51,8 @@ export const DB = {
   _snapshot: null,         // state as of the last commit (for building undo entries)
   _loadToken: 0,           // 백그라운드 새로고침 적용 가드용(새 로드/새 새로고침 시 증가)
   _pendingSave: false,     // 미저장(또는 저장 중) 로컬 편집 있음 → 새로고침이 덮어쓰지 않도록
+  _savePromise: null,
+  _saveError: false,
   _saveSeq: 0,
   _maxHistory: 80,
   _onHistory: null,        // () => update undo/redo button states
@@ -104,13 +106,31 @@ export const DB = {
   _scheduleSave(immediate) {
     clearTimeout(this._saveTimer);
     this._pendingSave = true;   // 저장 완료 전까지 백그라운드 새로고침이 내 편집을 덮지 않게
+    this._saveError = false;
     const doSave = () => {
       const seq = ++this._saveSeq;
-      this._fetch('save', { data: this.state })
-        .then(() => { if (seq === this._saveSeq) this._pendingSave = false; })  // 최신 저장 성공 시에만 해제
-        .catch((e) => { console.error(e); toast('동기화 실패 (변경은 로컬에 보관됨)', 'error'); });
+      this._savePromise = this._fetch('save', { data: this.state })
+        .then(() => { if (seq === this._saveSeq) { this._pendingSave = false; this._saveError = false; } })  // 최신 저장 성공 시에만 해제
+        .catch((e) => { if (seq === this._saveSeq) { this._pendingSave = false; this._saveError = true; } console.error(e); toast('동기화 실패 (변경은 로컬에 보관됨)', 'error'); });
+      return this._savePromise;
     };
     if (immediate) doSave(); else this._saveTimer = setTimeout(doSave, 1200);
+  },
+
+  async flushSave() {
+    if (!LIVE() || !this._pendingSave) return true;
+    clearTimeout(this._saveTimer);
+    const seq = ++this._saveSeq;
+    try {
+      this._savePromise = this._fetch('save', { data: this.state });
+      await this._savePromise;
+      if (seq === this._saveSeq) { this._pendingSave = false; this._saveError = false; }
+      return true;
+    } catch (e) {
+      if (seq === this._saveSeq) { this._pendingSave = false; this._saveError = true; }
+      console.error(e); toast('동기화 실패 (변경은 로컬에 보관됨)', 'error');
+      return false;
+    }
   },
 
   canUndo() { return this._undo.length > 0; },
@@ -150,8 +170,8 @@ export const DB = {
     const opts = payload
       ? { method: 'POST', body: JSON.stringify({ action, token, ...payload }),
           headers: { 'Content-Type': 'text/plain;charset=utf-8' } } // text/plain avoids CORS preflight
-      : { method: 'GET' };
-    const u = payload ? url : `${url}?${new URLSearchParams({ action, token, ...(query || {}) })}`;
+      : { method: 'GET', cache: 'no-store' };
+    const u = payload ? url : `${url}?${new URLSearchParams({ action, token, _ts: String(Date.now()), ...(query || {}) })}`;
     const res = await fetch(u, opts);
     const json = await res.json();
     if (json.error) throw new Error(json.error);
@@ -161,8 +181,9 @@ export const DB = {
   // 백그라운드 새로고침: 다른 사용자/시트 변경을 반영. merge=true 면 시트 편집까지(느림), false 면 대시보드 편집만(빠름).
   // 내 미저장 편집(_pendingSave)·열린 모달 중에는 스킵(클로버/방해 방지). 데이터 동일하면 재렌더 안 함.
   // 반환: 'busy'(편집/모달 중 스킵) · true(갱신함) · false(이미 최신) · 'stale'/'error'. 수동 버튼이 피드백에 사용.
-  refresh({ merge = false } = {}) {
-    if (!LIVE() || this._pendingSave) return Promise.resolve('busy');
+  refresh({ merge = false, force = false } = {}) {
+    if (!LIVE() || (!force && this._pendingSave)) return Promise.resolve('busy');
+    if (!force && this._saveError) return Promise.resolve('save-error');
     if (typeof document !== 'undefined' && document.querySelector('.modal-overlay')) return Promise.resolve('busy');
     const token = ++this._loadToken;
     const saveSeqAtStart = this._saveSeq;   // 조회 중 내가 편집·저장하면 시퀀스가 바뀜 → 옛 응답 폐기(편집 되돌림 방지)
@@ -174,7 +195,7 @@ export const DB = {
       this.state = next; this._snapshot = clone(this.state);
       this._persistLocal(); this._emit(); this._onRefresh && this._onRefresh();
       return true;
-    }).catch(() => 'error').finally(() => this._setLoading(false));
+    }).catch((e) => { console.error(e); return 'error'; }).finally(() => this._setLoading(false));
   },
 };
 

@@ -8,7 +8,7 @@ import { computeScores, tierForScore } from '../calc.js';
 import { el, fmt, toast, clear } from '../util.js';
 import { CATEGORY_ORDER } from '../config.js';
 import { loadImage, extractLines, consensusMatch, CHECK_AT } from '../ocr.js';
-import { page, card, btn, modal, busyOverlay, tierBadge, classBadge } from './ui.js';
+import { page, card, btn, modal, busyOverlay, tierBadge, classBadge, comboSelect } from './ui.js';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 let selDate = todayISO();
@@ -352,9 +352,10 @@ function checkinPanel(content) {
         ]));
       });
       unmatched.slice(0, 30).forEach((tok) => {
-        const sel = el('select.input', { onchange: (e) => { const prev = manual.get(tok); if (prev) selected.delete(prev); const id = +e.target.value || 0; manual.set(tok, id); if (id) selected.add(id); syncChecks(); } }, [
-          el('option', { value: '', text: '— 무시 —' }), ...roster.map((m) => el('option', { value: m.id, text: m.name })),
-        ]);
+        const sel = comboSelect([{ value: '', label: '— 무시 —' }, ...roster.map((m) => ({ value: m.id, label: m.name }))], '', {
+          placeholder: '닉네임 검색',
+          onchange: (e) => { const prev = manual.get(tok); if (prev) selected.delete(prev); const id = +e.target.value || 0; manual.set(tok, id); if (id) selected.add(id); syncChecks(); },
+        });
         list.appendChild(el('label.match-row.unmatched', {}, [el('span.match-token', { text: `“${tok}”` }), el('span', { text: '→' }), sel]));
       });
       ocrResult.appendChild(list);

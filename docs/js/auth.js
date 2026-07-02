@@ -3,6 +3,7 @@
 //   • 비밀번호: 7979 = 멤버, 관리자 비번 = 관리자. 백엔드 쓰기 토큰은 항상 7979로 고정.
 import { CONFIG } from './config.js';
 import { el } from './util.js';
+import { comboSelect } from './views/ui.js';
 
 // 게이트 드롭다운 채울 명단 — 읽기는 토큰 불필요(getAll). 백엔드 → 로컬 → 시드 순.
 async function loadRoster() {
@@ -35,8 +36,7 @@ export const Auth = {
     const names = await loadRoster();
     return new Promise((resolve) => {
       const who = names.length
-        ? el('select.gate-input.gate-who', {}, [el('option', { value: '', text: '닉네임 선택…' }),
-            ...names.map((n) => el('option', { value: n, text: n }))])
+        ? comboSelect(names, '', { class: 'gate-input gate-who', placeholder: '닉네임 검색…' })
         : el('input.gate-input.gate-who', { placeholder: '내 닉네임', autocomplete: 'off' });
       const input = el('input.gate-input', { type: 'password', placeholder: '비밀번호', autocomplete: 'off' });
       const err = el('div.gate-err');

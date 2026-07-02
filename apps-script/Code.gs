@@ -4,6 +4,7 @@
  * 저장 구조:
  *   • _state (A1)  : 전체 상태 JSON (권위 저장소). 시트에 없는 깊은 데이터(스킬/장비/참여/정산 등)는 여기에만.
  *   • 편집 탭들     : 명단·분배내역·콘텐츠·티어컷·운영진·고투·설정·분배기준
+ *                    ·장비현황·주문석보유·공용주문석보유·엘릭서보유·보드-*
  *                    → 시트에서 직접 편집 가능. getAll 때 읽어서 _state 위에 덮어(병합) 반환.
  *   • _locks       : 소프트 락(페이지 편집 중 표시). page|who|ts.
  *
@@ -57,7 +58,8 @@ function checkToken(token) {
 function ss() { return SpreadsheetApp.getActiveSpreadsheet(); }
 
 function loadState(doMerge) {
-  var sh = ss().getSheetByName(STATE_SHEET);
+  var book = ss();
+  var sh = book.getSheetByName(STATE_SHEET);
   if (!sh) return null;
   var last = sh.getLastRow();
   // A 열의 청크들을 순서대로 이어붙임(구버전 단일 A1 도 청크 1개로 호환).
@@ -70,12 +72,15 @@ function loadState(doMerge) {
   var state;
   try { state = JSON.parse(raw); } catch (_) { return null; }
   // 편집 탭 병합은 비용이 큼(13탭 read ~수초) → merge 요청 시에만. 기본 getAll 은 _state 만 빠르게 반환.
-  if (doMerge) { try { mergeTabs(ss(), state); } catch (e) { /* 병합 실패 시 _state 그대로 */ } }
+  if (doMerge) {
+    mergeTabs(book, state);
+    // 시트에서 읽은 변경을 권위 저장소에도 반영한다. 그래야 다음 빠른 getAll/재접속 때도 되밀리지 않는다.
+    writeStateSheet(book, state);
+  }
   return state;
 }
 
-function saveState(state) {
-  var book = ss();
+function writeStateSheet(book, state) {
   var sh = book.getSheetByName(STATE_SHEET) || book.insertSheet(STATE_SHEET);
   var str = JSON.stringify(state);
   var chunks = [];
@@ -86,7 +91,12 @@ function saveState(state) {
   var rng = sh.getRange(1, 1, chunks.length, 1);
   rng.setNumberFormat('@');                                    // 텍스트 강제(= + - 등 수식/숫자 해석 방지)
   rng.setValues(chunks);
-  try { writeTabs(book, state); } catch (e) { /* 미러 실패 무시 */ }
+}
+
+function saveState(state) {
+  var book = ss();
+  writeStateSheet(book, state);
+  writeTabs(book, state);
 }
 
 /* 편집 탭 정의: [탭이름, 헤더[], 행생성(state)→rows, 병합(state, rows)] */
@@ -97,13 +107,22 @@ function ymd(v) {
   return String(v == null ? '' : v).trim();
 }
 function truthyActive(v) { return !(v === '휴면' || v === false || v === 'FALSE' || v === 'x' || v === '' ); }
+function txt(v) { return String(v == null ? '' : v).trim(); }
 
-function readSheet(book, name) {
+function readTable(book, name) {
   var sh = book.getSheetByName(name);
   if (!sh) return null;
   var vals = sh.getDataRange().getValues();
-  if (vals.length < 2) return [];   // 헤더만 있거나 빈 경우 → 빈 배열(전부 삭제로 간주하지 않도록 호출부에서 처리)
-  return vals.slice(1).filter(function (r) { return r.join('').trim() !== ''; });
+  if (!vals.length) return { head: [], rows: [] };
+  var head = vals[0].map(function (v) { return txt(v); });
+  var rows = vals.slice(1).filter(function (r) { return r.join('').trim() !== ''; });
+  return { head: head, rows: rows };
+}
+function readSheet(book, name) {
+  var table = readTable(book, name);
+  if (!table) return null;
+  if (!table.rows.length) return [];   // 헤더만 있거나 빈 경우 → 빈 배열(전부 삭제로 간주하지 않도록 호출부에서 처리)
+  return table.rows;
 }
 function writeSheet(book, name, head, rows) {
   var sh = book.getSheetByName(name) || book.insertSheet(name);
@@ -112,6 +131,61 @@ function writeSheet(book, name, head, rows) {
   if (rows.length) sh.getRange(2, 1, rows.length, head.length).setValues(rows);
   sh.setFrozenRows(1);
 }
+
+var EQUIP_GROUPS = [
+  { label: '무기', slots: ['주무기', '보조1', '보조2'] },
+  { label: '방어구', slots: ['투구', '견갑', '상의', '하의', '벨트', '장갑', '신발', '망토'] },
+  { label: '장신구', slots: ['목걸이', '귀걸이', '반지', '팔찌'] },
+  { label: '성유물', slots: ['복종', '충성', '무한', '심연'] },
+];
+var EQUIP_SLOTS = (function () {
+  var out = [];
+  EQUIP_GROUPS.forEach(function (g) { g.slots.forEach(function (slot) { out.push(slot); }); });
+  return out;
+})();
+var RELIC_SLOTS = (function () {
+  var out = {};
+  EQUIP_GROUPS[3].slots.forEach(function (slot) { out[slot] = true; });
+  return out;
+})();
+
+function tierText(t) {
+  var n = +t || 0;
+  return n ? ((n % 1 === 0 ? String(n) : n.toFixed(1)) + 'T') : '';
+}
+function equipText(slot, it) {
+  if (!it) return '';
+  if (RELIC_SLOTS[slot]) return it.tier ? ('T' + it.tier) : '';
+  var parts = [];
+  if (it.star) parts.push(it.star + '성');
+  if (it.tier) parts.push(tierText(it.tier));
+  if (it.enhance) parts.push('+' + it.enhance);
+  return parts.join(' ');
+}
+function parseEquipValue(slot, v) {
+  var s = txt(v);
+  if (!s) return null;
+  if (RELIC_SLOTS[slot]) {
+    var rm = s.match(/T?\s*(\d+)/i);
+    var rt = rm ? num(rm[1]) : 0;
+    return rt ? { tier: rt } : null;
+  }
+  var starM = s.match(/([1-6])\s*성/);
+  var tierM = s.match(/(\d+(?:\.\d+)?)\s*T/i);
+  var enhM = s.match(/[+＋]\s*(\d+)/);
+  var star = starM ? num(starM[1]) : 0;
+  var tier = tierM ? num(tierM[1]) : 0;
+  var enhance = enhM ? num(enhM[1]) : 0;
+  if (!star && !tier && !enhance) return null;
+  return { star: star, tier: tier, enhance: enhance };
+}
+function commonStoneHead(mc) { return mc.name + ' (' + mc.star + '성)'; }
+function parseCommonStoneHead(h) {
+  var m = txt(h).match(/^(.*)\s*\((\d+)성\)\s*$/);
+  if (!m) return null;
+  return { name: txt(m[1]), star: num(m[2]) || 5 };
+}
+function commonStoneKey(mc) { return mc.name + '__' + mc.star; }
 
 function writeTabs(book, s) {
   // 구버전(읽기전용 미러) 탭 정리 — 더 이상 쓰지 않음.
@@ -136,8 +210,10 @@ function writeTabs(book, s) {
     ['투력 비율(%)', (sset.powerRatio || 0) * 100], ['참여 비율(%)', (sset.participationRatio || 0) * 100]]);
   var rsh = book.getSheetByName('분배기준') || book.insertSheet('분배기준');
   rsh.clearContents(); rsh.getRange('A1').setValue(s.distributionRules || '');
+  writeEquipSheet(book, s);
   // 보유 현황(롱포맷: 닉네임·직업·스킬 1행씩) — 행 추가/삭제로 보유 관리
   writeSheet(book, '주문석보유', ['닉네임', '직업', '주문석'], ownRows(s, '주문석'));
+  writeCommonStoneSheet(book, s);
   writeSheet(book, '엘릭서보유', ['닉네임', '직업', '엘릭서'], ownRows(s, '엘릭서'));
   // 상태 보드(성좌·탈것·플랫폼): 멤버×컬럼 매트릭스, 셀에 O = 보유/가능
   (s.statusBoards || []).forEach(function (b) {
@@ -148,6 +224,25 @@ function writeTabs(book, s) {
     });
     writeSheet(book, '보드-' + b.name, ['닉네임'].concat(cols), rows);
   });
+}
+function writeEquipSheet(book, s) {
+  var rows = (s.members || []).filter(function (m) { return m.active !== false; }).map(function (m) {
+    return [m.name, m.cls || ''].concat(EQUIP_SLOTS.map(function (slot) {
+      return equipText(slot, (m.equip || {})[slot]);
+    }));
+  });
+  writeSheet(book, '장비현황', ['닉네임', '직업'].concat(EQUIP_SLOTS), rows);
+}
+function writeCommonStoneSheet(book, s) {
+  var app = s.appSettings || {};
+  var managed = app.managedStones || [];
+  var rows = (s.members || []).filter(function (m) { return m.active !== false; }).map(function (m) {
+    var bag = ((m.skills || {})['공용주문석']) || {};
+    return [m.name, m.cls || ''].concat(managed.map(function (mc) {
+      return bag[commonStoneKey(mc)] || '';
+    }));
+  });
+  writeSheet(book, '공용주문석보유', ['닉네임', '직업'].concat(managed.map(commonStoneHead)), rows);
 }
 function ownRows(s, cat) {
   var out = [];
@@ -202,6 +297,8 @@ function mergeTabs(book, s) {
   }
   var rsh = book.getSheetByName('분배기준');
   if (rsh) { var rv = rsh.getRange('A1').getValue(); if (rv) s.distributionRules = String(rv); }
+  mergeEquipSheet(book, s);
+  mergeCommonStoneSheet(book, s);
   // 보유 현황 read-back(탭이 권위 → 닉네임으로 멤버 찾아 스킬 재구성)
   ['주문석', '엘릭서'].forEach(function (cat) {
     var rows = readSheet(book, cat === '주문석' ? '주문석보유' : '엘릭서보유');
@@ -215,15 +312,60 @@ function mergeTabs(book, s) {
     }
   });
   (s.statusBoards || []).forEach(function (b) {
-    var rows = readSheet(book, '보드-' + b.name);
-    if (rows && rows.length) {
-      var mb = memberByName(s); var cols = b.columns || []; b.data = {};
-      rows.forEach(function (r) {
-        var m = mb[String(r[0]).trim()]; if (!m) return;
-        var rec = {}; cols.forEach(function (c, ci) { if (String(r[ci + 1] || '').trim()) rec[c] = true; });
+    var table = readTable(book, '보드-' + b.name);
+    if (table && table.rows.length) {
+      var mb = memberByName(s);
+      var cols = table.head.slice(1).map(txt).filter(function (c) { return c; });
+      if (cols.length) b.columns = cols;
+      b.data = {};
+      table.rows.forEach(function (r) {
+        var m = mb[txt(r[0])]; if (!m) return;
+        var rec = {}; (b.columns || []).forEach(function (c, ci) { if (txt(r[ci + 1])) rec[c] = true; });
         if (Object.keys(rec).length) b.data[String(m.id)] = rec;
       });
     }
+  });
+}
+
+function mergeEquipSheet(book, s) {
+  var rows = readSheet(book, '장비현황');
+  if (!rows || !rows.length) return;
+  var mb = memberByName(s);
+  rows.forEach(function (r) {
+    var m = mb[txt(r[0])]; if (!m) return;
+    m.equip = m.equip || {};
+    EQUIP_SLOTS.forEach(function (slot, i) {
+      var raw = r[i + 2];
+      var parsed = parseEquipValue(slot, raw);
+      if (txt(raw)) {
+        if (parsed) m.equip[slot] = parsed;
+      } else {
+        delete m.equip[slot];
+      }
+    });
+  });
+}
+function mergeCommonStoneSheet(book, s) {
+  var table = readTable(book, '공용주문석보유');
+  if (!table) return;
+  var defs = [];
+  table.head.slice(2).forEach(function (h) {
+    var def = parseCommonStoneHead(h);
+    if (def && def.name) defs.push(def);
+  });
+  if (!defs.length) return;
+  s.appSettings = s.appSettings || {};
+  s.appSettings.managedStones = defs;
+  if (!table.rows.length) return;
+  var mb = memberByName(s);
+  table.rows.forEach(function (r) {
+    var m = mb[txt(r[0])]; if (!m) return;
+    m.skills = m.skills || {};
+    m.skills['공용주문석'] = {};
+    defs.forEach(function (def, i) {
+      var count = num(r[i + 2]);
+      if (count > 0) m.skills['공용주문석'][commonStoneKey(def)] = count;
+    });
   });
 }
 

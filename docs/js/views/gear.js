@@ -5,7 +5,7 @@ import { DB } from '../db.js';
 import { Roles } from '../roles.js';
 import { CLASS_LIST } from '../config.js';
 import { el, toast, uid, clear } from '../util.js';
-import { page, card, btn, input, select, modal, field, confirmDialog } from './ui.js';
+import { page, card, btn, input, select, comboSelect, modal, field, confirmDialog, classBadge } from './ui.js';
 import { equipGrid, equipCell, editSlot, EQUIP_GROUPS } from './equip.js';
 import { classGroups } from '../skills-data.js';
 import { COMMON_SPELLSTONES } from '../common-stones.js';
@@ -43,8 +43,8 @@ export function renderGear() {
     if (!gearMember || !activeMembers.some((m) => m.id === gearMember)) gearMember = activeMembers[0].id; // 기본 = 본인
     const selMember = activeMembers.find((m) => m.id === gearMember);
     const canEditSel = adm || Roles.isMe(selMember.name); // 멤버는 본인 장비만 편집
-    const picker = select(activeMembers.map((m) => ({ value: String(m.id), label: m.name + (Roles.isMe(m.name) ? ' (나)' : '') })), String(gearMember),
-      { onchange: (e) => { gearMember = +e.target.value; renderGear(); } });
+    const picker = comboSelect(activeMembers.map((m) => ({ value: String(m.id), label: m.name + (Roles.isMe(m.name) ? ' (나)' : '') })), String(gearMember),
+      { placeholder: '클랜원 검색', onchange: (e) => { gearMember = +e.target.value; renderGear(); } });
     addSection('gear-equip', '장착 장비', card('장착 장비', el('div', {}, [
       el('div.toolbar', {}, [el('span.muted', { text: '클랜원' }), picker, canEditSel ? el('span.hint', { text: '슬롯을 클릭해 등급·티어·강화 입력' }) : el('span.hint', { text: '본인 장비만 편집할 수 있습니다' })]),
       equipGrid(selMember, { editable: canEditSel }),
@@ -55,10 +55,10 @@ export function renderGear() {
   // 셀 고정폭(colgroup) + 그룹 헤더(무기/방어구/장신구/성유물). 성유물은 강화가 없어 좁게.
   if (activeMembers.length) {
     const eqTbl = el('table.tbl.equip-status-tbl');
-    const cg = [el('col.col-name')];
+    const cg = [el('col.col-name'), el('col.col-class')];
     EQUIP_GROUPS.forEach((g) => g.slots.forEach(() => cg.push(el('col', { class: g.label === '성유물' ? 'col-relic' : '' }))));
     eqTbl.appendChild(el('colgroup', {}, cg));
-    const h1 = [el('th.col-name', { rowspan: '2', text: '닉네임' })];
+    const h1 = [el('th.col-name', { rowspan: '2', text: '닉네임' }), el('th.col-class', { rowspan: '2', text: '직업' })];
     EQUIP_GROUPS.forEach((g) => h1.push(el('th', { class: 'grp-start', colspan: String(g.slots.length), text: g.label })));
     const h2 = [];
     EQUIP_GROUPS.forEach((g) => g.slots.forEach((slot, i) => h2.push(el('th', { class: i === 0 ? 'grp-start' : '', title: slot, text: slot }))));
@@ -66,7 +66,10 @@ export function renderGear() {
     const tb2 = el('tbody');
     activeMembers.forEach((m) => {
       const canEditRow = adm || Roles.isMe(m.name); // 관리자 전체, 멤버는 본인 행
-      const tr = el('tr', { class: Roles.isMe(m.name) ? 'me-row' : '' }, [el('td.col-name', {}, [el('b', { text: m.name })])]);
+      const tr = el('tr', { class: Roles.isMe(m.name) ? 'me-row' : '' }, [
+        el('td.col-name', {}, [el('b', { text: m.name })]),
+        el('td.col-class', {}, [classBadge(m.cls)]),
+      ]);
       EQUIP_GROUPS.forEach((g) => g.slots.forEach((slot, i) => {
         const c = equipCell(slot, (m.equip || {})[slot]);
         tr.appendChild(el('td', {
