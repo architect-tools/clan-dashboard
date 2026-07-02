@@ -7460,18 +7460,7 @@
     {
       "active": true,
       "cls": "암살자",
-      "equip": {
-        "보조1": {
-          "enhance": 5,
-          "star": 2,
-          "tier": 4
-        },
-        "주무기": {
-          "enhance": 3,
-          "star": 4,
-          "tier": 5
-        }
-      },
+      "equip": {},
       "grade": "정회원",
       "id": 48,
       "name": "노획",
