@@ -623,9 +623,9 @@
     {
       "category": "필드 보스",
       "name": "5그룹",
-      "points": 0,
+      "points": 5,
       "weekly": 3,
-      "active": false
+      "active": true
     },
     {
       "category": "필드 보스",

@@ -1,9 +1,10 @@
 // dashboard.js — overview: clan stats, tier distribution, top lists.
 import { DB } from '../db.js';
+import { Roles } from '../roles.js';
 import { computeSettlement, tierForScore } from '../calc.js';
-import { el, fmt } from '../util.js';
-import { CONFIG, TIER_COLORS, CLASSES } from '../config.js';
-import { page, card, statCard, table, classBadge, tierBadge, btn } from './ui.js';
+import { el, fmt, toast } from '../util.js';
+import { CONFIG, TIER_COLORS, CLASSES, CLASS_LIST } from '../config.js';
+import { page, card, statCard, table, classBadge, tierBadge, btn, modal, select } from './ui.js';
 
 export function renderDashboard() {
   const s = DB.state;
@@ -15,6 +16,7 @@ export function renderDashboard() {
     subtitle: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }),
     actions: [
       el('span.mode-pill', { class: live ? 'live' : 'local', text: live ? '클라우드 동기화' : '로컬 저장' }),
+      Roles.isAdmin() ? btn('직업 수정', () => openClassEditor(), { kind: 'ghost', admin: true }) : null,
     ],
   });
 
@@ -67,4 +69,20 @@ export function renderDashboard() {
       { key: 'score', label: '점수', align: 'right', render: (m) => fmt(m.score) },
     ], topPart), { className: 'card-compact', actions: btn('참여도 관리', () => location.hash = '#/participation', { kind: 'ghost' }) }),
   ]));
+}
+
+function openClassEditor() {
+  const rows = [...DB.state.members]
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
+  modal('클랜원 직업 수정', () => table([
+    { key: 'name', label: '닉네임', render: (m) => el('b', { text: m.name || '-' }) },
+    { label: '직업', render: (m) => select(CLASS_LIST, m.cls, {
+      onchange: (e) => {
+        m.cls = e.target.value;
+        DB.commit();
+        toast(`${m.name} 직업을 변경했습니다`);
+      },
+    }) },
+    { label: '상태', align: 'center', render: (m) => el('span.dot', { class: m.active !== false ? 'on' : 'off', title: m.active !== false ? '활동' : '휴면' }) },
+  ], rows), { wide: true, onClose: () => renderDashboard() });
 }

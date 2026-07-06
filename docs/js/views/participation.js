@@ -15,13 +15,38 @@ let selDate = todayISO();
 let selContent = null;
 let viewMonth = null; // {y, m} 0-based month
 
+function categoryRank(cat) {
+  const i = CATEGORY_ORDER.indexOf(cat);
+  return i >= 0 ? i : 99;
+}
+
+function groupNumber(name) {
+  const m = String(name || '').match(/^(\d+)\s*그룹/);
+  return m ? +m[1] : null;
+}
+
+function contentCompare(a, b) {
+  const ca = typeof a === 'string' ? DB.state.contentCatalog.find((c) => c.name === a) : a;
+  const cb = typeof b === 'string' ? DB.state.contentCatalog.find((c) => c.name === b) : b;
+  const catA = ca?.category || '';
+  const catB = cb?.category || '';
+  const catDiff = categoryRank(catA) - categoryRank(catB);
+  if (catDiff) return catDiff;
+  const nameA = ca?.name || String(a || '');
+  const nameB = cb?.name || String(b || '');
+  const ga = groupNumber(nameA);
+  const gb = groupNumber(nameB);
+  if (catA === '필드 보스' && ga != null && gb != null && ga !== gb) return ga - gb;
+  return nameA.localeCompare(nameB, 'ko', { numeric: true });
+}
+
 function catGroups(catalog, includeInactive = false) {
   const list = catalog.filter((c) => includeInactive || c.active);
   const g = {};
   for (const c of list) (g[c.category] ||= []).push(c);
   return [...new Set(list.map((c) => c.category))]
-    .sort((a, b) => (CATEGORY_ORDER.indexOf(a) + 1 || 99) - (CATEGORY_ORDER.indexOf(b) + 1 || 99))
-    .map((cat) => ({ cat, items: g[cat] }));
+    .sort((a, b) => categoryRank(a) - categoryRank(b))
+    .map((cat) => ({ cat, items: [...g[cat]].sort(contentCompare) }));
 }
 
 export function renderParticipation() {
@@ -117,9 +142,8 @@ function daySummaryPanel() {
   const byId = Object.fromEntries(s.members.map((m) => [m.id, m]));
   const contents = Object.keys(day).filter((cn) => (day[cn] || []).length);
   if (!contents.length) return el('div.empty', { text: '위에서 콘텐츠를 선택해 참여자를 기록하세요.' });
-  // arrange recorded contents as slots, ordered by catalog category then name
-  const catIdx = (cn) => { const c = s.contentCatalog.find((x) => x.name === cn); return c ? (CATEGORY_ORDER.indexOf(c.category) + 1 || 99) : 99; };
-  contents.sort((a, b) => catIdx(a) - catIdx(b) || a.localeCompare(b));
+  // arrange recorded contents as slots, ordered by catalog category then content order
+  contents.sort(contentCompare);
 
   const grid = el('div.slot-grid');
   contents.forEach((cn) => {

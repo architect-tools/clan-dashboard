@@ -219,6 +219,7 @@ function normalizeFieldBossCatalog(catalog) {
   const specs = [
     { name: '3그룹', points: 3, weekly: 5 },
     { name: '4그룹', points: 5, weekly: 4 },
+    { name: '5그룹', points: 5, weekly: 3 },
     { name: '6그룹', points: 10, weekly: 2 },
     { name: '7그룹', points: 15, weekly: 1 },
   ];
@@ -231,12 +232,6 @@ function normalizeFieldBossCatalog(catalog) {
       item.points = spec.points;
       item.weekly = +item.weekly || spec.weekly;
       item.active = true;
-    }
-  }
-  for (const item of catalog) {
-    if (item && item.category === '필드 보스' && item.name === '5그룹') {
-      item.points = 0;
-      item.active = false;
     }
   }
 }
