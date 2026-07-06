@@ -93,6 +93,23 @@ function levenshtein(a, b) {
 const CONFUSE = { '0': 'o', '1': 'l', '2': 'z', '3': 'e', '4': 'a', '5': 's', '6': 'b', '7': 't', '8': 'b', '9': 'g' };
 function fold(s) { return s.replace(/[0-9]/g, (d) => CONFUSE[d]); }
 
+const Y_VOWEL_FOLD = { 'ㅑ': 'ㅏ', 'ㅒ': 'ㅐ', 'ㅕ': 'ㅓ', 'ㅖ': 'ㅔ', 'ㅛ': 'ㅗ', 'ㅠ': 'ㅜ' };
+function foldYVowels(str) {
+  let out = '';
+  for (const ch of String(str)) {
+    const code = ch.charCodeAt(0) - 0xac00;
+    if (code >= 0 && code <= 11171) {
+      const cho = Math.floor(code / 588);
+      const jung = Math.floor((code % 588) / 28);
+      const jong = code % 28;
+      const folded = Y_VOWEL_FOLD[JUNG[jung]];
+      if (folded) out += String.fromCharCode(0xac00 + cho * 588 + JUNG.indexOf(folded) * 28 + jong);
+      else out += ch;
+    } else out += ch;
+  }
+  return out;
+}
+
 // Tense→plain consonant fold (ㄲ→ㄱ …) — Tesseract routinely confuses these.
 const TENSE = { 'ㄲ': 'ㄱ', 'ㄸ': 'ㄷ', 'ㅃ': 'ㅂ', 'ㅆ': 'ㅅ', 'ㅉ': 'ㅈ' };
 /** Decompose to jamo with tense-fold; optionally drop jongsung (받침),
@@ -138,6 +155,8 @@ export function similarity(a, b) {
   let sim = simCore(na, nb);
   const fa = fold(na), fb = fold(nb);
   if (fa !== na || fb !== nb) sim = Math.max(sim, simCore(fa, fb) * 0.98); // tiny penalty so exact wins ties
+  const ya = foldYVowels(fa), yb = foldYVowels(fb);
+  if (ya !== fa || yb !== fb) sim = Math.max(sim, simCore(ya, yb) * 0.97); // OCR often drops ㅑ/ㅕ/ㅛ/ㅠ on small text
   return sim;
 }
 

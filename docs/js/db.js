@@ -201,6 +201,12 @@ export const DB = {
 
 // 장비 슬롯명 운영 시트 기준으로 교정(기존 데이터 키 이동, 값 보존)
 const EQUIP_RENAME = { '무기': '주무기', '보조무기1': '보조1', '보조무기2': '보조2', '흉갑': '상의', '각반': '하의', '허리띠': '벨트' };
+const MEMBER_RENAME = { '도베르만': 'Doberman', '페커리': '냉정' };
+
+function migrateMemberName(name) {
+  return MEMBER_RENAME[name] || name || '';
+}
+
 function migrateEquip(eq) {
   const out = { ...(eq || {}) };
   for (const [o, n] of Object.entries(EQUIP_RENAME)) {
@@ -247,7 +253,7 @@ function normalize(d) {
   d.powerRanks ||= [];
   d.staff ||= [];
   d.members = (d.members || []).map((m, i) => ({
-    id: m.id || i + 1, order: m.order ?? i + 1, name: m.name || '',
+    id: m.id || i + 1, order: m.order ?? i + 1, name: migrateMemberName(m.name),
     cls: m.cls || '', power: +m.power || 0, score: +m.score || 0,
     grade: m.grade || '정회원',        // 등급(멤버십): 운영진/정회원/준회원/신입
     equip: migrateEquip(m.equip),      // 장착 장비: {슬롯: {star,tier,enhance}} (슬롯명 시트 기준)

@@ -9,7 +9,7 @@ const weeklyCsv = process.argv[2];
 const seedFile = process.argv[3] || 'docs/data/seed.json';
 
 // The real current clan, in 투력 order (as supplied by the user). In-game nicknames.
-const CANON = ['보스','페커리','붉으래','우소츠키','돈가츠','딱꽁','아싸다','치느','하나둘셋얍','이루릴',
+const CANON = ['보스','냉정','붉으래','우소츠키','돈가츠','딱꽁','아싸다','치느','하나둘셋얍','이루릴',
   '폭력','데드','빛싸다','여신민아','버기','제크로무','다무리','스팔','나유','Doberman',
   '치치','헤세메','KDA','까치','승냉','윤재','해지슬','하도유','Babyee','xooos',
   'oO서영Oo','s하울s','헤파이토스','EXE','v구름v','권성준','비타민나라','VISVIM','리턴','헤라클',
