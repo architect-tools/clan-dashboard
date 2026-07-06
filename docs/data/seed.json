@@ -609,29 +609,36 @@
     {
       "category": "필드 보스",
       "name": "3그룹",
-      "points": 5,
+      "points": 3,
       "weekly": 5,
       "active": true
     },
     {
       "category": "필드 보스",
       "name": "4그룹",
-      "points": 10,
+      "points": 5,
       "weekly": 4,
       "active": true
     },
     {
       "category": "필드 보스",
       "name": "5그룹",
-      "points": 15,
+      "points": 0,
       "weekly": 3,
-      "active": true
+      "active": false
     },
     {
       "category": "필드 보스",
       "name": "6그룹",
-      "points": 20,
+      "points": 10,
       "weekly": 2,
+      "active": true
+    },
+    {
+      "category": "필드 보스",
+      "name": "7그룹",
+      "points": 15,
+      "weekly": 1,
       "active": true
     },
     {

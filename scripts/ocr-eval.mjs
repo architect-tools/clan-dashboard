@@ -75,11 +75,18 @@ const save = () => fs.writeFileSync(CACHE, JSON.stringify(cache));
 for (const smp of SAMPLES) {
   const meta = await sharp(smp.file).metadata();
   const cropKey = `${smp.panel.x},${smp.panel.y},${smp.panel.w},${smp.panel.h}`;
-  // mirror ocr.js extractLines: add denoise+sharpen pass for low-res regions
+  // mirror ocr.js extractLines: add denoise/sharpen passes and a higher scale for low-res regions
   const regionW = smp.panel.w * meta.width;
-  const variants = (process.env.VARIANTS ? VARIANTS : [{}, { binarize: 132 }, { binarize: 110 }, ...(regionW < 1150 ? [{ ops: ['median','unsharp'], binarize: 132 }] : [])]);
+  const regionH = smp.panel.h * meta.height;
+  const lowRes = regionW < 1150 || regionH < 720 || meta.width < 1280;
+  const veryLowRes = regionW < 900 || regionH < 520 || meta.width < 1000;
+  const variants = (process.env.VARIANTS ? VARIANTS : [
+    {}, { binarize: 132 }, { binarize: 110 },
+    ...(lowRes ? [{ ops: ['median','unsharp'], binarize: 132 }, { ops: ['unsharp'], binarize: 150 }] : []),
+  ]);
+  const scales = process.env.SCALES || !veryLowRes || SCALES.includes(5.2) ? SCALES : [...SCALES, 5.2];
   const perScale = [];
-  for (const s of SCALES) for (const v of variants) {
+  for (const s of scales) for (const v of variants) {
     const key = `${KERNEL}|ms${MAX_SIDE}|${smp.file}|${cropKey}|${s}|${v.binarize?'b'+v.binarize:'n'}|${(v.ops||[]).join('+')}`;
     if (!cache[key]) { const buf = await preprocess(smp.file, meta, smp.panel, s, v); const { data } = await worker.recognize(buf); cache[key]=dedup(data.text||''); save(); process.stderr.write('.'); }
     perScale.push(cache[key]);

@@ -7,6 +7,9 @@ import { page, card, table, btn, input, comboSelect, field, modal } from './ui.j
 
 export function renderDistParams() {
   const s = DB.state;
+  const contentRows = [...s.contentCatalog].sort((a, b) =>
+    String(a.name || '').localeCompare(String(b.name || ''), 'ko') ||
+    String(a.category || '').localeCompare(String(b.category || ''), 'ko'));
   const body = page('분배 파라미터', {
     subtitle: '다이아 분배 비율 · 티어컷 · 고투 · 운영진 · 콘텐츠 점수 — 정산 계산에 쓰이는 값',
     actions: [btn('다이아 정산으로', () => location.hash = '#/diamond', { kind: 'ghost' })],
@@ -89,7 +92,7 @@ export function renderDistParams() {
       { label: '주간횟수', align: 'right', render: (c) => input({ type: 'number', value: c.weekly, style: { width: '72px' }, onchange: (e) => { c.weekly = +e.target.value || 0; } }) },
       { label: '활성', align: 'center', render: (c) => el('input', { type: 'checkbox', checked: c.active, onchange: (e) => { c.active = e.target.checked; } }) },
       { label: '', align: 'right', render: (c) => btn('삭제', () => { s.contentCatalog = s.contentCatalog.filter((x) => x !== c); DB.commit(); renderDistParams(); }, { kind: 'ghost-danger' }) },
-    ], s.contentCatalog),
+    ], contentRows),
     el('div.row-actions', {}, [
       btn('+ 콘텐츠 추가', () => addContent(), { kind: 'ghost' }),
       btn('저장', () => { DB.commit(); toast('콘텐츠 저장됨'); }, { kind: 'primary' }),

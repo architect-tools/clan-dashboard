@@ -209,6 +209,32 @@ function migrateEquip(eq) {
   return out;
 }
 
+function normalizeFieldBossCatalog(catalog) {
+  const specs = [
+    { name: '3그룹', points: 3, weekly: 5 },
+    { name: '4그룹', points: 5, weekly: 4 },
+    { name: '6그룹', points: 10, weekly: 2 },
+    { name: '7그룹', points: 15, weekly: 1 },
+  ];
+  for (const spec of specs) {
+    let item = catalog.find((c) => c && c.category === '필드 보스' && c.name === spec.name);
+    if (!item) {
+      catalog.push({ category: '필드 보스', ...spec, active: true });
+    } else {
+      item.category = '필드 보스';
+      item.points = spec.points;
+      item.weekly = +item.weekly || spec.weekly;
+      item.active = true;
+    }
+  }
+  for (const item of catalog) {
+    if (item && item.category === '필드 보스' && item.name === '5그룹') {
+      item.points = 0;
+      item.active = false;
+    }
+  }
+}
+
 // ── state normalization / migration ─────────────────────────────────
 function normalize(d) {
   d = d || {};
@@ -231,6 +257,7 @@ function normalize(d) {
   d.contentCatalog ||= [];
   // 콘텐츠 카테고리 보정: 앙그바르 투기장·클랜 원정대는 '클랜 활동'으로 분리(기존 데이터도 교정)
   for (const c of d.contentCatalog) if (c && (c.name === '앙그바르 투기장' || c.name === '클랜 원정대')) c.category = '클랜 활동';
+  normalizeFieldBossCatalog(d.contentCatalog);
   d.rotationQueues ||= [];
   d.weaponProgress ||= [];
 

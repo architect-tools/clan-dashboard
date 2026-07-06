@@ -326,9 +326,10 @@ function checkinPanel(content) {
   }
 
   // manual roster picker (always available, even without screenshot)
+  const rosterByName = [...roster].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
   const manualPick = el('details.manual-pick', {}, [
     el('summary', { text: '명단에서 직접 선택 / 추가' }),
-    el('div.pick-grid', {}, Roles.selfFirst(roster).map((m) => {
+    el('div.pick-grid', {}, rosterByName.map((m) => {
       const on = current.has(m.id);
       return el('label.pick-item', { class: on ? 'on' : '' }, [
         el('input', { type: 'checkbox', checked: on, dataset: { mid: m.id }, onchange: (e) => toggle(m.id, e.target.checked) }),

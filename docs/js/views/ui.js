@@ -89,7 +89,7 @@ export function modal(title, content, { onClose, wide, headerActions } = {}) {
   // header actions render in the sticky header, left of the ✕ (always reachable)
   const acts = headerActions ? [].concat(typeof headerActions === 'function' ? headerActions(close) : headerActions).filter(Boolean) : [];
   const widthCls = wide === 'x' ? '.modal-xwide' : wide ? '.modal-wide' : '';
-  const overlay = el('div.modal-overlay', { onclick: (e) => { if (e.target === overlay && !document.querySelector('.combo.open')) close(); } }, [
+  const overlay = el('div.modal-overlay', { onmousedown: (e) => { if (e.target === overlay && !document.querySelector('.combo.open')) close(); } }, [
     el('div.modal' + widthCls, {}, [
       el('div.modal-head', {}, [
         el('h3', { text: title }),

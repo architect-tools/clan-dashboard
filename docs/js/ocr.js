@@ -1,4 +1,4 @@
-// ocr.js — screenshot → text lines → roster matches. (preproc: raw+b132+b110)
+// ocr.js — screenshot → text lines → roster matches. (multi-scale OCR preproc variants)
 // Engine: Tesseract.js (kor+eng, sparse-text mode) loaded lazily from CDN.
 // Matching is against the known roster, so even imperfect OCR is recovered by
 // fuzzy hangul matching + the admin's review step.
@@ -237,12 +237,18 @@ export async function extractLines(img, crop, onProgress = () => {}, { psm = '11
   if (!variants) {
     variants = [{}, { binarize: 132 }, { binarize: 110 }];
     // Low-res / compressed captures (e.g. KakaoTalk-shared shots): names are only a
-    // few px tall and JPEG/WebP blocking garbles them. Add a denoise+sharpen pass
-    // (unioned with the above) to recover hard glyphs — ONLY when the region is
-    // small, so normal/high-res shots aren't slowed. Validated in scripts/ocr-eval.mjs
-    // (sample C 샬루키 58%→65%: hidden→shown; A/B unchanged; 0 false matches).
+    // few px tall and JPEG/WebP blocking garbles them. Add denoise/sharpen passes
+    // plus one extra upscale tier for very small regions — ONLY when the region is
+    // small, so normal/high-res shots aren't slowed.
     const regionW = crop ? crop.w : img.naturalWidth;
-    if (regionW < 1150) variants.push({ ops: ['median', 'unsharp'], binarize: 132 });
+    const regionH = crop ? crop.h : img.naturalHeight;
+    const lowRes = regionW < 1150 || regionH < 720 || img.naturalWidth < 1280;
+    const veryLowRes = regionW < 900 || regionH < 520 || img.naturalWidth < 1000;
+    if (lowRes) variants.push(
+      { ops: ['median', 'unsharp'], binarize: 132 },
+      { ops: ['unsharp'], binarize: 150 },
+    );
+    if (veryLowRes && !scales.includes(5.2)) scales = [...scales, 5.2];
   }
   const scheduler = await getScheduler(onProgress, lang, psm);
   const passes = [];
