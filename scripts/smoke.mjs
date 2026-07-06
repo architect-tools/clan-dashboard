@@ -97,7 +97,7 @@ try {
   if (app.querySelector('.checkin') && cbOf(A)?.checked) ok('체크인: 기존 기록(A) 자동 체크'); else bad('checkin open', 'panel/A');
   const setCb = (id, on) => { const cb = cbOf(id); cb.checked = on; cb.dispatchEvent(new w.Event('change')); };
   setCb(A, false); setCb(B, true); setCb(C, true);            // A 해제, B·C 추가
-  [...app.querySelectorAll('button')].find((b) => b.textContent.trim() === '참여 기록').click();
+  [...app.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('참여 기록')).click();
   const rec = new Set(Mutations.getEvent(todayISO, CONTENT));
   if (rec.size === 2 && !rec.has(A) && rec.has(B) && rec.has(C)) ok('체크인 확정 = selected(단일소스): A제거·B·C추가'); else bad('checkin confirm', `got [${[...rec]}]`);
   Mutations.setEventMembers(todayISO, CONTENT, []);           // cleanup

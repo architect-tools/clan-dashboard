@@ -251,13 +251,25 @@ export async function extractLines(img, crop, onProgress = () => {}, { psm = '11
     if (veryLowRes && !scales.includes(5.2)) scales = [...scales, 5.2];
   }
   const scheduler = await getScheduler(onProgress, lang, psm);
+  const regions = [crop || null];
+  if (!crop && img.naturalWidth >= 1200 && img.naturalHeight >= 800) {
+    // Full-screen captures include title/footer chrome that can drown out bottom
+    // rows. Add one roster-grid region pass without requiring the user to crop.
+    regions.push({
+      x: img.naturalWidth * 0.01,
+      y: img.naturalHeight * 0.13,
+      w: img.naturalWidth * 0.98,
+      h: img.naturalHeight * 0.75,
+    });
+    if (!scales.includes(5.2)) scales = [...scales, 5.2];
+  }
   const passes = [];
-  for (const s of scales) for (const v of variants) passes.push({ s, v });
+  for (const region of regions) for (const s of scales) for (const v of variants) passes.push({ region, s, v });
   // preprocess on the main thread (cheap), then recognize all passes concurrently
   // across the worker pool. Promise.all preserves input order in the result.
   let done = 0;
   const perScale = await Promise.all(passes.map(async (p) => {
-    const { dataUrl } = preprocess(img, crop, p.s, p.v);
+    const { dataUrl } = preprocess(img, p.region, p.s, p.v);
     const { data } = await scheduler.addJob('recognize', dataUrl);
     onProgress({ stage: `문자 인식 중 (${++done}/${passes.length})`, progress: 0.15 + done / passes.length * 0.8 });
     return dedup(data.text || '');

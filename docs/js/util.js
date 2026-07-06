@@ -137,6 +137,7 @@ function simCore(na, nb) {
   const jamCJ = 1 - levenshtein(cf, cb) / Math.max(cf.length, cb.length);
   const jam = Math.max(jamFull, jamCJ * 0.99);          // jongsung-insensitive (OCR drops 받침)
   let sim = raw * 0.35 + jam * 0.65;
+  if (cf === cb && Math.min(na.length, nb.length) >= 2) sim = Math.max(sim, 0.84);
   // Substring bonus, scaled by coverage. Require the contained string to be ≥2
   // chars so short fragments can't fake a high score by mere containment: a 2-char
   // fragment (e.g. "Kd"⊂"KDA", "da"⊂"KDA") used to hit 0.55+0.4·(2/3)=0.82 and

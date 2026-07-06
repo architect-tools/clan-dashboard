@@ -196,11 +196,13 @@ function checkinPanel(content) {
   }
   const current = new Set(Mutations.getEvent(selDate, content)); // memberIds already recorded
   let curImg = null, crop = null, imgEl = null;
+  const selectedBadge = el('span.cbadge', { text: '선택 0명' });
 
   const wrap = el('div.checkin');
   wrap.appendChild(el('div.checkin-head', {}, [
     el('b', { text: `${content} 참여 기록` }),
     cat ? el('span.muted', { text: `${cat.points}점 · ${cat.category}` }) : null,
+    selectedBadge,
   ]));
 
   const drop = el('div.drop', {}, [
@@ -225,8 +227,7 @@ function checkinPanel(content) {
     try { curImg = await loadImage(file); } catch { return toast('이미지를 열 수 없습니다', 'error'); }
     // reset any prior recognition (so replacing the screenshot always starts clean).
     // selected 도 기존 기록(current) 기준으로 되돌려 이전 인식의 잔여 체크가 누적되지 않게.
-    crop = null; picked.clear(); manual.clear(); clear(ocrResult);
-    selected.clear(); current.forEach((id) => selected.add(id)); syncChecks();
+    crop = null; resetRecognitionState();
     drop.style.display = 'none'; buildPreview();
     // apply the remembered region (resolution-independent fractions) — cheap, no
     // OpenCV. Panel auto-detect is OPT-IN via a button: it loads a ~10MB WASM and
@@ -318,7 +319,13 @@ function checkinPanel(content) {
   const selected = new Set(current);        // 기록될 최종 memberId 집합 = 단일 진실
   const picked = new Map();                 // OCR 인식결과 표시용: id -> {member, score, token}
   const manual = new Map();                 // 미매칭 토큰 드롭다운: token -> memberId
+  let saveBtn = null;
   const toggle = (id, on) => { if (on) selected.add(id); else selected.delete(id); syncChecks(); };
+  function resetRecognitionState() {
+    picked.clear(); manual.clear(); clear(ocrResult);
+    selected.clear(); current.forEach((id) => selected.add(id));
+    syncChecks();
+  }
   // 두 목록(OCR 결과 · 명단 직접선택)의 모든 체크박스를 selected 기준으로 일치시킴
   function syncChecks() {
     ocrResult.querySelectorAll('input[data-mid]').forEach((cb) => {
@@ -327,9 +334,12 @@ function checkinPanel(content) {
     manualPick.querySelectorAll('input[data-mid]').forEach((cb) => {
       const on = selected.has(+cb.dataset.mid); cb.checked = on; cb.closest('.pick-item')?.classList.toggle('on', on);
     });
+    selectedBadge.textContent = `선택 ${selected.size}명`;
+    if (saveBtn) saveBtn.textContent = `참여 기록 (${selected.size}명)`;
   }
   async function runOcr() {
     if (!curImg) return;
+    resetRecognitionState();
     const busy = busyOverlay('참여자 인식 중…', 'OCR 엔진 준비 중');
     try {
       const out = await extractLines(curImg, crop, (p) => {
@@ -338,7 +348,6 @@ function checkinPanel(content) {
         progress.textContent = `${p.stage} (${pct}%)`;
       });
       const { matched, maybe } = consensusMatch(out.perScale, roster);
-      picked.clear();
       for (const mm of matched) { picked.set(mm.member.id, mm); selected.add(mm.member.id); } // 신뢰 → 자동 선택
       for (const mm of maybe) if (!picked.has(mm.member.id)) picked.set(mm.member.id, mm);      // 확인필요 → 표시만(선택 X)
       manualPick.open = true; // 동기화된 목록을 바로 펼쳐 보여줌
@@ -387,20 +396,22 @@ function checkinPanel(content) {
     }
   }
 
-  const actions = el('div.checkin-actions', {}, [
-    btn('취소', () => { selContent = null; renderParticipation(); }, { kind: 'ghost' }),
-    Mutations.getEvent(selDate, content).length
-      ? btn('이 기록 삭제', () => { Mutations.setEventMembers(selDate, content, []); DB.commit(); toast('기록 삭제'); renderParticipation(); }, { kind: 'ghost-danger' })
-      : null,
-    btn('참여 기록', () => {
+  saveBtn = btn('참여 기록 (0명)', () => {
       // selected 가 단일 진실(기존 기록 + OCR 자동선택 + 수동 체크/해제 반영). 두 목록이
       // 같은 집합을 보므로 예전의 'added 가드 + DOM 스캔' 병합 로직이 필요 없다.
       Mutations.setEventMembers(selDate, content, [...selected]);
       DB.commit();
       toast(`${content}: ${selected.size}명 기록 완료`);
       selContent = null; renderParticipation();
-    }, { kind: 'primary' }),
+    }, { kind: 'primary' });
+  const actions = el('div.checkin-actions', {}, [
+    btn('취소', () => { selContent = null; renderParticipation(); }, { kind: 'ghost' }),
+    Mutations.getEvent(selDate, content).length
+      ? btn('이 기록 삭제', () => { Mutations.setEventMembers(selDate, content, []); DB.commit(); toast('기록 삭제'); renderParticipation(); }, { kind: 'ghost-danger' })
+      : null,
+    saveBtn,
   ]);
+  syncChecks();
 
   // paste support while panel open
   const onPaste = (e) => { const it = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/')); if (it) pick(it.getAsFile()); };
