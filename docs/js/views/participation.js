@@ -346,7 +346,7 @@ function checkinPanel(content) {
         const pct = Math.round(p.progress * 100);
         busy.update(p.stage, `${pct}%`);
         progress.textContent = `${p.stage} (${pct}%)`;
-      });
+      }, { roster });
       const { matched, maybe } = consensusMatch(out.perScale, roster);
       for (const mm of matched) { picked.set(mm.member.id, mm); selected.add(mm.member.id); } // 신뢰 → 자동 선택
       for (const mm of maybe) if (!picked.has(mm.member.id)) picked.set(mm.member.id, mm);      // 확인필요 → 표시만(선택 X)

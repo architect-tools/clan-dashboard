@@ -210,10 +210,11 @@ function poolSize() {
   const c = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 4;
   return Math.max(2, Math.min(4, c - 1));
 }
-let _schedulerP = null;
+const _schedulers = {};
 async function getScheduler(onProgress, lang = 'kor+eng', psm = '11') {
-  if (_schedulerP) return _schedulerP;
-  _schedulerP = (async () => {
+  const key = `${lang}|${psm}`;
+  if (_schedulers[key]) return _schedulers[key];
+  _schedulers[key] = (async () => {
     await ensureTesseract(onProgress);
     onProgress({ stage: `OCR 데이터 준비(${lang}, 워커 ${poolSize()}개, 최초 1회)`, progress: 0.1 });
     const scheduler = window.Tesseract.createScheduler();
@@ -224,7 +225,188 @@ async function getScheduler(onProgress, lang = 'kor+eng', psm = '11') {
     }));
     return scheduler;
   })();
-  return _schedulerP;
+  return _schedulers[key];
+}
+
+function autoRosterRegion(img) {
+  return {
+    x: img.naturalWidth * 0.01,
+    y: img.naturalHeight * 0.13,
+    w: img.naturalWidth * 0.98,
+    h: img.naturalHeight * 0.75,
+  };
+}
+
+function median(nums, fallback = 0) {
+  const a = nums.filter((n) => Number.isFinite(n)).sort((x, y) => x - y);
+  if (!a.length) return fallback;
+  const mid = Math.floor(a.length / 2);
+  return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
+}
+
+function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+
+function clusters(nums, gap) {
+  const values = nums.filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+  const out = [];
+  for (const v of values) {
+    const last = out[out.length - 1];
+    if (!last || Math.abs(v - last[last.length - 1]) > gap) out.push([v]);
+    else last.push(v);
+  }
+  return out.map((g) => median(g));
+}
+
+function parseTsvBoxes(tsv) {
+  const rows = String(tsv || '').trim().split(/\r?\n/);
+  if (rows.length < 2) return [];
+  const head = rows[0].split('\t');
+  const idx = (k) => head.indexOf(k);
+  const li = idx('left'), ti = idx('top'), wi = idx('width'), hi = idx('height'), txti = idx('text'), leveli = idx('level');
+  if ([li, ti, wi, hi, txti].some((i) => i < 0)) return [];
+  return rows.slice(1).map((row) => {
+    const cols = row.split('\t');
+    if (leveli >= 0 && cols[leveli] !== '5') return null;
+    const text = cols.slice(txti).join('\t').trim();
+    const x = +cols[li], y = +cols[ti], w = +cols[wi], h = +cols[hi];
+    if (!text || !Number.isFinite(x + y + w + h)) return null;
+    return { text, bbox: { x0: x, y0: y, x1: x + w, y1: y + h } };
+  }).filter(Boolean);
+}
+
+function flattenBoxes(data) {
+  const out = [];
+  const push = (text, bbox) => {
+    if (!bbox) return;
+    const t = String(text || '').trim().replace(/\s+/g, ' ');
+    if (t) out.push({ text: t, bbox });
+  };
+  for (const l of data?.lines || []) push(l.text, l.bbox);
+  for (const w of data?.words || []) push(w.text, w.bbox);
+  const visitLine = (line) => {
+    push(line.text, line.bbox);
+    for (const w of line.words || []) push(w.text, w.bbox);
+  };
+  for (const b of data?.blocks || []) for (const p of b.paragraphs || []) for (const l of p.lines || []) visitLine(l);
+  out.push(...parseTsvBoxes(data?.tsv));
+  return out;
+}
+
+function bestRoster(token, roster) {
+  let best = null, second = 0;
+  for (const m of roster) {
+    const score = similarity(token, m.name);
+    if (score > (best?.score || 0)) { second = best?.score || 0; best = { member: m, score }; }
+    else if (score > second) second = score;
+  }
+  return best ? { ...best, second } : null;
+}
+
+function anchorBoxes(data, pre, roster) {
+  const best = new Map();
+  for (const box of flattenBoxes(data)) {
+    if (normName(box.text).length < 2) continue;
+    const hit = bestRoster(box.text, roster);
+    if (!hit || hit.score < 0.72) continue;
+    const b = box.bbox;
+    const rect = {
+      x: pre.ox + b.x0 / pre.scale,
+      y: pre.oy + b.y0 / pre.scale,
+      w: (b.x1 - b.x0) / pre.scale,
+      h: (b.y1 - b.y0) / pre.scale,
+    };
+    if (rect.w < 4 || rect.h < 4) continue;
+    const cur = best.get(hit.member.id);
+    if (!cur || hit.score > cur.score) best.set(hit.member.id, { ...hit, token: box.text, rect });
+  }
+  return [...best.values()];
+}
+
+function inferRosterSlots(region, anchors) {
+  const cols = 5, bands = 2, rowsPerBand = 5;
+  const colW = region.w / cols, bandH = region.h / bands;
+  const offsets = [];
+  for (const a of anchors) {
+    const cx = a.rect.x + a.rect.w / 2;
+    const col = clamp(Math.floor((cx - region.x) / colW), 0, cols - 1);
+    offsets.push(a.rect.x - (region.x + col * colW));
+  }
+  const nameOffset = clamp(median(offsets, colW * 0.25) - colW * 0.03, colW * 0.18, colW * 0.32);
+  const nameW = colW * 0.66;
+  const slots = [];
+  for (let band = 0; band < bands; band++) {
+    const bandY = region.y + band * bandH;
+    const roughPitch = bandH * 0.162;
+    const roughY0 = bandY + bandH * 0.25;
+    const centers = anchors
+      .map((a) => a.rect.y + a.rect.h / 2)
+      .filter((y) => y >= bandY && y < bandY + bandH);
+    const yc = clusters(centers, bandH * 0.07);
+    const diffs = yc.slice(1).map((y, i) => y - yc[i]).filter((d) => d > roughPitch * 0.55 && d < roughPitch * 1.45);
+    const pitch = clamp(median(diffs, roughPitch), roughPitch * 0.75, roughPitch * 1.25);
+    const row0s = yc.map((y) => y - clamp(Math.round((y - roughY0) / pitch), 0, rowsPerBand - 1) * pitch);
+    const row0 = clamp(median(row0s, roughY0), bandY + bandH * 0.18, bandY + bandH * 0.32);
+    const h = clamp(pitch * 0.56, 24, 44);
+    for (let row = 0; row < rowsPerBand; row++) {
+      const cy = row0 + row * pitch;
+      if (cy < bandY || cy > bandY + bandH) continue;
+      for (let col = 0; col < cols; col++) {
+        const x = region.x + col * colW + nameOffset;
+        slots.push({ key: `${band}:${row}:${col}`, x, y: cy - h / 2, w: nameW, h, col, row, band });
+      }
+    }
+  }
+  return slots;
+}
+
+async function recognizeWithLayout(worker, dataUrl) {
+  try { return (await worker.recognize(dataUrl, {}, { blocks: true, tsv: true })).data; }
+  catch { return (await worker.recognize(dataUrl)).data; }
+}
+
+async function extractAnchoredSlots(img, crop, roster, onProgress = () => {}, { lang = 'kor+eng' } = {}) {
+  if (!Array.isArray(roster) || !roster.length) return { lines: [], anchors: [], slots: [] };
+  const region = crop || (img.naturalWidth >= 1200 && img.naturalHeight >= 800 ? autoRosterRegion(img) : null);
+  if (!region) return { lines: [], anchors: [], slots: [] };
+  if (region.w < img.naturalWidth * 0.6 || region.h < img.naturalHeight * 0.45) return { lines: [], anchors: [], slots: [] };
+  const worker = await getWorker(onProgress, lang);
+  await worker.setParameters({ tessedit_pageseg_mode: '11' });
+  onProgress({ stage: '위치 앵커 탐색', progress: 0.02 });
+  const pre = preprocess(img, region, 2.8);
+  const layout = await recognizeWithLayout(worker, pre.dataUrl);
+  const anchors = anchorBoxes(layout, pre, roster);
+  const slots = inferRosterSlots(region, anchors);
+  const anchoredSlots = new Set();
+  for (const a of anchors.filter((x) => x.score >= 0.80)) {
+    const cx = a.rect.x + a.rect.w / 2, cy = a.rect.y + a.rect.h / 2;
+    const hit = slots.find((s) => cx >= s.x - s.w * 0.25 && cx <= s.x + s.w * 1.05 && cy >= s.y - s.h * 0.8 && cy <= s.y + s.h * 1.2);
+    if (hit) anchoredSlots.add(hit.key);
+  }
+  const targets = slots.filter((s) => !anchoredSlots.has(s.key));
+  await worker.setParameters({ tessedit_pageseg_mode: '7' });
+  const lines = [], matches = [];
+  const variants = [{ ops: ['unsharp'], binarize: 150 }, { binarize: 132 }];
+  let done = 0;
+  for (const slot of targets) {
+    let best = null;
+    for (const v of variants) {
+      const scale = Math.min(7, Math.max(2.2, TARGET_CELL_H / Math.max(8, slot.h)));
+      const { dataUrl } = preprocess(img, slot, scale, v);
+      const { data } = await worker.recognize(dataUrl);
+      for (const token of dedup(data.text || '')) {
+        if (normName(token).length < 2) continue;
+        const hit = bestRoster(token, roster);
+        if (!hit) continue;
+        if (!best || hit.score > best.score) best = { ...hit, token, slot };
+      }
+    }
+    if (best && best.score >= 0.80 && (best.score >= 0.94 || best.score - best.second >= 0.04)) {
+      lines.push(best.token);
+      matches.push(best);
+    }
+    onProgress({ stage: `앵커 기반 재인식 ${++done}/${targets.length}`, progress: targets.length ? done / targets.length : 1 });
+  }
+  return { lines: dedup(lines.join('\n')), anchors, slots: targets, matches, engine: `tesseract-anchor-slots(${targets.length})` };
 }
 
 /**
@@ -233,7 +415,7 @@ async function getScheduler(onProgress, lang = 'kor+eng', psm = '11') {
  * another. Running a few scales and unioning all recognized text catches names
  * no single pass gets. Combined with confusable-char matching downstream.
  */
-export async function extractLines(img, crop, onProgress = () => {}, { psm = '11', scales = [2.8, 3.6, 4.4], lang = 'kor+eng', variants } = {}) {
+export async function extractLines(img, crop, onProgress = () => {}, { psm = '11', scales = [2.8, 3.6, 4.4], lang = 'kor+eng', variants, roster, anchored = true } = {}) {
   if (!variants) {
     variants = [{}, { binarize: 132 }, { binarize: 110 }];
     // Low-res / compressed captures (e.g. KakaoTalk-shared shots): names are only a
@@ -255,12 +437,7 @@ export async function extractLines(img, crop, onProgress = () => {}, { psm = '11
   if (!crop && img.naturalWidth >= 1200 && img.naturalHeight >= 800) {
     // Full-screen captures include title/footer chrome that can drown out bottom
     // rows. Add one roster-grid region pass without requiring the user to crop.
-    regions.push({
-      x: img.naturalWidth * 0.01,
-      y: img.naturalHeight * 0.13,
-      w: img.naturalWidth * 0.98,
-      h: img.naturalHeight * 0.75,
-    });
+    regions.push(autoRosterRegion(img));
     if (!scales.includes(5.2)) scales = [...scales, 5.2];
   }
   const passes = [];
@@ -274,8 +451,24 @@ export async function extractLines(img, crop, onProgress = () => {}, { psm = '11
     onProgress({ stage: `문자 인식 중 (${++done}/${passes.length})`, progress: 0.15 + done / passes.length * 0.8 });
     return dedup(data.text || '');
   }));
+  let anchoredPass = null;
+  if (anchored && Array.isArray(roster) && roster.length) {
+    try {
+      anchoredPass = await extractAnchoredSlots(img, crop, roster, (p) => {
+        onProgress({ stage: p.stage, progress: 0.95 + p.progress * 0.04 });
+      }, { lang });
+      if (anchoredPass.lines.length) perScale.push(anchoredPass.lines);
+    } catch (e) {
+      console.warn('anchor slot OCR failed', e);
+    }
+  }
   onProgress({ stage: '완료', progress: 1 });
-  return { lines: dedup(perScale.flat().join('\n')), perScale, engine: `tesseract(${lang},${passes.length}pass×${poolSize()}w)` };
+  return {
+    lines: dedup(perScale.flat().join('\n')),
+    perScale,
+    engine: `tesseract(${lang},${passes.length}pass×${poolSize()}w${anchoredPass ? '+anchor' : ''})`,
+    anchored: anchoredPass,
+  };
 }
 
 // Match rule (per user spec) — the score you SEE is the whole decision, no hidden
