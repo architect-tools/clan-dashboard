@@ -130,6 +130,7 @@ function jamo2(str, dropJong) {
 
 function simCore(na, nb) {
   if (na === nb) return 1;
+  const latinOnly = /^[0-9a-z]+$/i.test(na) && /^[0-9a-z]+$/i.test(nb);
   const raw = 1 - levenshtein(na, nb) / Math.max(na.length, nb.length);
   const ff = jamo2(na, false), fb = jamo2(nb, false);
   const jamFull = 1 - levenshtein(ff, fb) / Math.max(ff.length, fb.length);
@@ -145,8 +146,13 @@ function simCore(na, nb) {
   // boost; shorter overlaps fall back to raw/jamo distance (→ shown, not checked).
   if (na.includes(nb) || nb.includes(na)) {
     const minL = Math.min(na.length, nb.length), maxL = Math.max(na.length, nb.length);
-    if (minL >= 3) sim = Math.max(sim, 0.55 + 0.4 * (minL / maxL));
+    const coverage = minL / maxL;
+    if (latinOnly) {
+      if (minL >= 4 && coverage >= 0.8) sim = Math.max(sim, 0.55 + 0.4 * coverage);
+    } else if (minL >= 3) sim = Math.max(sim, 0.55 + 0.4 * coverage);
   }
+  if (latinOnly && na !== nb && Math.min(na.length, nb.length) <= 3 && Math.max(na.length, nb.length) >= 5)
+    sim = Math.min(sim, 0.59);
   return Math.max(0, Math.min(1, sim));
 }
 

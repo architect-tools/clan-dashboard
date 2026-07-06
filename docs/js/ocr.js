@@ -237,6 +237,10 @@ function autoRosterRegion(img) {
   };
 }
 
+function isBroadRosterRegion(img, region) {
+  return !!region && region.w >= img.naturalWidth * 0.6 && region.h >= img.naturalHeight * 0.45;
+}
+
 function median(nums, fallback = 0) {
   const a = nums.filter((n) => Number.isFinite(n)).sort((x, y) => x - y);
   if (!a.length) return fallback;
@@ -366,9 +370,10 @@ async function recognizeWithLayout(worker, dataUrl) {
 
 async function extractAnchoredSlots(img, crop, roster, onProgress = () => {}, { lang = 'kor+eng' } = {}) {
   if (!Array.isArray(roster) || !roster.length) return { lines: [], anchors: [], slots: [] };
-  const region = crop || (img.naturalWidth >= 1200 && img.naturalHeight >= 800 ? autoRosterRegion(img) : null);
+  const autoRegion = img.naturalWidth >= 1200 && img.naturalHeight >= 800 ? autoRosterRegion(img) : null;
+  const region = crop && isBroadRosterRegion(img, crop) ? crop : (autoRegion || crop);
   if (!region) return { lines: [], anchors: [], slots: [] };
-  if (region.w < img.naturalWidth * 0.6 || region.h < img.naturalHeight * 0.45) return { lines: [], anchors: [], slots: [] };
+  if (!isBroadRosterRegion(img, region)) return { lines: [], anchors: [], slots: [] };
   const worker = await getWorker(onProgress, lang);
   await worker.setParameters({ tessedit_pageseg_mode: '11' });
   onProgress({ stage: '위치 앵커 탐색', progress: 0.02 });
@@ -434,10 +439,11 @@ export async function extractLines(img, crop, onProgress = () => {}, { psm = '11
   }
   const scheduler = await getScheduler(onProgress, lang, psm);
   const regions = [crop || null];
-  if (!crop && img.naturalWidth >= 1200 && img.naturalHeight >= 800) {
+  const autoRegion = img.naturalWidth >= 1200 && img.naturalHeight >= 800 ? autoRosterRegion(img) : null;
+  if (autoRegion) {
     // Full-screen captures include title/footer chrome that can drown out bottom
-    // rows. Add one roster-grid region pass without requiring the user to crop.
-    regions.push(autoRosterRegion(img));
+    // rows. Add one roster-grid region pass even when an old remembered crop exists.
+    regions.push(autoRegion);
     if (!scales.includes(5.2)) scales = [...scales, 5.2];
   }
   const passes = [];
@@ -474,12 +480,12 @@ export async function extractLines(img, crop, onProgress = () => {}, { psm = '11
 // Match rule (per user spec) — the score you SEE is the whole decision, no hidden
 // heuristics:
 //   • score ≥ CHECK_AT (80%) → matched → checkbox auto-checked
-//   • SHOW_AT (60%) ≤ score < CHECK_AT → maybe → shown in the list but UNCHECKED
+//   • SHOW_AT (70%) ≤ score < CHECK_AT → maybe → shown in the list but UNCHECKED
 //   • score < SHOW_AT → dropped (not shown)
 // `score` is each member's BEST similarity across all passes (multi-scale union).
 // No vote-counting or length/script bars, so a shown 72% is never auto-checked and
 // the colour boundary can line up exactly with the 80% check line.
-export const CHECK_AT = 0.80, SHOW_AT = 0.60;
+export const CHECK_AT = 0.80, SHOW_AT = 0.70;
 
 export function consensusMatch(perScale, roster, { checkAt = CHECK_AT, showAt = SHOW_AT } = {}) {
   const best = new Map(); // memberId -> {member, score, token} — best read across ALL passes
