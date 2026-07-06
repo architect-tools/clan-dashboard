@@ -236,6 +236,11 @@ function normalizeFieldBossCatalog(catalog) {
   }
 }
 
+function isCorruptContentEntry(c) {
+  const text = `${c?.category || ''} ${c?.name || ''}`;
+  return text.includes('??') || text.includes('�') || /^\d+\?\?$/.test(String(c?.name || ''));
+}
+
 // ── state normalization / migration ─────────────────────────────────
 function normalize(d) {
   d = d || {};
@@ -256,6 +261,7 @@ function normalize(d) {
     active: m.active !== false, note: m.note || '',
   }));
   d.contentCatalog ||= [];
+  d.contentCatalog = d.contentCatalog.filter((c) => !isCorruptContentEntry(c));
   // 콘텐츠 카테고리 보정: 앙그바르 투기장·클랜 원정대는 '클랜 활동'으로 분리(기존 데이터도 교정)
   for (const c of d.contentCatalog) if (c && (c.name === '앙그바르 투기장' || c.name === '클랜 원정대')) c.category = '클랜 활동';
   normalizeFieldBossCatalog(d.contentCatalog);

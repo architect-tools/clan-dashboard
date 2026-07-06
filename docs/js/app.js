@@ -23,6 +23,7 @@ const NAV = [
   { path: 'diamond', icon: '💎', label: '다이아 정산' },
   { path: 'rotation', icon: '🎁', label: '전리품' },
   { path: 'gear', icon: '🛡️', label: '장비/캐릭터 현황' },
+  { path: 'dist-params', icon: '🧮', label: '분배 파라미터', admin: true },
   { path: 'settings', icon: '⚙️', label: '설정', admin: true },
 ];
 

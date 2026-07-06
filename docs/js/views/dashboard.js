@@ -16,6 +16,7 @@ export function renderDashboard() {
     subtitle: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }),
     actions: [
       el('span.mode-pill', { class: live ? 'live' : 'local', text: live ? '클라우드 동기화' : '로컬 저장' }),
+      Roles.isAdmin() ? btn('콘텐츠 점수표', () => location.hash = '#/dist-params', { kind: 'ghost', admin: true }) : null,
       Roles.isAdmin() ? btn('직업 수정', () => openClassEditor(), { kind: 'ghost', admin: true }) : null,
     ],
   });
