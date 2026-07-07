@@ -7,6 +7,11 @@ import { page, card, table, btn, input, comboSelect, field, modal } from './ui.j
 
 export function renderDistParams() {
   const s = DB.state;
+  const saveNow = async (message) => {
+    DB.commit();
+    const ok = await DB.flushSave();
+    if (ok) toast(message);
+  };
   const contentRows = [...s.contentCatalog].sort((a, b) =>
     String(a.name || '').localeCompare(String(b.name || ''), 'ko') ||
     String(a.category || '').localeCompare(String(b.category || ''), 'ko'));
@@ -88,14 +93,14 @@ export function renderDistParams() {
     table([
       { key: 'category', label: '분류' },
       { key: 'name', label: '콘텐츠' },
-      { label: '점수', align: 'right', render: (c) => input({ type: 'number', value: c.points, style: { width: '72px' }, onchange: (e) => { c.points = +e.target.value || 0; } }) },
-      { label: '주간횟수', align: 'right', render: (c) => input({ type: 'number', value: c.weekly, style: { width: '72px' }, onchange: (e) => { c.weekly = +e.target.value || 0; } }) },
+      { label: '점수', align: 'right', render: (c) => input({ type: 'number', value: c.points, style: { width: '72px' }, oninput: (e) => { c.points = +e.target.value || 0; }, onchange: (e) => { c.points = +e.target.value || 0; } }) },
+      { label: '주간횟수', align: 'right', render: (c) => input({ type: 'number', value: c.weekly, style: { width: '72px' }, oninput: (e) => { c.weekly = +e.target.value || 0; }, onchange: (e) => { c.weekly = +e.target.value || 0; } }) },
       { label: '활성', align: 'center', render: (c) => el('input', { type: 'checkbox', checked: c.active, onchange: (e) => { c.active = e.target.checked; } }) },
       { label: '', align: 'right', render: (c) => btn('삭제', () => { s.contentCatalog = s.contentCatalog.filter((x) => x !== c); DB.commit(); renderDistParams(); }, { kind: 'ghost-danger' }) },
     ], contentRows),
     el('div.row-actions', {}, [
       btn('+ 콘텐츠 추가', () => addContent(), { kind: 'ghost' }),
-      btn('저장', () => { DB.commit(); toast('콘텐츠 저장됨'); }, { kind: 'primary' }),
+      btn('저장', () => saveNow('콘텐츠 저장됨'), { kind: 'primary' }),
     ]),
   ]), { className: 'card-compact' }));
 

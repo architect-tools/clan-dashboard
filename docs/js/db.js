@@ -229,9 +229,9 @@ function normalizeFieldBossCatalog(catalog) {
       catalog.push({ category: '필드 보스', ...spec, active: true });
     } else {
       item.category = '필드 보스';
-      item.points = spec.points;
+      if (item.points == null || item.points === '') item.points = spec.points;
       item.weekly = +item.weekly || spec.weekly;
-      item.active = true;
+      if (item.active == null) item.active = true;
     }
   }
 }

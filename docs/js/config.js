@@ -4,7 +4,7 @@
 
 export const CONFIG = {
   appName: '불면증 클랜 관리',
-  version: '1.0.1',
+  version: '1.0.2',
 
   // ── Backend (optional) ───────────────────────────────────────────
   // Paste the Apps Script Web App URL here (…/exec). Blank = standalone mode.
