@@ -2,15 +2,30 @@
 // 운영진 · 콘텐츠 점수. 다이아 정산의 "분배 파라미터" 버튼으로 진입(사이드바 설정과 분리).
 import { DB } from '../db.js';
 import { Roles } from '../roles.js';
+import { computeScores } from '../calc.js';
 import { el, fmt, toast } from '../util.js';
 import { page, card, table, btn, input, comboSelect, field, modal } from './ui.js';
 
 export function renderDistParams() {
   const s = DB.state;
+  const applyCurrentParticipationScores = () => {
+    const dates = Object.keys(s.participation?.byDate || {}).sort();
+    if (!dates.length) return false;
+    const range = {
+      from: s.participation.scoreFrom || dates[0],
+      to: s.participation.scoreTo || dates[dates.length - 1],
+    };
+    const scores = computeScores(s.participation.byDate, s.contentCatalog, s.members, range);
+    s.members.forEach((m) => { m.score = scores[m.id] || 0; });
+    s.participation.scoreFrom = range.from;
+    s.participation.scoreTo = range.to;
+    return true;
+  };
   const saveNow = async (message) => {
+    const applied = applyCurrentParticipationScores();
     DB.commit();
     const ok = await DB.flushSave();
-    if (ok) toast(message);
+    if (ok) toast(applied ? `${message} · 참여점수 재계산됨` : message);
   };
   const contentRows = [...s.contentCatalog].sort((a, b) =>
     String(a.name || '').localeCompare(String(b.name || ''), 'ko') ||
