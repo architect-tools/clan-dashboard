@@ -7,7 +7,11 @@
     "seed": "node scripts/build-seed.mjs",
     "check": "node scripts/check-imports.mjs",
     "smoke": "node scripts/smoke.mjs",
-    "ocr-test": "node scripts/ocr-test.mjs"
+    "ocr-test": "node scripts/ocr-test.mjs",
+    "qa:list": "node scripts/qa-reports.mjs list",
+    "qa:show": "node scripts/qa-reports.mjs show",
+    "qa:prompt": "node scripts/qa-reports.mjs prompt",
+    "qa:reply": "node scripts/qa-reports.mjs reply"
   },
   "comment": "deps are DEV/TEST only — the deployed static site loads tesseract.js from CDN and needs no npm install",
   "devDependencies": {

@@ -80,7 +80,8 @@ body[data-role="member"] .admin-only{display:none !important}
   position:sticky;top:0;background:rgba(13,16,21,.82);backdrop-filter:blur(8px);z-index:60}
 .menu-btn{display:none}
 .topbar-title{display:none}
-.topbar-tools{margin-left:auto;display:flex;gap:6px}
+.topbar-tools{margin-left:auto;display:flex;gap:6px;align-items:center}
+.topbar-qa-btn{height:34px;padding:0 13px}
 .icon-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--line2);background:var(--panel);
   color:var(--txt);font-size:15px;cursor:pointer;transition:.13s;display:inline-grid;place-items:center}
 .icon-btn:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
@@ -309,6 +310,53 @@ select.input{cursor:pointer}
 .mode-pill.live{background:color-mix(in srgb,var(--primary) 8%,var(--panel));color:var(--primary);border-color:color-mix(in srgb,var(--primary) 30%,var(--line))}
 .mode-pill.local{background:var(--bg2);color:var(--muted)}
 
+/* ── QA reports ──────────────────────────────────────────────────── */
+.qa-summary{display:flex;flex-direction:column;gap:14px}
+.qa-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.qa-metric{border:1px solid var(--line);border-radius:8px;background:var(--bg2);padding:11px 12px}
+.qa-metric-value{font-family:var(--mono);font-size:19px;font-weight:600;color:var(--txt)}
+.qa-metric-label{font-size:11.5px;color:var(--muted);margin-top:1px}
+.qa-mini-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}
+.qa-mini{display:flex;flex-direction:column;gap:5px;text-align:left;border:1px solid var(--line);
+  border-radius:8px;background:var(--bg2);color:var(--txt);padding:10px 12px;cursor:pointer;font-family:inherit;min-width:0}
+.qa-mini:hover{border-color:var(--primary)}
+.qa-mini-main,.qa-slot-head,.qa-detail-badges{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.qa-mini-title,.qa-slot-title{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qa-status,.qa-severity{display:inline-flex;align-items:center;border-radius:7px;padding:2px 8px;
+  font-size:11px;font-weight:700;border:1px solid var(--line2);white-space:nowrap}
+.qa-status.open{color:var(--warn);background:color-mix(in srgb,var(--warn) 10%,var(--panel));border-color:color-mix(in srgb,var(--warn) 36%,var(--line))}
+.qa-status.in-progress{color:var(--primary);background:color-mix(in srgb,var(--primary) 10%,var(--panel));border-color:color-mix(in srgb,var(--primary) 36%,var(--line))}
+.qa-status.resolved{color:var(--good);background:color-mix(in srgb,var(--good) 11%,var(--panel));border-color:color-mix(in srgb,var(--good) 36%,var(--line))}
+.qa-status.blocked{color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,var(--panel));border-color:color-mix(in srgb,var(--bad) 36%,var(--line))}
+.qa-status.closed{color:var(--dim);background:var(--bg2)}
+.qa-severity.low{color:var(--muted)}
+.qa-severity.normal{color:var(--primary)}
+.qa-severity.high{color:var(--warn)}
+.qa-severity.critical{color:var(--bad)}
+.qa-history-layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;align-items:start}
+.qa-slot-list{display:flex;flex-direction:column;gap:8px;max-height:66vh;overflow:auto;padding-right:4px}
+.qa-slot{display:flex;flex-direction:column;gap:6px;text-align:left;border:1px solid var(--line);border-radius:9px;
+  background:var(--bg2);color:var(--txt);padding:11px 12px;cursor:pointer;font-family:inherit;min-width:0}
+.qa-slot:hover{border-color:var(--primary)}
+.qa-slot.active{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 9%,var(--panel))}
+.qa-slot-meta{font-size:11.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qa-detail{min-width:0;border:1px solid var(--line);border-radius:10px;background:var(--bg2);padding:15px}
+.qa-detail.empty-detail{display:grid;place-items:center;min-height:220px;color:var(--dim)}
+.qa-detail-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.qa-detail-slot{font-family:var(--mono);font-size:12px;color:var(--primary);font-weight:600}
+.qa-detail-title{font-size:18px;font-weight:600;margin:3px 0 0;line-height:1.3}
+.qa-meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:13px 0}
+.qa-meta{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:8px 10px;min-width:0}
+.qa-meta span{display:block;font-size:11px;color:var(--dim)}
+.qa-meta b{display:block;font-size:12.5px;color:var(--txt);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qa-block{margin-top:10px}
+.qa-block-label{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px}
+.qa-block-text,.qa-reply{white-space:pre-wrap;border:1px solid var(--line);border-radius:8px;background:var(--panel);
+  padding:10px 12px;font-size:13px;color:var(--txt);line-height:1.6;word-break:break-word}
+.qa-reply{border-color:color-mix(in srgb,var(--good) 26%,var(--line));background:color-mix(in srgb,var(--good) 7%,var(--panel))}
+.qa-detail-actions{margin-top:14px}
+.qa-form textarea.input,.qa-detail textarea.input,.field textarea.input{width:100%;resize:vertical;min-height:86px}
+
 /* ── modal ───────────────────────────────────────────────────────── */
 .modal-overlay{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.6);backdrop-filter:blur(2px);
   display:grid;place-items:center;padding:20px;animation:fade .15s}
@@ -466,11 +514,15 @@ select.input{cursor:pointer}
 /* ── responsive ──────────────────────────────────────────────────── */
 @media(max-width:880px){
   .col-2,.form-grid{grid-template-columns:1fr}
+  .qa-metrics,.qa-mini-list,.qa-history-layout{grid-template-columns:1fr}
+  .qa-slot-list{max-height:34vh}
+  .qa-detail-head{flex-direction:column}
   .sched-grid{grid-template-columns:1fr;}
   .sched-col{border-right:none;border-bottom:1px solid var(--line);min-height:auto}
   .sidebar{position:fixed;z-index:80;transform:translateX(-100%);transition:.25s;box-shadow:var(--shadow)}
   body.nav-open .sidebar{transform:none}
   .topbar{padding:12px 8px}
+  .topbar-qa-btn{height:34px;padding:0 10px;font-size:12.5px}
   .menu-btn{display:inline-grid;place-items:center;background:var(--panel);border:1px solid var(--line2);color:var(--txt);
     width:38px;height:38px;border-radius:8px;font-size:16px;cursor:pointer}
   .topbar-title{display:block;font-weight:600}

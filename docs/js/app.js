@@ -6,8 +6,8 @@ import { Roles } from './roles.js';
 import { Locks } from './locks.js';
 import { Router } from './router.js';
 import { el, $, toast, applyUiScale } from './util.js';
-import { busyOverlay } from './views/ui.js';
-import { renderDashboard } from './views/dashboard.js';
+import { busyOverlay, btn } from './views/ui.js';
+import { renderDashboard, openBugReportForm } from './views/dashboard.js';
 import { renderMembers } from './views/members.js';
 import { renderParticipation } from './views/participation.js';
 import { renderDiamond } from './views/diamond.js';
@@ -73,6 +73,8 @@ function buildShell() {
   // undo/redo는 공유 상태를 되돌릴 수 있어 관리자 전용
   undoBtn = el('button.icon-btn.admin-only', { title: '실행 취소 (Ctrl+Z)', onclick: () => DB.undo(), disabled: true }, ['↶']);
   redoBtn = el('button.icon-btn.admin-only', { title: '다시 실행 (Ctrl+Shift+Z)', onclick: () => DB.redo(), disabled: true }, ['↷']);
+  const qaReportBtn = btn('버그 리포트 작성', () => openBugReportForm(), { kind: 'primary', admin: true });
+  qaReportBtn.classList.add('topbar-qa-btn');
   const lockBanner = el('div.lock-banner', { style: { display: 'none' } });
   Locks.setBanner(lockBanner);
   const main = el('main.main', {}, [lockBanner, el('div#app')]);
@@ -80,7 +82,7 @@ function buildShell() {
     el('button.menu-btn', { text: '☰', onclick: () => document.body.classList.toggle('nav-open') }),
     el('span.topbar-title', { text: CONFIG.appName }),
     el('span.role-badge', { class: Roles.isAdmin() ? 'admin' : 'member', text: (Roles.isAdmin() ? '관리자' : '멤버') + ' · ' + (Roles.me() || '?') }),
-    el('div.topbar-tools', {}, [undoBtn, redoBtn]),
+    el('div.topbar-tools', {}, [undoBtn, redoBtn, qaReportBtn]),
   ]);
   root.appendChild(el('div.layout', {}, [nav, el('div.main-wrap', {}, [topbar, main])]));
   nav.addEventListener('click', (e) => { if (e.target.closest('.nav-link')) document.body.classList.remove('nav-open'); });

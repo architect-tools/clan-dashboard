@@ -11,8 +11,12 @@ for (const k of ['window', 'document', 'localStorage', 'Image', 'Blob', 'Node', 
 // keep Node's native performance (jsdom's shim self-recurses when made global)
 globalThis.location = w.location;
 globalThis.URL = w.URL;
-globalThis.fetch = async (u) => {
-  const path = String(u).includes('seed.json') ? 'docs/data/seed.json' : null;
+globalThis.fetch = async (u, opts = {}) => {
+  const url = String(u);
+  if (url.includes('script.google.com')) {
+    return { ok: true, json: async () => ({ data: opts.method === 'POST' ? { ok: true } : null }) };
+  }
+  const path = url.includes('seed.json') ? 'docs/data/seed.json' : null;
   if (!path) throw new Error('unexpected fetch: ' + u);
   const text = readFileSync(path, 'utf8');
   return { ok: true, json: async () => JSON.parse(text), text: async () => text };

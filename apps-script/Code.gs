@@ -4,7 +4,7 @@
  * 저장 구조:
  *   • _state (A1)  : 전체 상태 JSON (권위 저장소). 시트에 없는 깊은 데이터(스킬/장비/참여/정산 등)는 여기에만.
  *   • 편집 탭들     : 명단·분배내역·콘텐츠·티어컷·운영진·고투·설정·분배기준
- *                    ·장비현황·주문석보유·공용주문석보유·엘릭서보유·보드-*
+ *                    ·QA리포트·장비현황·주문석보유·공용주문석보유·엘릭서보유·보드-*
  *                    → 시트에서 직접 편집 가능. getAll 때 읽어서 _state 위에 덮어(병합) 반환.
  *   • _locks       : 소프트 락(페이지 편집 중 표시). page|who|ts.
  *
@@ -108,6 +108,33 @@ function ymd(v) {
 }
 function truthyActive(v) { return !(v === '휴면' || v === false || v === 'FALSE' || v === 'x' || v === '' ); }
 function txt(v) { return String(v == null ? '' : v).trim(); }
+function dts(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ssXXX");
+  return txt(v);
+}
+
+function qaStatusText(v) {
+  var s = txt(v);
+  var m = { open: '접수', in_progress: '처리중', resolved: '해결', blocked: '보류', closed: '종료' };
+  return m[s] || s || '접수';
+}
+function qaStatusValue(v) {
+  var s = txt(v);
+  var m = { '접수': 'open', '처리중': 'in_progress', '해결': 'resolved', '보류': 'blocked', '종료': 'closed',
+    open: 'open', in_progress: 'in_progress', resolved: 'resolved', blocked: 'blocked', closed: 'closed' };
+  return m[s] || 'open';
+}
+function qaSeverityText(v) {
+  var s = txt(v);
+  var m = { low: '낮음', normal: '보통', high: '높음', critical: '긴급' };
+  return m[s] || s || '보통';
+}
+function qaSeverityValue(v) {
+  var s = txt(v);
+  var m = { '낮음': 'low', '보통': 'normal', '높음': 'high', '긴급': 'critical',
+    low: 'low', normal: 'normal', high: 'high', critical: 'critical' };
+  return m[s] || 'normal';
+}
 
 function readTable(book, name) {
   var sh = book.getSheetByName(name);
@@ -208,6 +235,12 @@ function writeTabs(book, s) {
   writeSheet(book, '설정', ['항목', '값'], [
     ['총 다이아', sset.totalDiamonds || 0], ['운영진 비율(%)', (sset.staffRatio || 0) * 100],
     ['투력 비율(%)', (sset.powerRatio || 0) * 100], ['참여 비율(%)', (sset.participationRatio || 0) * 100]]);
+  writeSheet(book, 'QA리포트', ['id', '슬롯', '상태', '심각도', '영역', '제목', '제보자', '담당', '접수일', '수정일', '해결일', '재현 절차', '기대 결과', '실제 결과', '메모', 'Codex 응답'],
+    (s.qaReports || []).map(function (r) {
+      return [r.id || '', r.slot || '', qaStatusText(r.status), qaSeverityText(r.severity), r.area || '', r.title || '',
+        r.reporter || '', r.assignee || '', r.createdAt || '', r.updatedAt || '', r.resolvedAt || '',
+        r.steps || '', r.expected || '', r.actual || '', r.note || '', r.reply || ''];
+    }));
   var rsh = book.getSheetByName('분배기준') || book.insertSheet('분배기준');
   rsh.clearContents(); rsh.getRange('A1').setValue(s.distributionRules || '');
   writeEquipSheet(book, s);
@@ -295,6 +328,27 @@ function mergeTabs(book, s) {
       else if (k.indexOf('참여') === 0) s.settings.participationRatio = v / 100;
     });
   }
+  var qrows = readSheet(book, 'QA리포트');
+  if (qrows && qrows.length) s.qaReports = qrows.map(function (r, i) {
+    return {
+      id: txt(r[0]) || txt(r[1]) || ('qa-' + Utilities.getUuid()),
+      slot: txt(r[1]) || ('QA-SHEET-' + (i + 1)),
+      status: qaStatusValue(r[2]),
+      severity: qaSeverityValue(r[3]),
+      area: txt(r[4]),
+      title: txt(r[5]),
+      reporter: txt(r[6]),
+      assignee: txt(r[7]),
+      createdAt: dts(r[8]),
+      updatedAt: dts(r[9]),
+      resolvedAt: dts(r[10]),
+      steps: txt(r[11]),
+      expected: txt(r[12]),
+      actual: txt(r[13]),
+      note: txt(r[14]),
+      reply: txt(r[15])
+    };
+  });
   var rsh = book.getSheetByName('분배기준');
   if (rsh) { var rv = rsh.getRange('A1').getValue(); if (rv) s.distributionRules = String(rv); }
   mergeEquipSheet(book, s);

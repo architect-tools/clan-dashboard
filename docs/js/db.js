@@ -241,6 +241,60 @@ function isCorruptContentEntry(c) {
   return text.includes('??') || text.includes('�') || /^\d+\?\?$/.test(String(c?.name || ''));
 }
 
+const QA_STATUSES = new Set(['open', 'in_progress', 'resolved', 'blocked', 'closed']);
+const QA_SEVERITIES = new Set(['low', 'normal', 'high', 'critical']);
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function qaDayKey(date = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}${p(date.getMonth() + 1)}${p(date.getDate())}`;
+}
+
+function nextQaSlot(reports) {
+  const day = qaDayKey();
+  const taken = new Set((reports || []).map((r) => r && r.slot).filter(Boolean));
+  let n = 1;
+  while (taken.has(`QA-${day}-${String(n).padStart(3, '0')}`)) n++;
+  return `QA-${day}-${String(n).padStart(3, '0')}`;
+}
+
+function normalizeQaStatus(status) {
+  const s = String(status || 'open');
+  return QA_STATUSES.has(s) ? s : 'open';
+}
+
+function normalizeQaSeverity(severity) {
+  const s = String(severity || 'normal');
+  return QA_SEVERITIES.has(s) ? s : 'normal';
+}
+
+function normalizeQaReport(report, index = 0) {
+  const r = report || {};
+  const createdAt = String(r.createdAt || r.date || '');
+  return {
+    id: String(r.id || r.slot || uid()),
+    slot: String(r.slot || `QA-LEGACY-${String(index + 1).padStart(3, '0')}`),
+    status: normalizeQaStatus(r.status),
+    severity: normalizeQaSeverity(r.severity),
+    area: String(r.area || ''),
+    title: String(r.title || '').trim(),
+    reporter: String(r.reporter || ''),
+    environment: String(r.environment || ''),
+    steps: String(r.steps || ''),
+    expected: String(r.expected || ''),
+    actual: String(r.actual || ''),
+    note: String(r.note || ''),
+    reply: String(r.reply || ''),
+    assignee: String(r.assignee || ''),
+    createdAt: createdAt || nowIso(),
+    updatedAt: String(r.updatedAt || createdAt || ''),
+    resolvedAt: String(r.resolvedAt || ''),
+  };
+}
+
 // ── state normalization / migration ─────────────────────────────────
 function normalize(d) {
   d = d || {};
@@ -299,6 +353,8 @@ function normalize(d) {
   d.dropLog ||= [];     // 드랍 기록: {id, date, content, item, note}
   d.sales ||= [];       // 진행 중 내판: {id, item, bidType, basePrice, deadline(ms), bids:[{name,amount}]}
   d.settlements ||= []; // finalized diamond distributions (다이아 분배 확정 기록)
+  d.qaReports = (d.qaReports || []).map(normalizeQaReport)
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   d.schedule ||= [];
   d.statusBoards ||= []; // 캐릭터 현황 보드: 주문석/성좌/탈것/엘릭서/플랫폼
   // 관리 보드를 운영 시트 구조로 1회 정비: 부적합 보드 제거(무기 숙련·KDA·통합보드 등) + 분리 카테고리 보장.
@@ -384,4 +440,37 @@ export const Mutations = {
   },
   removeSettlement(id) { DB.state.settlements = DB.state.settlements.filter((x) => x.id !== id); },
   resetScores() { DB.state.members.forEach((m) => { m.score = 0; }); },
+
+  // QA reports -------------------------------------------------------
+  addQaReport(report) {
+    const list = (DB.state.qaReports ||= []);
+    const now = nowIso();
+    const rec = normalizeQaReport({
+      ...report,
+      id: uid(),
+      slot: nextQaSlot(list),
+      status: 'open',
+      createdAt: now,
+      updatedAt: now,
+    });
+    list.unshift(rec);
+    return rec;
+  },
+  updateQaReport(idOrSlot, patch = {}) {
+    const list = (DB.state.qaReports ||= []);
+    const rec = list.find((r) => r.id === idOrSlot || r.slot === idOrSlot);
+    if (!rec) return null;
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === undefined) continue;
+      rec[k] = v == null ? '' : v;
+    }
+    rec.status = normalizeQaStatus(rec.status);
+    rec.severity = normalizeQaSeverity(rec.severity);
+    rec.updatedAt = nowIso();
+    if (['resolved', 'closed'].includes(rec.status) && !rec.resolvedAt) rec.resolvedAt = rec.updatedAt;
+    return rec;
+  },
+  removeQaReport(idOrSlot) {
+    DB.state.qaReports = (DB.state.qaReports || []).filter((r) => r.id !== idOrSlot && r.slot !== idOrSlot);
+  },
 };
