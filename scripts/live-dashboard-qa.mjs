@@ -238,17 +238,30 @@ async function getAll({ merge }) {
 }
 
 async function post(action, payload) {
+  const body = JSON.stringify({ action, token, ...payload });
   return fetchJson(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, token, ...payload }),
+    headers: { 'Content-Type': 'text/plain;charset=utf-8', 'Content-Length': String(Buffer.byteLength(body)) },
+    body,
   }, action === 'save' ? 1 : 3);
 }
 
 async function fetchJson(target, opts = { cache: 'no-store' }, tries = 3) {
   let last = '';
   for (let i = 1; i <= tries; i++) {
-    const res = await fetch(target, opts);
+    const res = await fetch(target, opts.method === 'POST' ? { ...opts, redirect: 'manual' } : opts);
+    if (opts.method === 'POST' && res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+      const redirected = await fetch(res.headers.get('location'), { method: 'GET', cache: 'no-store' });
+      const text = await redirected.text();
+      if (redirected.ok && text.trim().startsWith('{')) {
+        const json = JSON.parse(text);
+        if (json.error) throw new Error(json.error);
+        return json.data;
+      }
+      last = `HTTP ${redirected.status} ${text.slice(0, 160).replace(/\s+/g, ' ')}`;
+      await new Promise((resolve) => setTimeout(resolve, 700 * i));
+      continue;
+    }
     const text = await res.text();
     if (res.ok && text.trim().startsWith('{')) {
       const json = JSON.parse(text);

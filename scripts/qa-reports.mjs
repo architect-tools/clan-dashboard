@@ -59,7 +59,7 @@ try {
     console.log(`${r.slot} 생성됨`);
   } else if (command === 'claim') {
     const r = requireReport(reports, positionals[0]);
-    const rec = await store.update(r.id || r.slot, {
+    const rec = await store.update(r.slot || r.id, {
       status: 'in_progress',
       assignee: options.assignee || positionals[1] || process.env.USERNAME || process.env.USER || 'Codex',
     });
@@ -71,7 +71,7 @@ try {
     if (['resolved', 'closed'].includes(status) && !message.trim()) {
       throw new Error('해결/종료 응답에는 --message, --file, 또는 stdin 내용이 필요합니다.');
     }
-    const rec = await store.update(r.id || r.slot, {
+    const rec = await store.update(r.slot || r.id, {
       status,
       reply: message.trim(),
       assignee: options.assignee || r.assignee || process.env.USERNAME || process.env.USER || 'Codex',
@@ -79,7 +79,7 @@ try {
     console.log(`${rec.slot} ${STATUS_LABEL[rec.status]} 응답 저장됨`);
   } else if (command === 'delete' || command === 'remove') {
     const r = requireReport(reports, positionals[0]);
-    await store.remove(r.id || r.slot);
+    await store.remove(r.slot || r.id);
     console.log(`${r.slot} 삭제됨`);
   } else {
     usage(1, `알 수 없는 명령: ${command}`);
@@ -175,17 +175,30 @@ async function loadState() {
 }
 
 async function postAction(action, payload) {
+  const body = JSON.stringify({ action, token: process.env.CLANDASH_TOKEN || CONFIG.GATE_PASSWORD || '', ...payload });
   return fetchJson(CONFIG.APPS_SCRIPT_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, token: process.env.CLANDASH_TOKEN || CONFIG.GATE_PASSWORD || '', ...payload }),
+    headers: { 'Content-Type': 'text/plain;charset=utf-8', 'Content-Length': String(Buffer.byteLength(body)) },
+    body,
   });
 }
 
 async function fetchJson(url, opts = { cache: 'no-store' }, tries = 3) {
   let last = null;
   for (let i = 1; i <= tries; i++) {
-    const res = await fetch(url, opts);
+    const res = await fetch(url, opts.method === 'POST' ? { ...opts, redirect: 'manual' } : opts);
+    if (opts.method === 'POST' && res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+      const redirected = await fetch(res.headers.get('location'), { method: 'GET', cache: 'no-store' });
+      const text = await redirected.text();
+      if (redirected.ok && text.trim().startsWith('{')) {
+        const json = JSON.parse(text);
+        if (json.error) throw new Error(json.error);
+        return json.data;
+      }
+      last = `HTTP ${redirected.status} ${text.slice(0, 120).replace(/\s+/g, ' ')}`;
+      await new Promise((resolve) => setTimeout(resolve, 500 * i));
+      continue;
+    }
     const text = await res.text();
     if (res.ok && text.trim().startsWith('{')) {
       const json = JSON.parse(text);
