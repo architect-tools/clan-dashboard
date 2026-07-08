@@ -310,11 +310,14 @@ function qaDayKey(date = new Date()) {
 }
 
 function nextQaSlot(reports) {
-  const day = qaDayKey();
+  const d = new Date();
+  const time = `${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}${String(d.getMilliseconds()).padStart(3, '0')}`;
   const taken = new Set((reports || []).map((r) => r && r.slot).filter(Boolean));
-  let n = 1;
-  while (taken.has(`QA-${day}-${String(n).padStart(3, '0')}`)) n++;
-  return `QA-${day}-${String(n).padStart(3, '0')}`;
+  let slot = '';
+  do {
+    slot = `QA-${qaDayKey(d)}-${time}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  } while (taken.has(slot));
+  return slot;
 }
 
 function normalizeQaStatus(status) {

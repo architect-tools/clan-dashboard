@@ -146,13 +146,12 @@ function qaSeverityValue(v) {
   return m[s] || 'normal';
 }
 function qaNow() { return new Date().toISOString(); }
-function qaSlotDay() { return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd'); }
+function qaSlotStamp() { return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss-SSS'); }
 function nextQaSlot(list) {
-  var day = qaSlotDay();
   var taken = {};
   (list || []).forEach(function (r) { if (r && r.slot) taken[String(r.slot)] = true; });
-  var n = 1, slot;
-  do { slot = 'QA-' + day + '-' + ('000' + n).slice(-3); n++; } while (taken[slot]);
+  var slot;
+  do { slot = 'QA-' + qaSlotStamp() + '-' + Utilities.getUuid().slice(0, 6); } while (taken[slot]);
   return slot;
 }
 function normalizeQaReport(r, existing) {

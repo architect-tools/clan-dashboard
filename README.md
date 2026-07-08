@@ -100,10 +100,10 @@ node scripts/build-seed.mjs <csv폴더>   # 시드 재생성
 ```bash
 npm run qa:list                 # 미해결 QA 리포트 목록
 npm run qa:create -- --title "테스트 리포트"
-npm run qa:show -- QA-20260707-001
-npm run qa:prompt -- QA-20260707-001
-npm run qa:reply -- QA-20260707-001 --status resolved --message "수정 내용과 검증 결과"
-npm run qa:delete -- QA-20260707-001
+npm run qa:show -- <slot>
+npm run qa:prompt -- <slot>
+npm run qa:reply -- <slot> --status resolved --message "수정 내용과 검증 결과"
+npm run qa:delete -- <slot>
 ```
 
 `APPS_SCRIPT_URL`이 비어 있는 로컬 JSON 상태를 처리할 때는 `--state-file <path>` 또는 `CLANDASH_STATE_FILE`을 지정하세요.
