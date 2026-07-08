@@ -14,12 +14,13 @@ globalThis.URL = w.URL;
 globalThis.fetch = async (u, opts = {}) => {
   const url = String(u);
   if (url.includes('script.google.com')) {
-    return { ok: true, json: async () => ({ data: opts.method === 'POST' ? { ok: true } : null }) };
+    const body = JSON.stringify({ data: opts.method === 'POST' ? { ok: true } : null });
+    return { ok: true, status: 200, text: async () => body, json: async () => JSON.parse(body) };
   }
   const path = url.includes('seed.json') ? 'docs/data/seed.json' : null;
   if (!path) throw new Error('unexpected fetch: ' + u);
   const text = readFileSync(path, 'utf8');
-  return { ok: true, json: async () => JSON.parse(text), text: async () => text };
+  return { ok: true, status: 200, json: async () => JSON.parse(text), text: async () => text };
 };
 
 // run as admin so admin-only render paths are exercised

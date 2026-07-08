@@ -172,10 +172,66 @@ export const DB = {
           headers: { 'Content-Type': 'text/plain;charset=utf-8' } } // text/plain avoids CORS preflight
       : { method: 'GET', cache: 'no-store' };
     const u = payload ? url : `${url}?${new URLSearchParams({ action, token, _ts: String(Date.now()), ...(query || {}) })}`;
-    const res = await fetch(u, opts);
-    const json = await res.json();
-    if (json.error) throw new Error(json.error);
-    return json.data;
+    let last = '';
+    for (let i = 0; i < 3; i++) {
+      const res = await fetch(u, opts);
+      const text = await res.text();
+      if (res.ok && text.trim().startsWith('{')) {
+        const json = JSON.parse(text);
+        if (json.error) throw new Error(json.error);
+        return json.data;
+      }
+      last = `HTTP ${res.status} ${text.slice(0, 120).replace(/\s+/g, ' ')}`;
+      await new Promise((resolve) => setTimeout(resolve, 400 * (i + 1)));
+    }
+    throw new Error(last || 'invalid backend response');
+  },
+
+  _applyQaReport(rec) {
+    if (!rec) return null;
+    this.state.qaReports ||= [];
+    const i = this.state.qaReports.findIndex((r) => r.id === rec.id || r.slot === rec.slot);
+    if (i >= 0) this.state.qaReports[i] = rec;
+    else this.state.qaReports.unshift(rec);
+    this.state.qaReports.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    this._snapshot = clone(this.state);
+    this._persistLocal();
+    this._emit();
+    return rec;
+  },
+
+  async addQaReport(report) {
+    if (!LIVE()) {
+      const rec = Mutations.addQaReport(report);
+      this.commit({ immediate: true });
+      return rec;
+    }
+    const rec = await this._fetch('qaAdd', { report });
+    return this._applyQaReport(rec);
+  },
+
+  async updateQaReport(idOrSlot, patch = {}) {
+    if (!LIVE()) {
+      const rec = Mutations.updateQaReport(idOrSlot, patch);
+      this.commit({ immediate: true });
+      return rec;
+    }
+    const rec = await this._fetch('qaUpdate', { idOrSlot, patch });
+    return this._applyQaReport(rec);
+  },
+
+  async removeQaReport(idOrSlot) {
+    if (!LIVE()) {
+      Mutations.removeQaReport(idOrSlot);
+      this.commit({ immediate: true });
+      return true;
+    }
+    await this._fetch('qaDelete', { idOrSlot });
+    this.state.qaReports = (this.state.qaReports || []).filter((r) => r.id !== idOrSlot && r.slot !== idOrSlot);
+    this._snapshot = clone(this.state);
+    this._persistLocal();
+    this._emit();
+    return true;
   },
 
   // 백그라운드 새로고침: 다른 사용자/시트 변경을 반영. merge=true 면 시트 편집까지(느림), false 면 대시보드 편집만(빠름).

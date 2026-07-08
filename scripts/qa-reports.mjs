@@ -42,13 +42,28 @@ try {
   } else if (command === 'prompt') {
     const r = requireReport(reports, positionals[0]);
     console.log(buildPrompt(r));
+  } else if (command === 'create') {
+    const title = options.title || positionals.join(' ') || '[E2E] QA 리포트 검증';
+    const r = await store.add({
+      title,
+      status: 'open',
+      severity: options.severity || 'low',
+      area: options.area || 'DB/동기화',
+      reporter: options.reporter || process.env.USERNAME || process.env.USER || 'Codex',
+      environment: options.environment || 'qa-reports CLI',
+      steps: options.steps || '',
+      expected: options.expected || '',
+      actual: options.actual || '',
+      note: options.note || '',
+    });
+    console.log(`${r.slot} 생성됨`);
   } else if (command === 'claim') {
     const r = requireReport(reports, positionals[0]);
-    r.status = 'in_progress';
-    r.assignee = options.assignee || positionals[1] || process.env.USERNAME || process.env.USER || 'Codex';
-    r.updatedAt = new Date().toISOString();
-    await store.save();
-    console.log(`${r.slot} 처리중: ${r.assignee}`);
+    const rec = await store.update(r.id || r.slot, {
+      status: 'in_progress',
+      assignee: options.assignee || positionals[1] || process.env.USERNAME || process.env.USER || 'Codex',
+    });
+    console.log(`${rec.slot} 처리중: ${rec.assignee}`);
   } else if (command === 'reply' || command === 'resolve') {
     const r = requireReport(reports, positionals[0]);
     const status = normalizeStatus(options.status || (command === 'resolve' ? 'resolved' : 'resolved'));
@@ -56,13 +71,16 @@ try {
     if (['resolved', 'closed'].includes(status) && !message.trim()) {
       throw new Error('해결/종료 응답에는 --message, --file, 또는 stdin 내용이 필요합니다.');
     }
-    r.status = status;
-    r.reply = message.trim();
-    r.assignee = options.assignee || r.assignee || process.env.USERNAME || process.env.USER || 'Codex';
-    r.updatedAt = new Date().toISOString();
-    if (['resolved', 'closed'].includes(status) && !r.resolvedAt) r.resolvedAt = r.updatedAt;
-    await store.save();
-    console.log(`${r.slot} ${STATUS_LABEL[r.status]} 응답 저장됨`);
+    const rec = await store.update(r.id || r.slot, {
+      status,
+      reply: message.trim(),
+      assignee: options.assignee || r.assignee || process.env.USERNAME || process.env.USER || 'Codex',
+    });
+    console.log(`${rec.slot} ${STATUS_LABEL[rec.status]} 응답 저장됨`);
+  } else if (command === 'delete' || command === 'remove') {
+    const r = requireReport(reports, positionals[0]);
+    await store.remove(r.id || r.slot);
+    console.log(`${r.slot} 삭제됨`);
   } else {
     usage(1, `알 수 없는 명령: ${command}`);
   }
@@ -98,9 +116,11 @@ function usage(code = 0, message = '') {
   node scripts/qa-reports.mjs list [--all] [--status open]
   node scripts/qa-reports.mjs show <slot-or-id>
   node scripts/qa-reports.mjs prompt <slot-or-id>
+  node scripts/qa-reports.mjs create --title "..."
   node scripts/qa-reports.mjs claim <slot-or-id> [assignee]
   node scripts/qa-reports.mjs reply <slot-or-id> [--status resolved] [--message "..."]
   node scripts/qa-reports.mjs reply <slot-or-id> --file reply.txt
+  node scripts/qa-reports.mjs delete <slot-or-id>
 
 Options:
   --state-file path   Use a local JSON state file instead of Apps Script.
@@ -120,7 +140,25 @@ async function loadState() {
     const state = JSON.parse(raw);
     return {
       state,
-      save: async () => writeFile(stateFile, JSON.stringify(state, null, 2) + '\n', 'utf8'),
+      add: async (report) => {
+        const rec = { id: 'qa-' + Date.now(), slot: report.slot || `QA-LOCAL-${Date.now()}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), ...report };
+        state.qaReports ||= [];
+        state.qaReports.unshift(rec);
+        await writeFile(stateFile, JSON.stringify(state, null, 2) + '\n', 'utf8');
+        return rec;
+      },
+      update: async (idOrSlot, patch) => {
+        const rec = requireReport(state.qaReports ||= [], idOrSlot);
+        Object.assign(rec, patch, { updatedAt: new Date().toISOString() });
+        if (['resolved', 'closed'].includes(rec.status) && !rec.resolvedAt) rec.resolvedAt = rec.updatedAt;
+        await writeFile(stateFile, JSON.stringify(state, null, 2) + '\n', 'utf8');
+        return rec;
+      },
+      remove: async (idOrSlot) => {
+        state.qaReports = (state.qaReports || []).filter((r) => r.id !== idOrSlot && r.slot !== idOrSlot);
+        await writeFile(stateFile, JSON.stringify(state, null, 2) + '\n', 'utf8');
+        return true;
+      },
     };
   }
   if (!CONFIG.APPS_SCRIPT_URL) {
@@ -130,25 +168,34 @@ async function loadState() {
   if (!state || typeof state !== 'object') throw new Error('원격 DB 상태를 불러오지 못했습니다.');
   return {
     state,
-    save: async () => {
-      const token = process.env.CLANDASH_TOKEN || CONFIG.GATE_PASSWORD || '';
-      const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'save', token, data: state }),
-      });
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
-    },
+    add: async (report) => postAction('qaAdd', { report }),
+    update: async (idOrSlot, patch) => postAction('qaUpdate', { idOrSlot, patch }),
+    remove: async (idOrSlot) => postAction('qaDelete', { idOrSlot }),
   };
 }
 
-async function fetchJson(url) {
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const json = await res.json();
-  if (json.error) throw new Error(json.error);
-  return json.data;
+async function postAction(action, payload) {
+  return fetchJson(CONFIG.APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action, token: process.env.CLANDASH_TOKEN || CONFIG.GATE_PASSWORD || '', ...payload }),
+  });
+}
+
+async function fetchJson(url, opts = { cache: 'no-store' }, tries = 3) {
+  let last = null;
+  for (let i = 1; i <= tries; i++) {
+    const res = await fetch(url, opts);
+    const text = await res.text();
+    if (res.ok && text.trim().startsWith('{')) {
+      const json = JSON.parse(text);
+      if (json.error) throw new Error(json.error);
+      return json.data;
+    }
+    last = `HTTP ${res.status} ${text.slice(0, 120).replace(/\s+/g, ' ')}`;
+    await new Promise((resolve) => setTimeout(resolve, 500 * i));
+  }
+  throw new Error(last || 'empty response');
 }
 
 function filterReports(reports, opts) {

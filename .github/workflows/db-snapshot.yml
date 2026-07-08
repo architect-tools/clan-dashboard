@@ -37,7 +37,7 @@ jobs:
           fi
           # 키 정렬(jq -S)로 정규화 → 값이 실제 바뀔 때만 깔끔한 diff
           jq -S '.data' /tmp/raw.json > /tmp/state.json
-          jq -S '{members:(.data.members|length), participationDays:(.data.participation.byDate|length), distributions:(.data.distributionLog|length), settlements:(.data.settlements|length), equipMembers:([.data.members[]|select((.equip|length)>0)]|length)}' /tmp/raw.json > /tmp/summary.json
+          jq -S '{members:(.data.members|length), participationDays:(.data.participation.byDate|length), distributions:(.data.distributionLog|length), settlements:(.data.settlements|length), qaReports:((.data.qaReports // [])|length), equipMembers:([.data.members[]|select((.equip|length)>0)]|length)}' /tmp/raw.json > /tmp/summary.json
 
       - name: Commit to db-history branch if changed
         run: |

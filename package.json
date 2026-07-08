@@ -11,7 +11,9 @@
     "qa:list": "node scripts/qa-reports.mjs list",
     "qa:show": "node scripts/qa-reports.mjs show",
     "qa:prompt": "node scripts/qa-reports.mjs prompt",
-    "qa:reply": "node scripts/qa-reports.mjs reply"
+    "qa:create": "node scripts/qa-reports.mjs create",
+    "qa:reply": "node scripts/qa-reports.mjs reply",
+    "qa:delete": "node scripts/qa-reports.mjs delete"
   },
   "comment": "deps are DEV/TEST only — the deployed static site loads tesseract.js from CDN and needs no npm install",
   "devDependencies": {

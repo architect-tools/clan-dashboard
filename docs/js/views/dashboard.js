@@ -1,5 +1,5 @@
 // dashboard.js — overview: clan stats, tier distribution, top lists.
-import { DB, Mutations } from '../db.js';
+import { DB } from '../db.js';
 import { Roles } from '../roles.js';
 import { computeSettlement, tierForScore } from '../calc.js';
 import { el, fmt, toast, clear } from '../util.js';
@@ -187,24 +187,28 @@ export function openBugReportForm() {
     field('추가 메모', note),
     el('div.modal-actions', {}, [
       btn('취소', close),
-      btn('제출', () => {
+      btn('제출', async () => {
         if (!title.value.trim()) return toast('제목을 입력하세요', 'error');
         if (!steps.value.trim() && !actual.value.trim()) return toast('재현 절차 또는 실제 결과를 입력하세요', 'error');
-        const rec = Mutations.addQaReport({
-          title: title.value.trim(),
-          area: area.value,
-          severity: severity.value,
-          environment: environment.value.trim(),
-          steps: steps.value.trim(),
-          expected: expected.value.trim(),
-          actual: actual.value.trim(),
-          note: note.value.trim(),
-          reporter: Roles.me(),
-        });
-        DB.commit({ immediate: true });
-        toast(`${rec.slot} 리포트가 접수되었습니다`);
-        close();
-        if (isDashboardRoute()) renderDashboard();
+        try {
+          const rec = await DB.addQaReport({
+            title: title.value.trim(),
+            area: area.value,
+            severity: severity.value,
+            environment: environment.value.trim(),
+            steps: steps.value.trim(),
+            expected: expected.value.trim(),
+            actual: actual.value.trim(),
+            note: note.value.trim(),
+            reporter: Roles.me(),
+          });
+          toast(`${rec.slot} 리포트가 접수되었습니다`);
+          close();
+          if (isDashboardRoute()) renderDashboard();
+        } catch (e) {
+          console.error(e);
+          toast('QA 리포트 저장 실패: ' + e.message, 'error');
+        }
       }, { kind: 'primary' }),
     ]),
   ]), { wide: true });
@@ -265,11 +269,15 @@ function qaDetail(report, rerender) {
     report.reply ? el('div.qa-reply', { text: report.reply }) : el('div.empty.small', { text: '아직 응답이 없습니다.' }),
     Roles.isAdmin() ? el('div.row-actions', { class: 'qa-detail-actions' }, [
       btn('프롬프트 복사', () => copyText(buildCodexPrompt(report)), { kind: 'ghost' }),
-      !['resolved', 'closed'].includes(report.status) ? btn('처리중 표시', () => {
-        Mutations.updateQaReport(report.id, { status: 'in_progress', assignee: Roles.me() });
-        DB.commit({ immediate: true });
-        toast('처리중으로 표시했습니다');
-        rerender();
+      !['resolved', 'closed'].includes(report.status) ? btn('처리중 표시', async () => {
+        try {
+          await DB.updateQaReport(report.id, { status: 'in_progress', assignee: Roles.me() });
+          toast('처리중으로 표시했습니다');
+          rerender();
+        } catch (e) {
+          console.error(e);
+          toast('QA 상태 저장 실패: ' + e.message, 'error');
+        }
       }, { kind: 'ghost' }) : null,
       btn(report.reply ? '응답 수정' : '응답 작성', () => openQaReplyEditor(report, rerender), { kind: 'primary' }),
     ]) : null,
@@ -298,17 +306,21 @@ function openQaReplyEditor(report, onSaved) {
     field('응답', reply),
     el('div.modal-actions', {}, [
       btn('취소', close),
-      btn('저장', () => {
+      btn('저장', async () => {
         if (['resolved', 'closed'].includes(status.value) && !reply.value.trim()) return toast('해결/종료 상태에는 응답을 입력하세요', 'error');
-        Mutations.updateQaReport(report.id, {
-          status: status.value,
-          assignee: assignee.value.trim(),
-          reply: reply.value.trim(),
-        });
-        DB.commit({ immediate: true });
-        toast('QA 응답을 저장했습니다');
-        close();
-        onSaved();
+        try {
+          await DB.updateQaReport(report.id, {
+            status: status.value,
+            assignee: assignee.value.trim(),
+            reply: reply.value.trim(),
+          });
+          toast('QA 응답을 저장했습니다');
+          close();
+          onSaved();
+        } catch (e) {
+          console.error(e);
+          toast('QA 응답 저장 실패: ' + e.message, 'error');
+        }
       }, { kind: 'primary' }),
     ]),
   ]), { wide: true });

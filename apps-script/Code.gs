@@ -40,6 +40,9 @@ function doPost(e) {
     if (!checkToken(body.token)) return json({ error: 'unauthorized' });
     var action = body.action;
     if (action === 'save') { saveState(body.data); return json({ data: { ok: true } }); }
+    if (action === 'qaAdd') { return json({ data: addQaReport(body.report) }); }
+    if (action === 'qaUpdate') { return json({ data: updateQaReport(body.idOrSlot, body.patch) }); }
+    if (action === 'qaDelete') { return json({ data: deleteQaReport(body.idOrSlot) }); }
     if (action === 'lock') { return json({ data: setLock(body.page, body.who) }); }
     if (action === 'unlock') { return json({ data: clearLock(body.page, body.who) }); }
     if (action === 'ocr') { return json({ data: { lines: naverOcr(body.image) } }); }
@@ -134,6 +137,103 @@ function qaSeverityValue(v) {
   var m = { '낮음': 'low', '보통': 'normal', '높음': 'high', '긴급': 'critical',
     low: 'low', normal: 'normal', high: 'high', critical: 'critical' };
   return m[s] || 'normal';
+}
+function qaNow() { return new Date().toISOString(); }
+function qaSlotDay() { return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd'); }
+function nextQaSlot(list) {
+  var day = qaSlotDay();
+  var taken = {};
+  (list || []).forEach(function (r) { if (r && r.slot) taken[String(r.slot)] = true; });
+  var n = 1, slot;
+  do { slot = 'QA-' + day + '-' + ('000' + n).slice(-3); n++; } while (taken[slot]);
+  return slot;
+}
+function normalizeQaReport(r, existing) {
+  r = r || {};
+  existing = existing || {};
+  var created = dts(r.createdAt) || existing.createdAt || qaNow();
+  return {
+    id: txt(r.id) || existing.id || ('qa-' + Utilities.getUuid()),
+    slot: txt(r.slot) || existing.slot || '',
+    status: qaStatusValue(r.status || existing.status),
+    severity: qaSeverityValue(r.severity || existing.severity),
+    area: txt(r.area) || existing.area || '',
+    title: txt(r.title) || existing.title || '',
+    reporter: txt(r.reporter) || existing.reporter || '',
+    assignee: txt(r.assignee) || existing.assignee || '',
+    createdAt: created,
+    updatedAt: dts(r.updatedAt) || existing.updatedAt || created,
+    resolvedAt: dts(r.resolvedAt) || existing.resolvedAt || '',
+    environment: txt(r.environment) || existing.environment || '',
+    steps: txt(r.steps) || existing.steps || '',
+    expected: txt(r.expected) || existing.expected || '',
+    actual: txt(r.actual) || existing.actual || '',
+    note: txt(r.note) || existing.note || '',
+    reply: txt(r.reply) || existing.reply || ''
+  };
+}
+function writeQaSheet(book, s) {
+  writeSheet(book, 'QA리포트', ['id', '슬롯', '상태', '심각도', '영역', '제목', '제보자', '담당', '접수일', '수정일', '해결일', '재현 절차', '기대 결과', '실제 결과', '메모', 'Codex 응답'],
+    (s.qaReports || []).map(function (r) {
+      return [r.id || '', r.slot || '', qaStatusText(r.status), qaSeverityText(r.severity), r.area || '', r.title || '',
+        r.reporter || '', r.assignee || '', r.createdAt || '', r.updatedAt || '', r.resolvedAt || '',
+        r.steps || '', r.expected || '', r.actual || '', r.note || '', r.reply || ''];
+    }));
+}
+
+function loadQaState() {
+  var book = ss();
+  var state = loadState(false);
+  if (!state) throw new Error('state not initialized');
+  state.qaReports = state.qaReports || [];
+  return { book: book, state: state };
+}
+function persistQaState(ctx) {
+  writeStateSheet(ctx.book, ctx.state);
+  writeQaSheet(ctx.book, ctx.state);
+}
+function addQaReport(report) {
+  var ctx = loadQaState();
+  var now = qaNow();
+  var rec = normalizeQaReport(report);
+  rec.id = rec.id || ('qa-' + Utilities.getUuid());
+  rec.slot = rec.slot || nextQaSlot(ctx.state.qaReports);
+  rec.status = 'open';
+  rec.createdAt = now;
+  rec.updatedAt = now;
+  ctx.state.qaReports.unshift(rec);
+  persistQaState(ctx);
+  return rec;
+}
+function updateQaReport(idOrSlot, patch) {
+  var ctx = loadQaState();
+  var key = txt(idOrSlot);
+  var found = null;
+  for (var i = 0; i < ctx.state.qaReports.length; i++) {
+    var r = ctx.state.qaReports[i];
+    if (r && (String(r.id) === key || String(r.slot) === key)) { found = r; break; }
+  }
+  if (!found) throw new Error('QA report not found: ' + key);
+  patch = patch || {};
+  var merged = {};
+  Object.keys(found).forEach(function (k) { merged[k] = found[k]; });
+  Object.keys(patch).forEach(function (k) { merged[k] = patch[k]; });
+  var rec = normalizeQaReport(merged, found);
+  rec.updatedAt = qaNow();
+  if ((rec.status === 'resolved' || rec.status === 'closed') && !rec.resolvedAt) rec.resolvedAt = rec.updatedAt;
+  Object.keys(found).forEach(function (k) { delete found[k]; });
+  Object.keys(rec).forEach(function (k) { found[k] = rec[k]; });
+  persistQaState(ctx);
+  return found;
+}
+function deleteQaReport(idOrSlot) {
+  var ctx = loadQaState();
+  var key = txt(idOrSlot);
+  var before = ctx.state.qaReports.length;
+  ctx.state.qaReports = ctx.state.qaReports.filter(function (r) { return !(r && (String(r.id) === key || String(r.slot) === key)); });
+  if (ctx.state.qaReports.length === before) throw new Error('QA report not found: ' + key);
+  persistQaState(ctx);
+  return { ok: true, idOrSlot: key };
 }
 
 function readTable(book, name) {
@@ -235,12 +335,7 @@ function writeTabs(book, s) {
   writeSheet(book, '설정', ['항목', '값'], [
     ['총 다이아', sset.totalDiamonds || 0], ['운영진 비율(%)', (sset.staffRatio || 0) * 100],
     ['투력 비율(%)', (sset.powerRatio || 0) * 100], ['참여 비율(%)', (sset.participationRatio || 0) * 100]]);
-  writeSheet(book, 'QA리포트', ['id', '슬롯', '상태', '심각도', '영역', '제목', '제보자', '담당', '접수일', '수정일', '해결일', '재현 절차', '기대 결과', '실제 결과', '메모', 'Codex 응답'],
-    (s.qaReports || []).map(function (r) {
-      return [r.id || '', r.slot || '', qaStatusText(r.status), qaSeverityText(r.severity), r.area || '', r.title || '',
-        r.reporter || '', r.assignee || '', r.createdAt || '', r.updatedAt || '', r.resolvedAt || '',
-        r.steps || '', r.expected || '', r.actual || '', r.note || '', r.reply || ''];
-    }));
+  writeQaSheet(book, s);
   var rsh = book.getSheetByName('분배기준') || book.insertSheet('분배기준');
   rsh.clearContents(); rsh.getRange('A1').setValue(s.distributionRules || '');
   writeEquipSheet(book, s);
