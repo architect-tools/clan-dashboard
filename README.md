@@ -102,7 +102,7 @@ GitHub 저장소 **Settings ▸ Secrets and variables ▸ Actions**에 다음 Se
 - `GAS_SCRIPT_ID`: Apps Script 프로젝트 ID
 - `GAS_DEPLOYMENT_ID`: 현재 Web App URL의 `/s/<여기>/exec` 값
 - `CLASPRC_JSON`: 배포 권한이 승인된 계정의 `~/.clasprc.json` 전체 JSON
-- `CLANDASH_TOKEN`: 라이브 QA 쓰기 토큰(없으면 `docs/js/config.js`의 `GATE_PASSWORD`를 사용)
+- `CLANDASH_TOKEN`: 라이브 QA 쓰기 토큰. UI 관리자 비밀번호(`ADMIN_PASSWORD`)가 아니라 백엔드 쓰기 토큰인 `GATE_PASSWORD` 값입니다.
 
 로컬에서 최초 1회:
 ```bash

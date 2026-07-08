@@ -127,11 +127,11 @@ async function checkFullStateCrud(base) {
   await post('save', { data: s });
   ok('write full state temp data');
 
-  const fast = await getAll({ merge: false });
+  const fast = await waitForState('read back full state temp data', (state) => assertTempState(state, memberId));
   assertTempState(fast, memberId);
   ok('read back full state temp data');
 
-  const merged = await getAll({ merge: true });
+  const merged = await waitForState('read back merge after writeTabs', (state) => assertTempState(state, memberId), { merge: true });
   assertTempState(merged, memberId);
   ok('read back merge after writeTabs');
 
@@ -140,7 +140,10 @@ async function checkFullStateCrud(base) {
   m.power = 124.5;
   m.note = marker + '-edited';
   await post('save', { data: edited });
-  const reread = await getAll({ merge: false });
+  const reread = await waitForState('edit temp member', (state) => {
+    const em = (state.members || []).find((x) => x.id === memberId);
+    if (!em || em.power !== 124.5 || em.note !== marker + '-edited') throw new Error('edited member not visible yet');
+  });
   const em = reread.members.find((x) => x.id === memberId);
   if (!em || em.power !== 124.5 || em.note !== marker + '-edited') fail('edit temp member');
   ok('edit temp member');
@@ -210,7 +213,11 @@ async function checkLockEndpoint() {
 }
 
 async function checkConcurrentFullSave() {
-  const base = await getAll({ merge: false });
+  const base = await waitForState('concurrent full save base', (state) => {
+    if (!Array.isArray(state.members) || !state.members.some((m) => m.name === marker)) {
+      throw new Error('temp member not visible before race');
+    }
+  });
   const a = clone(base);
   const b = clone(base);
   a.appSettings ||= {};
@@ -218,7 +225,13 @@ async function checkConcurrentFullSave() {
   a.appSettings.liveQaRace = marker + '-A';
   b.appSettings.liveQaRace = marker + '-B';
   await Promise.all([post('save', { data: a }), post('save', { data: b })]);
-  const after = await getAll({ merge: false });
+  const after = await waitForState('concurrent full save serialized', (state) => {
+    const value = state.appSettings?.liveQaRace;
+    if (value !== marker + '-A' && value !== marker + '-B') throw new Error(`race marker not visible: ${value}`);
+    if (!Array.isArray(state.members) || !state.members.some((m) => m.name === marker)) {
+      throw new Error('temp member not preserved');
+    }
+  });
   const value = after.appSettings?.liveQaRace;
   if (value !== marker + '-A' && value !== marker + '-B') fail('concurrent full save result', String(value));
   if (!Array.isArray(after.members) || !after.members.some((m) => m.name === marker)) fail('concurrent full save preserved state');
@@ -227,6 +240,9 @@ async function checkConcurrentFullSave() {
 
 async function restoreOriginal() {
   await post('save', { data: original });
+  await waitForState('restore original state', (state) => {
+    if (stable(state) !== originalText) throw new Error('restored state not visible yet');
+  }, { timeoutMs: 30000 });
   restoreNeeded = false;
   ok('restore original state');
 }
@@ -244,6 +260,22 @@ async function post(action, payload) {
     headers: { 'Content-Type': 'text/plain;charset=utf-8', 'Content-Length': String(Buffer.byteLength(body)) },
     body,
   }, action === 'save' ? 1 : 3);
+}
+
+async function waitForState(name, check, { merge = false, timeoutMs = 20000, intervalMs = 1000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let last = '';
+  while (Date.now() <= deadline) {
+    const state = await getAll({ merge });
+    try {
+      check(state);
+      return state;
+    } catch (err) {
+      last = err.message || String(err);
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+  }
+  fail(name, last || 'condition not met');
 }
 
 async function fetchJson(target, opts = { cache: 'no-store' }, tries = 3) {
