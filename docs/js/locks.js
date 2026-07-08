@@ -4,7 +4,7 @@ import { CONFIG } from './config.js';
 import { Roles } from './roles.js';
 
 const LIVE = () => !!CONFIG.APPS_SCRIPT_URL;
-const LOCKED_PAGES = new Set(['members', 'diamond', 'dist-params', 'settings', 'rotation', 'gear']);
+const LOCKED_PAGES = new Set(['members', 'participation', 'diamond', 'dist-params', 'settings', 'rotation', 'gear']);
 
 export const Locks = {
   page: null, timer: null, _banner: null,

@@ -9,7 +9,13 @@ on:
       - 'docs/js/db.js'
       - 'scripts/live-dashboard-qa.mjs'
       - '.github/workflows/apps-script-deploy.yml'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      run_live_qa:
+        description: 'Run mutating production live QA after deployment'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -108,8 +114,28 @@ jobs:
             --versionNumber "$VERSION_NUMBER" \
             --description "main ${GITHUB_SHA}"
 
-      - name: Live QA after deployment
+      - name: Read-only live health check after deployment
         run: |
           set -euo pipefail
           sleep 10
+          node --input-type=module <<'NODE'
+          import { CONFIG } from './docs/js/config.js';
+          const res = await fetch(`${CONFIG.APPS_SCRIPT_URL}?action=getAll&_ts=${Date.now()}`);
+          const text = await res.text();
+          if (!res.ok || !text.trim().startsWith('{')) {
+            throw new Error(`Invalid backend response: HTTP ${res.status} ${text.slice(0, 120)}`);
+          }
+          const json = JSON.parse(text);
+          if (json.error) throw new Error(json.error);
+          const state = json.data;
+          if (!Array.isArray(state?.members) || state.members.length < 1) {
+            throw new Error('Live backend returned an empty member roster');
+          }
+          console.log(`live backend ok: ${state.members.length} members`);
+          NODE
+
+      - name: Live QA after deployment
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_live_qa }}
+        run: |
+          set -euo pipefail
           npm run qa:live

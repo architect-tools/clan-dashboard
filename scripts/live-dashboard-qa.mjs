@@ -17,6 +17,8 @@ if (!url) throw new Error('APPS_SCRIPT_URL is empty');
 const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
 const marker = `__LIVE_QA_${stamp}__`;
 const backupPath = join(tmpdir(), `clandash-live-backup-${stamp}.json`);
+const qaLockWho = `live-dashboard-qa:${marker}`;
+const qaLockPages = ['members', 'participation', 'diamond', 'dist-params', 'settings', 'rotation', 'gear'];
 const log = [];
 const ok = (name, detail = '') => {
   log.push({ ok: true, name, detail });
@@ -34,8 +36,12 @@ const fail = (name, detail = '') => {
 let original = null;
 let originalText = '';
 let restoreNeeded = false;
+let qaLocksAcquired = false;
 
 try {
+  await assertNoActiveEditors('preflight');
+  await acquireQaLocks();
+
   original = await getAll({ merge: false });
   originalText = stable(original);
   await writeFile(backupPath, JSON.stringify(original, null, 2) + '\n', 'utf8');
@@ -51,9 +57,11 @@ try {
   const final = await getAll({ merge: false });
   if (stable(final) !== originalText) {
     await writeFile(join(tmpdir(), `clandash-live-after-restore-${stamp}.json`), JSON.stringify(final, null, 2) + '\n', 'utf8');
-    fail('restore equality', 'final state differs from original');
+    warn('restore equality', 'state changed outside QA; temp QA data was cleaned and non-QA changes were preserved');
+  } else {
+    ok('restore equality');
   }
-  ok('restore equality');
+  await releaseQaLocks();
   console.log('\nLIVE DASHBOARD QA PASS');
 } catch (err) {
   console.error('\nLIVE DASHBOARD QA FAIL:', err.message || err);
@@ -66,6 +74,7 @@ try {
       console.error(restoreErr.message || restoreErr);
     }
   }
+  await releaseQaLocks();
   process.exit(1);
 }
 
@@ -106,10 +115,8 @@ async function checkFullStateCrud(base) {
   s.participation ||= {};
   s.participation.byDate ||= {};
   s.participation.byDate[date] = { [marker]: [memberId] };
-  s.settings.totalDiamonds = (s.settings.totalDiamonds || 0) + 1;
   s.tiers = [...(s.tiers || [])];
   if (s.tiers[0]) s.tiers[0] = { ...s.tiers[0], minScore: s.tiers[0].minScore };
-  s.powerRanks = [...(s.powerRanks || []), { rank: 99, pct: 0 }];
   s.staff = [...(s.staff || []), { name: marker, ratio: 0 }];
   s.contentCatalog = [...(s.contentCatalog || []), { category: '기타', name: marker, points: 1, weekly: 1, active: true }];
   s.rotationQueues = [...(s.rotationQueues || []), { name: marker, items: [{ name: marker }] }];
@@ -123,6 +130,7 @@ async function checkFullStateCrud(base) {
     s.statusBoards[0].data[String(memberId)] = { [(s.statusBoards[0].columns || ['테스트'])[0]]: true };
   }
 
+  await assertNoActiveEditors('before temp full-state save');
   restoreNeeded = true;
   await post('save', { data: s });
   ok('write full state temp data');
@@ -139,6 +147,7 @@ async function checkFullStateCrud(base) {
   const m = edited.members.find((x) => x.id === memberId);
   m.power = 124.5;
   m.note = marker + '-edited';
+  await assertNoActiveEditors('before temp member edit save');
   await post('save', { data: edited });
   const reread = await waitForState('edit temp member', (state) => {
     const em = (state.members || []).find((x) => x.id === memberId);
@@ -162,6 +171,7 @@ function assertTempState(state, memberId) {
 }
 
 async function checkQaWorkflowRace() {
+  await assertNoActiveEditors('before qa workflow race');
   const reports = await Promise.all(Array.from({ length: 3 }, (_, i) => post('qaAdd', {
     report: {
       title: `${marker} QA race ${i}`,
@@ -213,6 +223,7 @@ async function checkLockEndpoint() {
 }
 
 async function checkConcurrentFullSave() {
+  await assertNoActiveEditors('before concurrent full save');
   const base = await waitForState('concurrent full save base', (state) => {
     if (!Array.isArray(state.members) || !state.members.some((m) => m.name === marker)) {
       throw new Error('temp member not visible before race');
@@ -239,18 +250,24 @@ async function checkConcurrentFullSave() {
 }
 
 async function restoreOriginal() {
-  await post('save', { data: original });
-  await waitForState('restore original state', (state) => {
-    if (stable(state) !== originalText) throw new Error('restored state not visible yet');
+  const current = await getAll({ merge: false });
+  const cleaned = cleanupTempState(current);
+  await post('save', { data: cleaned });
+  await waitForState('cleanup temp live QA state', (state) => {
+    if (hasTempState(state)) throw new Error('temp QA data still visible');
   }, { timeoutMs: 30000 });
   restoreNeeded = false;
-  ok('restore original state');
+  ok('cleanup temp live QA state');
 }
 
 async function getAll({ merge }) {
   const params = new URLSearchParams({ action: 'getAll', _ts: String(Date.now()) });
   if (merge) params.set('merge', '1');
   return fetchJson(`${url}?${params}`);
+}
+
+async function getLocks() {
+  return fetchJson(`${url}?${new URLSearchParams({ action: 'getLocks', _ts: String(Date.now()) })}`);
 }
 
 async function post(action, payload) {
@@ -260,6 +277,35 @@ async function post(action, payload) {
     headers: { 'Content-Type': 'text/plain;charset=utf-8', 'Content-Length': String(Buffer.byteLength(body)) },
     body,
   }, action === 'save' ? 1 : 3);
+}
+
+async function assertNoActiveEditors(stage) {
+  const locks = await getLocks();
+  const active = (Array.isArray(locks) ? locks : []).filter((l) => !isQaLock(l));
+  if (active.length) {
+    fail(`active editors present (${stage})`, active.map((l) => `${l.page}:${l.who}`).join(', '));
+  }
+}
+
+function isQaLock(lock) {
+  const who = String(lock?.who || '');
+  return who === qaLockWho || who.startsWith(marker) || who.includes('live-dashboard-qa');
+}
+
+async function acquireQaLocks() {
+  qaLocksAcquired = true;
+  for (const page of qaLockPages) await post('lock', { page, who: qaLockWho });
+  ok('qa edit lock acquired', qaLockPages.join(','));
+}
+
+async function releaseQaLocks() {
+  if (!qaLocksAcquired) return;
+  for (const page of qaLockPages) {
+    try { await post('unlock', { page, who: qaLockWho }); }
+    catch (err) { warn('qa edit lock release failed', `${page}: ${err.message || err}`); }
+  }
+  qaLocksAcquired = false;
+  ok('qa edit lock released');
 }
 
 async function waitForState(name, check, { merge = false, timeoutMs = 20000, intervalMs = 1000 } = {}) {
@@ -276,6 +322,58 @@ async function waitForState(name, check, { merge = false, timeoutMs = 20000, int
     }
   }
   fail(name, last || 'condition not met');
+}
+
+function cleanupTempState(state) {
+  const s = clone(state);
+  const memberIds = new Set((s.members || [])
+    .filter((m) => isMarkerText(m.name) || isMarkerText(m.note))
+    .map((m) => String(m.id)));
+
+  s.members = (s.members || []).filter((m) => !(isMarkerText(m.name) || isMarkerText(m.note)));
+
+  const byDate = s.participation?.byDate || {};
+  for (const [date, events] of Object.entries(byDate)) {
+    for (const [content, ids] of Object.entries(events || {})) {
+      if (isMarkerText(content)) {
+        delete events[content];
+        continue;
+      }
+      if (Array.isArray(ids)) events[content] = ids.filter((id) => !memberIds.has(String(id)));
+    }
+    if (!Object.keys(events || {}).length) delete byDate[date];
+  }
+
+  s.staff = (s.staff || []).filter((x) => !isMarkerText(x.name));
+  s.contentCatalog = (s.contentCatalog || []).filter((x) => !isMarkerText(x.name));
+  s.rotationQueues = (s.rotationQueues || []).filter((x) => !isMarkerText(x.name));
+  s.dropLog = (s.dropLog || []).filter((x) => !isMarkerRecord(x));
+  s.distributionLog = (s.distributionLog || []).filter((x) => !isMarkerRecord(x));
+  s.sales = (s.sales || []).filter((x) => !isMarkerRecord(x));
+  s.settlements = (s.settlements || []).filter((x) => !isMarkerRecord(x));
+  s.qaReports = (s.qaReports || []).filter((x) => !isMarkerRecord(x));
+
+  for (const board of s.statusBoards || []) {
+    if (!board?.data) continue;
+    for (const id of memberIds) delete board.data[id];
+  }
+
+  if (s.appSettings?.liveQaRace && String(s.appSettings.liveQaRace).startsWith('__LIVE_QA_')) {
+    delete s.appSettings.liveQaRace;
+  }
+  return s;
+}
+
+function hasTempState(state) {
+  return stable(cleanupTempState(state)) !== stable(state);
+}
+
+function isMarkerRecord(value) {
+  return isMarkerText(JSON.stringify(value || {}));
+}
+
+function isMarkerText(value) {
+  return String(value || '').includes(marker);
 }
 
 async function fetchJson(target, opts = { cache: 'no-store' }, tries = 3) {

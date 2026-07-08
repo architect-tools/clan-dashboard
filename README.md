@@ -96,7 +96,7 @@ node scripts/build-seed.mjs <csv폴더>   # 시드 재생성
 
 ## 🚢 Apps Script CI/CD
 `apps-script/**`가 `main`에 들어가면 GitHub Actions의 `Apps Script deploy` workflow가 실행됩니다.
-이 workflow는 `Code.gs`를 기존 Apps Script 프로젝트에 `clasp push`한 뒤, `docs/js/config.js`가 가리키는 기존 Web App deployment를 새 버전으로 갱신하고 `npm run qa:live`까지 실행합니다.
+이 workflow는 `Code.gs`를 기존 Apps Script 프로젝트에 `clasp push`한 뒤, `docs/js/config.js`가 가리키는 기존 Web App deployment를 새 버전으로 갱신하고 읽기 전용 라이브 헬스체크를 실행합니다.
 
 GitHub 저장소 **Settings ▸ Secrets and variables ▸ Actions**에 다음 Secrets가 필요합니다:
 - `GAS_SCRIPT_ID`: Apps Script 프로젝트 ID
@@ -109,6 +109,12 @@ GitHub 저장소 **Settings ▸ Secrets and variables ▸ Actions**에 다음 Se
 npx @google/clasp login
 ```
 로그인 후 생성된 `~/.clasprc.json` 값을 `CLASPRC_JSON` secret에 넣습니다.
+
+운영 DB에 쓰기/편집/race condition까지 검증하는 full live QA는 실제 데이터를 임시로 쓰므로 사용자가 편집하지 않는 시간에 수동으로 실행하세요:
+```bash
+gh workflow run "Apps Script deploy" -f run_live_qa=true
+```
+이 QA는 시작 전에 활성 편집 락을 감지하면 쓰기 작업을 하지 않고 실패합니다.
 
 ## 🧪 QA 리포트 처리 흐름
 관리자 대시보드 상단의 `버그 리포트 작성`에서 접수하고, `QA 히스토리`에서 슬롯별 요청/응답을 확인합니다.
