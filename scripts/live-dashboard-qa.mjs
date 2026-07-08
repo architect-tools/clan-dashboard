@@ -1,0 +1,262 @@
+#!/usr/bin/env node
+// Live dashboard QA loop.
+// Creates temporary data in the live Apps Script state, verifies read/write/edit
+// paths, then restores the original state. Designed to fail closed with a
+// backup file path if restore does not complete.
+
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { CONFIG } from '../docs/js/config.js';
+import { computeSettlement } from '../docs/js/calc.js';
+
+const token = process.env.CLANDASH_TOKEN || CONFIG.GATE_PASSWORD || '';
+const url = CONFIG.APPS_SCRIPT_URL;
+if (!url) throw new Error('APPS_SCRIPT_URL is empty');
+
+const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+const marker = `__LIVE_QA_${stamp}__`;
+const backupPath = join(tmpdir(), `clandash-live-backup-${stamp}.json`);
+const log = [];
+const ok = (name, detail = '') => {
+  log.push({ ok: true, name, detail });
+  console.log(`OK ${name}${detail ? ' - ' + detail : ''}`);
+};
+const fail = (name, detail = '') => {
+  log.push({ ok: false, name, detail });
+  throw new Error(`${name}${detail ? ': ' + detail : ''}`);
+};
+
+let original = null;
+let originalText = '';
+let restoreNeeded = false;
+
+try {
+  original = await getAll({ merge: false });
+  originalText = stable(original);
+  await writeFile(backupPath, JSON.stringify(original, null, 2) + '\n', 'utf8');
+  ok('backup live state', backupPath);
+
+  await checkReads(original);
+  await checkFullStateCrud(original);
+  await checkLockEndpoint();
+  await checkConcurrentFullSave();
+  await checkQaWorkflowRace();
+
+  await restoreOriginal();
+  const final = await getAll({ merge: false });
+  if (stable(final) !== originalText) {
+    await writeFile(join(tmpdir(), `clandash-live-after-restore-${stamp}.json`), JSON.stringify(final, null, 2) + '\n', 'utf8');
+    fail('restore equality', 'final state differs from original');
+  }
+  ok('restore equality');
+  console.log('\nLIVE DASHBOARD QA PASS');
+} catch (err) {
+  console.error('\nLIVE DASHBOARD QA FAIL:', err.message || err);
+  if (restoreNeeded && original) {
+    try {
+      await restoreOriginal();
+      console.error('Restore attempted after failure. Backup:', backupPath);
+    } catch (restoreErr) {
+      console.error('RESTORE FAILED. Manual backup:', backupPath);
+      console.error(restoreErr.message || restoreErr);
+    }
+  }
+  process.exit(1);
+}
+
+async function checkReads(state) {
+  if (!Array.isArray(state.members) || state.members.length < 1) fail('read members', 'empty roster');
+  if (!state.settings || !Array.isArray(state.tiers) || !Array.isArray(state.contentCatalog)) fail('read core settings');
+  const merged = await getAll({ merge: true });
+  if (!Array.isArray(merged.members) || merged.members.length < 1) fail('read merge members', 'empty roster');
+  ok('read getAll/getAll merge', `${state.members.length} members`);
+  const settlement = computeSettlement(state);
+  if (settlement.verification.status !== '정상') fail('settlement verification', settlement.verification.status);
+  ok('compute settlement', `distributed ${settlement.totals.distributed}`);
+}
+
+async function checkFullStateCrud(base) {
+  const s = clone(base);
+  const maxId = Math.max(0, ...(s.members || []).map((m) => +m.id || 0));
+  const memberId = maxId + 999;
+  const date = '2099-12-31';
+
+  s.members.push({
+    id: memberId,
+    order: (s.members || []).length + 1,
+    name: marker,
+    cls: '전사',
+    power: 123.4,
+    score: 77,
+    grade: '신입',
+    equip: { 주무기: { star: 4, tier: 5.5, enhance: 8 } },
+    skills: { 주문석: { 다중_궤적: true }, 공용주문석: {}, 엘릭서: { 테스트: true } },
+    active: true,
+    note: marker,
+  });
+  s.participation ||= {};
+  s.participation.byDate ||= {};
+  s.participation.byDate[date] = { [marker]: [memberId] };
+  s.settings.totalDiamonds = (s.settings.totalDiamonds || 0) + 1;
+  s.tiers = [...(s.tiers || [])];
+  if (s.tiers[0]) s.tiers[0] = { ...s.tiers[0], minScore: s.tiers[0].minScore };
+  s.powerRanks = [...(s.powerRanks || []), { rank: 99, pct: 0 }];
+  s.staff = [...(s.staff || []), { name: marker, ratio: 0 }];
+  s.contentCatalog = [...(s.contentCatalog || []), { category: '기타', name: marker, points: 1, weekly: 1, active: true }];
+  s.rotationQueues = [...(s.rotationQueues || []), { name: marker, items: [{ name: marker }] }];
+  s.dropLog = [{ id: marker + '-drop', date, content: marker, item: marker, note: marker }, ...(s.dropLog || [])];
+  s.distributionLog = [{ id: marker + '-dist', date, item: marker, type: '기타', member: marker, from: '', price: 1, note: marker }, ...(s.distributionLog || [])];
+  s.sales = [{ id: marker + '-sale', item: marker, bidType: '경매', basePrice: 1, deadline: Date.now() + 3600000, bids: [{ name: marker, amount: 1 }] }, ...(s.sales || [])];
+  s.settlements = [{ id: marker + '-settle', date, from: date, to: date, total: 1, distributed: 1, entries: [{ memberId, name: marker, cls: '전사', powerDia: 0, partDia: 1, staffDia: 0, total: 1, score: 77, tier: 'F' }] }, ...(s.settlements || [])];
+  s.statusBoards ||= [];
+  if (s.statusBoards[0]) {
+    s.statusBoards[0].data ||= {};
+    s.statusBoards[0].data[String(memberId)] = { [(s.statusBoards[0].columns || ['테스트'])[0]]: true };
+  }
+
+  restoreNeeded = true;
+  await post('save', { data: s });
+  ok('write full state temp data');
+
+  const fast = await getAll({ merge: false });
+  assertTempState(fast, memberId);
+  ok('read back full state temp data');
+
+  const merged = await getAll({ merge: true });
+  assertTempState(merged, memberId);
+  ok('read back merge after writeTabs');
+
+  const edited = clone(merged);
+  const m = edited.members.find((x) => x.id === memberId);
+  m.power = 124.5;
+  m.note = marker + '-edited';
+  await post('save', { data: edited });
+  const reread = await getAll({ merge: false });
+  const em = reread.members.find((x) => x.id === memberId);
+  if (!em || em.power !== 124.5 || em.note !== marker + '-edited') fail('edit temp member');
+  ok('edit temp member');
+}
+
+function assertTempState(state, memberId) {
+  const member = (state.members || []).find((m) => m.id === memberId || m.name === marker);
+  if (!member) fail('temp member persisted');
+  if (!state.participation?.byDate?.['2099-12-31']?.[marker]?.includes(memberId)) fail('temp participation persisted');
+  if (!(state.dropLog || []).some((x) => x.id === marker + '-drop')) fail('temp drop persisted');
+  if (!(state.distributionLog || []).some((x) => x.id === marker + '-dist')) fail('temp distribution persisted');
+  if (!(state.rotationQueues || []).some((x) => x.name === marker)) fail('temp queue persisted');
+  if (!(state.sales || []).some((x) => x.id === marker + '-sale')) fail('temp sale persisted');
+  if (!(state.settlements || []).some((x) => x.id === marker + '-settle')) fail('temp settlement persisted');
+  if (!(state.contentCatalog || []).some((x) => x.name === marker)) fail('temp content persisted');
+}
+
+async function checkQaWorkflowRace() {
+  const reports = await Promise.all(Array.from({ length: 3 }, (_, i) => post('qaAdd', {
+    report: {
+      title: `${marker} QA race ${i}`,
+      severity: 'low',
+      area: 'DB/동기화',
+      reporter: 'live-dashboard-qa',
+      environment: 'concurrent qaAdd',
+      steps: 'concurrent create',
+      expected: 'unique slots and no lost update',
+      actual: 'running',
+      note: marker,
+    },
+  })));
+  const slots = reports.map((r) => r.slot);
+  if (new Set(slots).size !== reports.length) fail('qa race unique slots', slots.join(','));
+  ok('qa race unique slots', slots.join(','));
+
+  const target = reports[0];
+  const updated = await post('qaUpdate', {
+    idOrSlot: target.slot,
+    patch: { status: 'resolved', assignee: 'live-dashboard-qa', reply: marker + ' reply ok' },
+  });
+  if (updated.status !== 'resolved' || updated.reply !== marker + ' reply ok') fail('qa update reply');
+  ok('qa update reply', target.slot);
+
+  const state = await getAll({ merge: false });
+  for (const r of reports) {
+    if (!(state.qaReports || []).some((x) => x.slot === r.slot)) fail('qa report readable', r.slot);
+  }
+  ok('qa reports readable', String(reports.length));
+
+  for (const r of reports) await post('qaDelete', { idOrSlot: r.slot });
+  const after = await getAll({ merge: false });
+  const left = (after.qaReports || []).filter((r) => String(r.note || '').includes(marker) || String(r.title || '').includes(marker));
+  if (left.length) fail('qa cleanup', left.map((r) => r.slot).join(','));
+  ok('qa cleanup');
+}
+
+async function checkLockEndpoint() {
+  const page = `live-qa-${stamp}`;
+  const a = await post('lock', { page, who: marker + '-A' });
+  const b = await post('lock', { page, who: marker + '-B' });
+  const locks = Array.isArray(b) ? b : a;
+  const mine = locks.filter((l) => l.page === page && String(l.who || '').startsWith(marker));
+  if (mine.length < 2) fail('soft lock race visibility', JSON.stringify(locks));
+  await post('unlock', { page, who: marker + '-A' });
+  await post('unlock', { page, who: marker + '-B' });
+  ok('soft lock race visibility');
+}
+
+async function checkConcurrentFullSave() {
+  const base = await getAll({ merge: false });
+  const a = clone(base);
+  const b = clone(base);
+  a.appSettings ||= {};
+  b.appSettings ||= {};
+  a.appSettings.liveQaRace = marker + '-A';
+  b.appSettings.liveQaRace = marker + '-B';
+  await Promise.all([post('save', { data: a }), post('save', { data: b })]);
+  const after = await getAll({ merge: false });
+  const value = after.appSettings?.liveQaRace;
+  if (value !== marker + '-A' && value !== marker + '-B') fail('concurrent full save result', String(value));
+  if (!Array.isArray(after.members) || !after.members.some((m) => m.name === marker)) fail('concurrent full save preserved state');
+  ok('concurrent full save serialized', value);
+}
+
+async function restoreOriginal() {
+  await post('save', { data: original });
+  restoreNeeded = false;
+  ok('restore original state');
+}
+
+async function getAll({ merge }) {
+  const params = new URLSearchParams({ action: 'getAll', _ts: String(Date.now()) });
+  if (merge) params.set('merge', '1');
+  return fetchJson(`${url}?${params}`);
+}
+
+async function post(action, payload) {
+  return fetchJson(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action, token, ...payload }),
+  }, action === 'save' ? 1 : 3);
+}
+
+async function fetchJson(target, opts = { cache: 'no-store' }, tries = 3) {
+  let last = '';
+  for (let i = 1; i <= tries; i++) {
+    const res = await fetch(target, opts);
+    const text = await res.text();
+    if (res.ok && text.trim().startsWith('{')) {
+      const json = JSON.parse(text);
+      if (json.error) throw new Error(json.error);
+      return json.data;
+    }
+    last = `HTTP ${res.status} ${text.slice(0, 160).replace(/\s+/g, ' ')}`;
+    await new Promise((resolve) => setTimeout(resolve, 700 * i));
+  }
+  throw new Error(last || 'invalid response');
+}
+
+function clone(v) {
+  return JSON.parse(JSON.stringify(v));
+}
+
+function stable(v) {
+  return JSON.stringify(v);
+}

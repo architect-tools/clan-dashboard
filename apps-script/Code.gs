@@ -39,10 +39,10 @@ function doPost(e) {
   try {
     if (!checkToken(body.token)) return json({ error: 'unauthorized' });
     var action = body.action;
-    if (action === 'save') { saveState(body.data); return json({ data: { ok: true } }); }
-    if (action === 'qaAdd') { return json({ data: addQaReport(body.report) }); }
-    if (action === 'qaUpdate') { return json({ data: updateQaReport(body.idOrSlot, body.patch) }); }
-    if (action === 'qaDelete') { return json({ data: deleteQaReport(body.idOrSlot) }); }
+    if (action === 'save') { return json({ data: withStateLock(function () { saveState(body.data); return { ok: true }; }) }); }
+    if (action === 'qaAdd') { return json({ data: withStateLock(function () { return addQaReport(body.report); }) }); }
+    if (action === 'qaUpdate') { return json({ data: withStateLock(function () { return updateQaReport(body.idOrSlot, body.patch); }) }); }
+    if (action === 'qaDelete') { return json({ data: withStateLock(function () { return deleteQaReport(body.idOrSlot); }) }); }
     if (action === 'lock') { return json({ data: setLock(body.page, body.who) }); }
     if (action === 'unlock') { return json({ data: clearLock(body.page, body.who) }); }
     if (action === 'ocr') { return json({ data: { lines: naverOcr(body.image) } }); }
@@ -55,6 +55,13 @@ function checkToken(token) {
   var pw = P.getProperty('GATE_PASSWORD');
   if (!pw) return true;
   return token === pw;
+}
+
+function withStateLock(fn) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try { return fn(); }
+  finally { lock.releaseLock(); }
 }
 
 /* ── state store + 양방향 병합 ───────────────────────────────────── */
