@@ -4900,6 +4900,9 @@
           "star": 4,
           "tier": 1.5
         },
+        "무한": {
+          "tier": 8
+        },
         "반지": {
           "enhance": 9,
           "star": 4,
@@ -4911,14 +4914,17 @@
           "tier": 3
         },
         "보조1": {
-          "enhance": 9,
+          "enhance": 10,
           "star": 4,
-          "tier": 3.5
+          "tier": 4.5
         },
         "보조2": {
           "enhance": 9,
           "star": 4,
           "tier": 4.5
+        },
+        "복종": {
+          "tier": 10
         },
         "상의": {
           "enhance": 8,
@@ -4930,15 +4936,21 @@
           "star": 4,
           "tier": 2
         },
+        "심연": {
+          "tier": 9
+        },
         "장갑": {
           "enhance": 10,
           "star": 4,
           "tier": 2
         },
         "주무기": {
-          "enhance": 12,
+          "enhance": 8,
           "star": 4,
-          "tier": 2
+          "tier": 4.5
+        },
+        "충성": {
+          "tier": 10
         },
         "투구": {
           "enhance": 8,
