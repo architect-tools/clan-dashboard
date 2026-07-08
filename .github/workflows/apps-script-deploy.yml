@@ -1,0 +1,115 @@
+name: Apps Script deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps-script/**'
+      - 'docs/js/config.js'
+      - 'docs/js/db.js'
+      - 'scripts/live-dashboard-qa.mjs'
+      - '.github/workflows/apps-script-deploy.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apps-script-deploy
+  cancel-in-progress: false
+
+env:
+  CLASP_VERSION: 3.3.0
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GAS_SCRIPT_ID: ${{ secrets.GAS_SCRIPT_ID }}
+      GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      CLANDASH_TOKEN: ${{ secrets.CLANDASH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate dashboard and Apps Script
+        run: |
+          set -euo pipefail
+          npm run check
+          npm run smoke
+          npm run gas:check
+
+      - name: Configure clasp credentials
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const os = require('os');
+          const path = require('path');
+
+          const required = ['GAS_SCRIPT_ID', 'GAS_DEPLOYMENT_ID', 'CLASPRC_JSON'];
+          const missing = required.filter((name) => !process.env[name]);
+          if (missing.length) {
+            throw new Error(`Missing required GitHub Secrets: ${missing.join(', ')}`);
+          }
+
+          const authPath = path.join(os.homedir(), '.clasprc.json');
+          fs.writeFileSync(authPath, process.env.CLASPRC_JSON, { mode: 0o600 });
+          fs.writeFileSync('.clasp.json', JSON.stringify({
+            scriptId: process.env.GAS_SCRIPT_ID,
+            rootDir: 'apps-script',
+          }, null, 2) + '\n');
+
+          JSON.parse(fs.readFileSync(authPath, 'utf8'));
+          JSON.parse(fs.readFileSync('.clasp.json', 'utf8'));
+          NODE
+
+      - name: Verify configured deployment matches frontend
+        run: |
+          set -euo pipefail
+          DEPLOYMENT_IN_CONFIG="$(node --input-type=module <<'NODE'
+          import { CONFIG } from './docs/js/config.js';
+          const match = String(CONFIG.APPS_SCRIPT_URL || '').match(/\/s\/([^/]+)\/exec$/);
+          if (!match) throw new Error('docs/js/config.js APPS_SCRIPT_URL is not a valid /exec URL');
+          console.log(match[1]);
+          NODE
+          )"
+          if [ "$DEPLOYMENT_IN_CONFIG" != "$GAS_DEPLOYMENT_ID" ]; then
+            echo "::error::GAS_DEPLOYMENT_ID does not match docs/js/config.js APPS_SCRIPT_URL"
+            echo "config: $DEPLOYMENT_IN_CONFIG"
+            echo "secret: $GAS_DEPLOYMENT_ID"
+            exit 1
+          fi
+
+      - name: Push Apps Script and update existing web app deployment
+        run: |
+          set -euo pipefail
+          CLASP="npx --yes @google/clasp@${CLASP_VERSION} --project .clasp.json"
+          $CLASP push --force
+
+          VERSION_OUTPUT="$($CLASP create-version "CI Apps Script deploy")"
+          echo "$VERSION_OUTPUT"
+          VERSION_NUMBER="$(printf '%s\n' "$VERSION_OUTPUT" | sed -nE 's/.*[Vv]ersion[^0-9]*([0-9]+).*/\1/p' | tail -n 1)"
+          if [ -z "$VERSION_NUMBER" ]; then
+            echo "::error::Could not parse Apps Script version number"
+            exit 1
+          fi
+
+          $CLASP update-deployment "$GAS_DEPLOYMENT_ID" \
+            --versionNumber "$VERSION_NUMBER" \
+            --description "main ${GITHUB_SHA}"
+
+      - name: Live QA after deployment
+        run: |
+          set -euo pipefail
+          sleep 10
+          npm run qa:live

@@ -90,8 +90,25 @@ npx serve docs        # 또는: python -m http.server 8080 --directory docs
 ```bash
 npm run check    # import 그래프 일관성 검사
 npm run smoke    # jsdom으로 전 화면 렌더 + 정산/뮤테이션 검증
+npm run gas:check # Apps Script(Code.gs) 문법 검사
 node scripts/build-seed.mjs <csv폴더>   # 시드 재생성
 ```
+
+## 🚢 Apps Script CI/CD
+`apps-script/**`가 `main`에 들어가면 GitHub Actions의 `Apps Script deploy` workflow가 실행됩니다.
+이 workflow는 `Code.gs`를 기존 Apps Script 프로젝트에 `clasp push`한 뒤, `docs/js/config.js`가 가리키는 기존 Web App deployment를 새 버전으로 갱신하고 `npm run qa:live`까지 실행합니다.
+
+GitHub 저장소 **Settings ▸ Secrets and variables ▸ Actions**에 다음 Secrets가 필요합니다:
+- `GAS_SCRIPT_ID`: Apps Script 프로젝트 ID
+- `GAS_DEPLOYMENT_ID`: 현재 Web App URL의 `/s/<여기>/exec` 값
+- `CLASPRC_JSON`: 배포 권한이 승인된 계정의 `~/.clasprc.json` 전체 JSON
+- `CLANDASH_TOKEN`: 라이브 QA 쓰기 토큰(없으면 `docs/js/config.js`의 `GATE_PASSWORD`를 사용)
+
+로컬에서 최초 1회:
+```bash
+npx @google/clasp login
+```
+로그인 후 생성된 `~/.clasprc.json` 값을 `CLASPRC_JSON` secret에 넣습니다.
 
 ## 🧪 QA 리포트 처리 흐름
 관리자 대시보드 상단의 `버그 리포트 작성`에서 접수하고, `QA 히스토리`에서 슬롯별 요청/응답을 확인합니다.
