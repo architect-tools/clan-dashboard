@@ -6138,7 +6138,7 @@
         "귀걸이": {
           "enhance": 8,
           "star": 4,
-          "tier": 2
+          "tier": 3
         },
         "망토": {
           "enhance": 8,
@@ -6146,29 +6146,29 @@
           "tier": 5.5
         },
         "목걸이": {
-          "enhance": 8,
+          "enhance": 11,
           "star": 4,
           "tier": 3
         },
         "반지": {
           "enhance": 8,
           "star": 4,
-          "tier": 3
+          "tier": 4.5
         },
         "벨트": {
           "enhance": 8,
           "star": 4,
-          "tier": 3
+          "tier": 4.5
         },
         "보조1": {
           "enhance": 8,
           "star": 4,
-          "tier": 4.5
+          "tier": 5.5
         },
         "보조2": {
           "enhance": 8,
           "star": 4,
-          "tier": 4.5
+          "tier": 5.5
         },
         "상의": {
           "enhance": 9,
@@ -6178,7 +6178,10 @@
         "신발": {
           "enhance": 8,
           "star": 4,
-          "tier": 3
+          "tier": 4.5
+        },
+        "심연": {
+          "tier": 8
         },
         "장갑": {
           "enhance": 8,
@@ -6188,7 +6191,7 @@
         "주무기": {
           "enhance": 8,
           "star": 4,
-          "tier": 4.5
+          "tier": 5.5
         },
         "투구": {
           "enhance": 8,
@@ -6203,7 +6206,7 @@
         "하의": {
           "enhance": 8,
           "star": 4,
-          "tier": 3.5
+          "tier": 4.5
         }
       },
       "grade": "정회원",
