@@ -4904,9 +4904,9 @@
           "tier": 8
         },
         "반지": {
-          "enhance": 9,
+          "enhance": 8,
           "star": 4,
-          "tier": 2
+          "tier": 3
         },
         "벨트": {
           "enhance": 8,
@@ -4929,7 +4929,7 @@
         "상의": {
           "enhance": 8,
           "star": 4,
-          "tier": 2
+          "tier": 4.5
         },
         "신발": {
           "enhance": 9,
