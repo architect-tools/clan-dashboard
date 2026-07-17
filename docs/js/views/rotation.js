@@ -69,7 +69,17 @@ export function renderRotation() {
       { key: 'content', label: '콘텐츠', render: (r) => el('b', { text: r.content }) },
       { key: 'item', label: '아이템' },
       { key: 'note', label: '메모', render: (r) => el('span.muted', { text: r.note || '' }) },
-      { label: '', align: 'right', render: (r) => btn('삭제', () => { s.dropLog = s.dropLog.filter((x) => x.id !== r.id); DB.commit(); renderRotation(); }, { kind: 'ghost-danger', admin: true }) },
+      { label: '', align: 'right', render: (r) => btn('삭제', async (event) => {
+        event.currentTarget.disabled = true;
+        s.dropLog = s.dropLog.filter((x) => x.id !== r.id);
+        const saved = await DB.commitNow();
+        if (saved) toast('드랍 기록을 삭제했습니다.');
+        else {
+          await DB.refresh({ force: true });
+          toast('삭제를 저장하지 못해 최신 데이터로 복구했습니다.', 'error');
+        }
+        renderRotation();
+      }, { kind: 'ghost-danger', admin: true }) },
     ], drops, { empty: dropQ ? '검색 결과 없음' : '드랍 기록이 없습니다.' })]),
   ]), { actions: btn('+ 드랍 기록', () => addDrop(), { kind: 'ghost', admin: true }) }));
 
@@ -174,10 +184,17 @@ export function renderRotation() {
     const note = input({ placeholder: '메모(선택)' });
     modal('드랍 기록', (close) => el('div.form', {}, [
       field('날짜', date), field('콘텐츠', content), field('아이템', item), field('메모', note),
-      el('div.modal-actions', {}, [btn('취소', close), btn('기록', () => {
+      el('div.modal-actions', {}, [btn('취소', close), btn('기록', async (event) => {
         if (!item.value.trim()) return toast('아이템 입력', 'error');
+        event.currentTarget.disabled = true;
         s.dropLog.unshift({ id: uid(), date: date.value, content: content.value.trim(), item: item.value.trim(), note: note.value.trim() });
-        DB.commit(); close(); toast('드랍 기록됨'); renderRotation();
+        const saved = await DB.commitNow();
+        if (saved) { close(); toast('드랍 기록됨'); }
+        else {
+          await DB.refresh({ force: true });
+          toast('드랍 기록을 저장하지 못했습니다.', 'error');
+        }
+        renderRotation();
       }, { kind: 'primary' })]),
     ]));
   }

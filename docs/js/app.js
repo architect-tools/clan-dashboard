@@ -148,4 +148,11 @@ async function main() {
   }
 }
 
+// Prevent a manual refresh/close from cancelling an in-flight destructive save.
+window.addEventListener('beforeunload', (event) => {
+  if (!DB._pendingSave) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
 main();

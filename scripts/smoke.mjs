@@ -160,6 +160,21 @@ try {
   if (calls.some((c) => c.kind === 'sale.cancelBid' && c.payload.memberName === '탈퇴한멤버')
       && refreshedSales[0]?.bids.length === 0) ok('관리자 입찰 삭제: 서버 확인 후 새로고침 상태에도 유지');
   else bad('admin atomic bid cancel UI', JSON.stringify({ calls, refreshedSales }));
+
+  const originalCommitNow = DB.commitNow;
+  try {
+    let dropSaveConfirmed = false;
+    DB.commitNow = async () => { dropSaveConfirmed = true; return true; };
+    DB.state.dropLog = [{ id: 'drop-save-test', date: '2099-01-01', content: '즉시 저장 테스트', item: '테스트 드랍', note: '' }];
+    app.innerHTML = ''; views.rotation();
+    const dropRow = [...app.querySelectorAll('tr')].find((tr) => tr.textContent.includes('즉시 저장 테스트'));
+    dropRow?.querySelector('button')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (dropSaveConfirmed && !DB.state.dropLog.some((x) => x.id === 'drop-save-test')) ok('드랍 삭제: 서버 저장 확인 후 완료');
+    else bad('drop delete immediate save', JSON.stringify({ dropSaveConfirmed, dropLog: DB.state.dropLog }));
+  } finally {
+    DB.commitNow = originalCommitNow;
+  }
   localStorage.setItem('clandash.v1.role', 'member');
 
   CONFIG.APPS_SCRIPT_URL = 'https://script.google.com/test-remote-guard';

@@ -147,6 +147,12 @@ export const DB = {
     return await this.flushSave();
   },
 
+  /** Commit and wait until the active backend confirms persistence. */
+  async commitNow({ history = true } = {}) {
+    if (!this.commit({ history })) return false;
+    return await this.flushSave();
+  },
+
   _queueWrite(task) {
     const run = this._writeTail.catch(() => {}).then(task);
     this._writeTail = run;
