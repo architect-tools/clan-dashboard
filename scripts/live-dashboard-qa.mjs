@@ -122,7 +122,6 @@ async function checkFullStateCrud(base) {
   s.rotationQueues = [...(s.rotationQueues || []), { name: marker, items: [{ name: marker }] }];
   s.dropLog = [{ id: marker + '-drop', date, content: marker, item: marker, note: marker }, ...(s.dropLog || [])];
   s.distributionLog = [{ id: marker + '-dist', date, item: marker, type: '기타', member: marker, from: '', price: 1, note: marker }, ...(s.distributionLog || [])];
-  s.sales = [{ id: marker + '-sale', item: marker, bidType: '경매', basePrice: 1, deadline: Date.now() + 3600000, bids: [{ name: marker, amount: 1 }] }, ...(s.sales || [])];
   s.settlements = [{ id: marker + '-settle', date, from: date, to: date, total: 1, distributed: 1, entries: [{ memberId, name: marker, cls: '전사', powerDia: 0, partDia: 1, staffDia: 0, total: 1, score: 77, tier: 'F' }] }, ...(s.settlements || [])];
   s.statusBoards ||= [];
   if (s.statusBoards[0]) {
@@ -133,6 +132,12 @@ async function checkFullStateCrud(base) {
   await assertNoActiveEditors('before temp full-state save');
   restoreNeeded = true;
   await post('save', { data: s });
+  await post('mutate', { mutationId: marker + '-sale-create', kind: 'sale.create', payload: {
+    id: marker + '-sale', item: marker, bidType: '경매', basePrice: 1, deadline: Date.now() + 3600000,
+  } });
+  await post('mutate', { mutationId: marker + '-sale-bid', kind: 'sale.bid', payload: {
+    saleId: marker + '-sale', memberId, amount: 1,
+  } });
   ok('write full state temp data');
 
   const fast = await waitForState('read back full state temp data', (state) => assertTempState(state, memberId));
@@ -235,7 +240,10 @@ async function checkConcurrentFullSave() {
   b.appSettings ||= {};
   a.appSettings.liveQaRace = marker + '-A';
   b.appSettings.liveQaRace = marker + '-B';
-  await Promise.all([post('save', { data: a }), post('save', { data: b })]);
+  const saves = await Promise.allSettled([post('save', { data: a }), post('save', { data: b })]);
+  const succeeded = saves.filter((x) => x.status === 'fulfilled').length;
+  const conflicted = saves.filter((x) => x.status === 'rejected' && String(x.reason?.message || x.reason).includes('conflict:')).length;
+  if (succeeded !== 1 || conflicted !== 1) fail('concurrent full save optimistic conflict', JSON.stringify(saves));
   const after = await waitForState('concurrent full save serialized', (state) => {
     const value = state.appSettings?.liveQaRace;
     if (value !== marker + '-A' && value !== marker + '-B') throw new Error(`race marker not visible: ${value}`);
@@ -246,11 +254,15 @@ async function checkConcurrentFullSave() {
   const value = after.appSettings?.liveQaRace;
   if (value !== marker + '-A' && value !== marker + '-B') fail('concurrent full save result', String(value));
   if (!Array.isArray(after.members) || !after.members.some((m) => m.name === marker)) fail('concurrent full save preserved state');
-  ok('concurrent full save serialized', value);
+  ok('concurrent full save optimistic conflict', value);
 }
 
 async function restoreOriginal() {
-  const current = await getAll({ merge: false });
+  let current = await getAll({ merge: false });
+  for (const sale of current.sales || []) {
+    if (isMarkerRecord(sale)) await post('mutate', { mutationId: marker + '-cleanup-sale-' + sale.id, kind: 'sale.cancel', payload: { saleId: sale.id } });
+  }
+  current = await getAll({ merge: false });
   const cleaned = cleanupTempState(current);
   await post('save', { data: cleaned });
   await waitForState('cleanup temp live QA state', (state) => {
@@ -271,7 +283,9 @@ async function getLocks() {
 }
 
 async function post(action, payload) {
-  const body = JSON.stringify({ action, token, ...payload });
+  const p = { ...(payload || {}) };
+  if (action === 'save' && p.baseAdminRevision == null) p.baseAdminRevision = +(p.data?.meta?.adminRevision || 0);
+  const body = JSON.stringify({ action, token, actor: 'live-dashboard-qa', role: 'admin', ...p });
   return fetchJson(url, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8', 'Content-Length': String(Buffer.byteLength(body)) },

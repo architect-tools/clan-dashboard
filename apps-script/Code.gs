@@ -9,8 +9,9 @@
  *   • _locks       : 소프트 락(페이지 편집 중 표시). page|who|ts.
  *
  * 동작:
- *   save  : _state 저장 + 편집 탭 재생성(대시보드 변경 → 시트 반영)
- *   getAll: _state 로드 + 편집 탭 병합(시트 변경 → 대시보드 반영). 충돌은 last-write-wins.
+ *   save  : 관리자 상태 저장 + 편집 탭 재생성(대시보드 변경 → 시트 반영)
+ *   mutate: 최신 _state 를 잠근 뒤 멤버별 셀/입찰 1건만 원자적으로 변경
+ *   getAll: 잠금 안에서 _state 로드 + 편집 탭 병합(시트 변경 → 대시보드 반영).
  *
  * 스크립트 속성: GATE_PASSWORD(= 대시보드 비번, 쓰기 인증). NAVER_OCR_URL/SECRET(선택).
  * 배포: 새 배포 ▸ 웹 앱 ▸ 실행: 나, 액세스: 모든 사용자 ▸ URL 을 config.js APPS_SCRIPT_URL 에.
@@ -27,8 +28,10 @@ function doGet(e) {
   try {
     if (action === 'ping') return json({ data: { ok: true, ts: Date.now() } });
     // merge=1 일 때만 편집 탭 병합(느림). 기본은 _state 만 빠르게 반환(시트 13탭 read 생략).
-    if (action === 'getAll') return json({ data: loadState(e.parameter && e.parameter.merge) });
-    if (action === 'getLocks') return json({ data: activeLocks() });
+    // _state 는 여러 셀 청크라 쓰는 도중 읽으면 부분 JSON이 될 수 있다. 읽기도
+    // 같은 ScriptLock 안에서 수행해 save/mutate/시트 병합과 직렬화한다.
+    if (action === 'getAll') return json({ data: withStateLock(function () { return loadState(e.parameter && e.parameter.merge); }) });
+    if (action === 'getLocks') return json({ data: withStateLock(function () { return activeLocks(); }) });
     return json({ error: 'unknown action: ' + action });
   } catch (err) { return json({ error: String(err) }); }
 }
@@ -39,7 +42,11 @@ function doPost(e) {
   try {
     if (!checkToken(body.token)) return json({ error: 'unauthorized' });
     var action = body.action;
-    if (action === 'save') { return json({ data: withStateLock(function () { saveState(body.data); return { ok: true }; }) }); }
+    if (action === 'save') {
+      if (txt(body.role) !== 'admin') return json({ error: 'forbidden: admin only' });
+      return json({ data: withStateLock(function () { return saveState(body.data, body.baseAdminRevision); }) });
+    }
+    if (action === 'mutate') { return json({ data: withStateLock(function () { return mutateState(body); }) }); }
     if (action === 'qaAdd') { return json({ data: withStateLock(function () { return addQaReport(body.report); }) }); }
     if (action === 'qaUpdate') { return json({ data: withStateLock(function () { return updateQaReport(body.idOrSlot, body.patch); }) }); }
     if (action === 'qaDelete') { return json({ data: withStateLock(function () { return deleteQaReport(body.idOrSlot); }) }); }
@@ -81,11 +88,21 @@ function loadState(doMerge) {
   if (!raw) return null;
   var state;
   try { state = JSON.parse(raw); } catch (_) { return null; }
+  normalizeRoster(state);
   // 편집 탭 병합은 비용이 큼(13탭 read ~수초) → merge 요청 시에만. 기본 getAll 은 _state 만 빠르게 반환.
   if (doMerge) {
+    var beforeMerge = JSON.stringify(state);
     mergeTabs(book, state);
-    // 시트에서 읽은 변경을 권위 저장소에도 반영한다. 그래야 다음 빠른 getAll/재접속 때도 되밀리지 않는다.
-    writeStateSheet(book, state);
+    normalizeRoster(state);
+    // 실제 시트 변경이 있을 때만 revision 을 올린다. getAll(merge=1) 폴링만으로
+    // 관리자 optimistic revision 이 불필요하게 충돌하지 않게 한다.
+    if (JSON.stringify(state) !== beforeMerge) {
+      var mergeMeta = ensureStateMeta(state);
+      mergeMeta.revision += 1;
+      mergeMeta.adminRevision += 1;
+      // 시트에서 읽은 변경을 권위 저장소에도 반영한다. 그래야 다음 빠른 getAll/재접속 때도 되밀리지 않는다.
+      writeStateSheet(book, state);
+    }
   }
   return state;
 }
@@ -103,10 +120,74 @@ function writeStateSheet(book, state) {
   rng.setValues(chunks);
 }
 
-function saveState(state) {
+function ensureStateMeta(state) {
+  state.meta = state.meta || {};
+  state.meta.revision = +state.meta.revision || 0;
+  state.meta.adminRevision = +state.meta.adminRevision || 0;
+  state.meta.appliedMutations = state.meta.appliedMutations || [];
+  return state.meta;
+}
+
+// 관리자 전체 저장이 늦게 도착해도 원자적 멤버 영역을 되돌리지 않는다. 장비·스킬·
+// 보드 셀·내판은 모두 mutate 경로에서만 변경하고, save 는 최신 서버 값을 보존한다.
+function preserveAtomicDomains(next, current) {
+  if (!current) return next;
+  next.meta = next.meta || {};
+  next.meta.appliedMutations = ((current.meta || {}).appliedMutations || []).slice();
+  var curMembers = {};
+  (current.members || []).forEach(function (m) { curMembers[String(m.id)] = m; });
+  (next.members || []).forEach(function (m) {
+    var cur = curMembers[String(m.id)];
+    if (!cur) return;
+    m.equip = cur.equip || {};
+    m.skills = cur.skills || {};
+  });
+  var curBoards = {};
+  (current.statusBoards || []).forEach(function (b) { curBoards[String(b.id)] = b; });
+  var survivingMembers = {};
+  (next.members || []).forEach(function (m) { survivingMembers[String(m.id)] = true; });
+  (next.statusBoards || []).forEach(function (b) {
+    var cur = curBoards[String(b.id)];
+    if (cur) {
+      b.data = {};
+      var survivingColumns = {};
+      (b.columns || []).forEach(function (column) { survivingColumns[String(column)] = true; });
+      Object.keys(cur.data || {}).forEach(function (memberId) {
+        if (!survivingMembers[String(memberId)]) return;
+        var rec = {};
+        Object.keys(cur.data[memberId] || {}).forEach(function (column) {
+          if (survivingColumns[String(column)]) rec[column] = cur.data[memberId][column];
+        });
+        if (Object.keys(rec).length) b.data[String(memberId)] = rec;
+      });
+    }
+  });
+  next.sales = current.sales || [];
+  next.qaReports = current.qaReports || [];
+  return next;
+}
+
+function saveState(state, baseAdminRevision) {
   var book = ss();
+  var current = loadState(false);
+  if (current) {
+    var currentMeta = ensureStateMeta(current);
+    if (baseAdminRevision != null && +baseAdminRevision !== currentMeta.adminRevision) {
+      throw new Error('conflict: 다른 관리자가 먼저 저장했습니다. 새로고침 후 다시 적용하세요.');
+    }
+    state = preserveAtomicDomains(state || {}, current);
+    var meta = ensureStateMeta(state);
+    meta.revision = currentMeta.revision + 1;
+    meta.adminRevision = currentMeta.adminRevision + 1;
+  } else {
+    var firstMeta = ensureStateMeta(state || {});
+    firstMeta.revision += 1;
+    firstMeta.adminRevision += 1;
+  }
+  normalizeRoster(state);
   writeStateSheet(book, state);
   writeTabs(book, state);
+  return { ok: true, revision: state.meta.revision, adminRevision: state.meta.adminRevision };
 }
 
 /* 편집 탭 정의: [탭이름, 헤더[], 행생성(state)→rows, 병합(state, rows)] */
@@ -118,6 +199,23 @@ function ymd(v) {
 }
 function truthyActive(v) { return !(v === '휴면' || v === false || v === 'FALSE' || v === 'x' || v === '' ); }
 function txt(v) { return String(v == null ? '' : v).trim(); }
+var MEMBER_RENAME = { '여신민아': '망듕땅', '권성준': '귄성준', '도베르만': 'Doberman', '페커리': '냉정' };
+var MEMBER_CLASS_OVERRIDES = { '해지슬': '사냥꾼', 'v구름v': '마법사' };
+function migrateMemberName(name) {
+  var raw = txt(name);
+  return MEMBER_RENAME[raw] || raw;
+}
+function normalizeRoster(s) {
+  if (!s) return;
+  s.staff = (s.staff || []).map(function (st) {
+    st.name = migrateMemberName(st.name);
+    return st;
+  });
+  (s.members || []).forEach(function (m) {
+    m.name = migrateMemberName(m.name);
+    if (MEMBER_CLASS_OVERRIDES[m.name]) m.cls = MEMBER_CLASS_OVERRIDES[m.name];
+  });
+}
 function dts(v) {
   if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ssXXX");
   return txt(v);
@@ -386,7 +484,16 @@ function ownRows(s, cat) {
   });
   return out;
 }
-function memberByName(s) { var x = {}; (s.members || []).forEach(function (m) { x[String(m.name)] = m; }); return x; }
+function memberByName(s) {
+  var x = {};
+  (s.members || []).forEach(function (m) {
+    x[String(m.name)] = m;
+    Object.keys(MEMBER_RENAME).forEach(function (oldName) {
+      if (MEMBER_RENAME[oldName] === m.name) x[oldName] = m;
+    });
+  });
+  return x;
+}
 
 /* 시트 편집 → state 병합. 탭이 비어있으면(헤더만) 그 영역은 _state 유지(실수로 전체 삭제 방지). */
 function mergeTabs(book, s) {
@@ -524,6 +631,211 @@ function mergeCommonStoneSheet(book, s) {
   });
 }
 
+/* ── 원자적 멤버/입찰 변경 ────────────────────────────────────────── */
+function atomicKey(v, label) {
+  var key = txt(v);
+  if (!key || key.length > 200 || key === '__proto__' || key === 'constructor' || key === 'prototype') {
+    throw new Error('invalid ' + (label || 'key'));
+  }
+  return key;
+}
+function atomicMember(state, body, payload) {
+  var actor = txt(body.actor);
+  var role = txt(body.role) === 'admin' ? 'admin' : 'member';
+  if (!actor) throw new Error('actor required');
+  var member = null;
+  (state.members || []).some(function (m) {
+    if ((payload.memberId != null && String(m.id) === String(payload.memberId)) ||
+        (payload.memberId == null && txt(m.name) === txt(payload.memberName || actor))) { member = m; return true; }
+    return false;
+  });
+  if (!member) throw new Error('member not found');
+  if (role !== 'admin' && txt(member.name) !== actor) throw new Error('forbidden: 본인 데이터만 변경할 수 있습니다.');
+  if (role !== 'admin' && member.active === false) throw new Error('inactive member');
+  return member;
+}
+function requireAtomicAdmin(body) {
+  if (txt(body.role) !== 'admin') throw new Error('forbidden: admin only');
+}
+function findSale(state, id) {
+  var sale = null;
+  (state.sales || []).some(function (x) { if (String(x.id) === String(id)) { sale = x; return true; } return false; });
+  if (!sale) throw new Error('sale not found');
+  sale.bids = sale.bids || [];
+  return sale;
+}
+function sanitizeEquip(slot, raw) {
+  if (!raw) return null;
+  if (RELIC_SLOTS[slot]) {
+    var rt = Math.max(0, Math.min(20, Math.floor(+raw.tier || 0)));
+    return rt ? { tier: rt } : null;
+  }
+  var star = Math.max(0, Math.min(6, Math.floor(+raw.star || 0)));
+  var tier = Math.max(0, Math.min(20, +raw.tier || 0));
+  var enhance = Math.max(0, Math.min(99, Math.floor(+raw.enhance || 0)));
+  return star || tier || enhance ? { star: star, tier: tier, enhance: enhance } : null;
+}
+function applyAtomicMutation(state, body) {
+  var kind = txt(body.kind), p = body.payload || {}, m, key, bag, on, sale, bid, i;
+  state.sales = state.sales || [];
+  state.statusBoards = state.statusBoards || [];
+  if (kind === 'equipment.set') {
+    m = atomicMember(state, body, p);
+    key = atomicKey(p.slot, 'slot');
+    if (EQUIP_SLOTS.indexOf(key) < 0) throw new Error('invalid equipment slot');
+    m.equip = m.equip || {};
+    var item = sanitizeEquip(key, p.value);
+    if (item) m.equip[key] = item; else delete m.equip[key];
+    return { member: m, slot: key, value: item };
+  }
+  if (kind === 'skill.toggle') {
+    m = atomicMember(state, body, p);
+    var cat = txt(p.category);
+    if (cat !== '주문석' && cat !== '엘릭서') throw new Error('invalid skill category');
+    key = atomicKey(p.key, 'skill');
+    m.skills = m.skills || {}; bag = m.skills[cat] = m.skills[cat] || {};
+    if (bag[key]) { delete bag[key]; on = false; } else { bag[key] = true; on = true; }
+    return { member: m, category: cat, key: key, on: on };
+  }
+  if (kind === 'skill.adjust') {
+    m = atomicMember(state, body, p);
+    key = atomicKey(p.key, 'skill');
+    var delta = (+p.delta || 0) < 0 ? -1 : 1;
+    m.skills = m.skills || {}; bag = m.skills['공용주문석'] = m.skills['공용주문석'] || {};
+    var count = Math.max(0, Math.min(99, (+bag[key] || 0) + delta));
+    if (count) bag[key] = count; else delete bag[key];
+    return { member: m, category: '공용주문석', key: key, count: count };
+  }
+  if (kind === 'board.toggle') {
+    m = atomicMember(state, body, p);
+    var board = null;
+    state.statusBoards.some(function (b) { if (String(b.id) === String(p.boardId)) { board = b; return true; } return false; });
+    if (!board) throw new Error('board not found');
+    key = atomicKey(p.column, 'column');
+    if ((board.columns || []).indexOf(key) < 0) throw new Error('board column not found');
+    board.data = board.data || {}; var rec = board.data[String(m.id)] = board.data[String(m.id)] || {};
+    if (rec[key]) { delete rec[key]; on = false; } else { rec[key] = true; on = true; }
+    if (!Object.keys(rec).length) delete board.data[String(m.id)];
+    return { member: m, board: board, column: key, on: on };
+  }
+  if (kind === 'sale.create') {
+    requireAtomicAdmin(body);
+    var saleId = txt(p.id) || ('sale-' + Utilities.getUuid());
+    if (state.sales.some(function (x) { return String(x.id) === saleId; })) throw new Error('duplicate sale id');
+    var bidTypes = { '투력순': true, '참여도순': true, '경매': true, '선착순': true };
+    sale = { id: saleId, item: atomicKey(p.item, 'item'), bidType: bidTypes[txt(p.bidType)] ? txt(p.bidType) : '투력순',
+      basePrice: Math.max(0, +p.basePrice || 0), deadline: +p.deadline || (Date.now() + 3600000), bids: [] };
+    state.sales.unshift(sale);
+    return { sale: sale };
+  }
+  if (kind === 'sale.bid') {
+    sale = findSale(state, p.saleId);
+    if (+sale.deadline && +sale.deadline < Date.now()) throw new Error('마감된 내판입니다.');
+    m = atomicMember(state, body, p);
+    for (i = 0; i < sale.bids.length; i++) if (txt(sale.bids[i].name) === txt(m.name)) throw new Error('이미 입찰했습니다.');
+    bid = { name: m.name, amount: sale.bidType === '경매' ? Math.max(0, +p.amount || 0) : 0 };
+    sale.bids.push(bid);
+    return { sale: sale, bid: bid };
+  }
+  if (kind === 'sale.cancelBid') {
+    sale = findSale(state, p.saleId);
+    // 관리자는 탈퇴/닉네임 변경 등 현재 명단에 없는 과거 입찰도 지울 수 있어야 한다.
+    // 멤버만 atomicMember를 거쳐 본인 입찰인지 검증한다.
+    var cancelName = '';
+    if (txt(body.role) === 'admin') cancelName = atomicKey(p.memberName, 'member');
+    else { m = atomicMember(state, body, p); cancelName = txt(m.name); }
+    var before = sale.bids.length;
+    sale.bids = sale.bids.filter(function (b) { return txt(b.name) !== cancelName; });
+    if (sale.bids.length === before) throw new Error('입찰 내역이 없습니다.');
+    return { sale: sale, member: m || null, memberName: cancelName };
+  }
+  if (kind === 'sale.cancel') {
+    requireAtomicAdmin(body);
+    findSale(state, p.saleId);
+    state.sales = state.sales.filter(function (x) { return String(x.id) !== String(p.saleId); });
+    return { saleId: p.saleId };
+  }
+  if (kind === 'sale.close') {
+    requireAtomicAdmin(body);
+    sale = findSale(state, p.saleId);
+    if (!sale.bids.length) throw new Error('입찰자가 없습니다.');
+    var byName = memberByName(state), ranked = sale.bids.slice();
+    if (sale.bidType === '투력순') ranked.sort(function (a, b) { return ((byName[b.name] || {}).power || 0) - ((byName[a.name] || {}).power || 0); });
+    else if (sale.bidType === '참여도순') ranked.sort(function (a, b) { return ((byName[b.name] || {}).score || 0) - ((byName[a.name] || {}).score || 0); });
+    else if (sale.bidType === '경매') ranked.sort(function (a, b) { return (+b.amount || 0) - (+a.amount || 0); });
+    var win = ranked[0], price = sale.bidType === '경매' ? (+win.amount || 0) : (+sale.basePrice || 0);
+    state.distributionLog = state.distributionLog || [];
+    state.distributionLog.unshift({ id: 'id' + Utilities.getUuid(), date: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+      item: sale.item, type: '내판', member: win.name, from: '', price: price, note: sale.bidType });
+    state.sales = state.sales.filter(function (x) { return String(x.id) !== String(sale.id); });
+    return { saleId: sale.id, winner: win, price: price, bidType: sale.bidType, item: sale.item };
+  }
+  throw new Error('unknown mutation: ' + kind);
+}
+
+function matrixCell(book, sheetName, memberName, columnName, value, fallback) {
+  var sh = book.getSheetByName(sheetName);
+  if (!sh || sh.getLastRow() < 2 || sh.getLastColumn() < 2) { fallback(); return; }
+  var heads = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(txt);
+  var col = heads.indexOf(columnName) + 1;
+  var names = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
+  var row = 0;
+  for (var i = 0; i < names.length; i++) if (txt(names[i][0]) === txt(memberName)) { row = i + 2; break; }
+  if (!row || !col) { fallback(); return; }
+  sh.getRange(row, col).setValue(value);
+}
+function writeOneBoardSheet(book, state, board) {
+  var cols = board.columns || [];
+  var rows = (state.members || []).filter(function (m) { return m.active !== false; }).map(function (m) {
+    var rec = (board.data || {})[String(m.id)] || {};
+    return [m.name].concat(cols.map(function (c) { return rec[c] ? 'O' : ''; }));
+  });
+  writeSheet(book, '보드-' + board.name, ['닉네임'].concat(cols), rows);
+}
+function syncOwnedSkillRow(book, state, result) {
+  var sheetName = result.category === '주문석' ? '주문석보유' : '엘릭서보유';
+  var sh = book.getSheetByName(sheetName);
+  if (!sh) { writeSheet(book, sheetName, ['닉네임', '직업', result.category], ownRows(state, result.category)); return; }
+  var values = sh.getDataRange().getValues(), rows = [];
+  for (var i = 1; i < values.length; i++) if (txt(values[i][0]) === txt(result.member.name) && txt(values[i][2]) === result.key) rows.push(i + 1);
+  if (result.on && !rows.length) sh.appendRow([result.member.name, result.member.cls || '', result.key]);
+  if (!result.on) for (var j = rows.length - 1; j >= 0; j--) sh.deleteRow(rows[j]);
+}
+function syncAtomicSheet(book, state, kind, result) {
+  if (kind === 'equipment.set') {
+    matrixCell(book, '장비현황', result.member.name, result.slot, result.value ? equipText(result.slot, result.value) : '', function () { writeEquipSheet(book, state); });
+  } else if (kind === 'skill.toggle') {
+    syncOwnedSkillRow(book, state, result);
+  } else if (kind === 'skill.adjust') {
+    var managed = ((state.appSettings || {}).managedStones || []), head = '';
+    managed.some(function (mc) { if (commonStoneKey(mc) === result.key) { head = commonStoneHead(mc); return true; } return false; });
+    if (head) matrixCell(book, '공용주문석보유', result.member.name, head, result.count || '', function () { writeCommonStoneSheet(book, state); });
+    else writeCommonStoneSheet(book, state);
+  } else if (kind === 'board.toggle') {
+    matrixCell(book, '보드-' + result.board.name, result.member.name, result.column, result.on ? 'O' : '', function () { writeOneBoardSheet(book, state, result.board); });
+  } else if (kind === 'sale.close') {
+    writeSheet(book, '분배내역', ['id', '날짜', '아이템', '구분', '받은 사람', '인계자', '내판가', '메모'],
+      (state.distributionLog || []).map(function (d) { return [d.id, d.date, d.item, d.type, d.member, d.from || '', d.price || 0, d.note || '']; }));
+  }
+}
+function mutateState(body) {
+  var state = loadState(false);
+  if (!state) throw new Error('state not initialized');
+  var meta = ensureStateMeta(state), mutationId = txt(body.mutationId) || Utilities.getUuid();
+  if (meta.appliedMutations.indexOf(mutationId) >= 0) return { ok: true, duplicate: true, state: state };
+  var result = applyAtomicMutation(state, body);
+  syncAtomicSheet(ss(), state, txt(body.kind), result);
+  meta.revision += 1;
+  // 마감은 분배내역이라는 관리자 도메인도 함께 바꾸므로, 오래 열린 관리자
+  // 전체 저장이 그 낙찰 기록을 되돌리지 못하게 admin revision도 올린다.
+  if (txt(body.kind) === 'sale.close') meta.adminRevision += 1;
+  meta.appliedMutations.push(mutationId);
+  if (meta.appliedMutations.length > 120) meta.appliedMutations = meta.appliedMutations.slice(-120);
+  normalizeRoster(state);
+  writeStateSheet(ss(), state);
+  return { ok: true, state: state, result: result, revision: meta.revision, adminRevision: meta.adminRevision };
+}
+
 /* ── 소프트 락(편집 중 표시) ─────────────────────────────────────── */
 function lockSheet() { var b = ss(); return b.getSheetByName(LOCK_SHEET) || b.insertSheet(LOCK_SHEET); }
 function activeLocks() {
@@ -532,7 +844,7 @@ function activeLocks() {
   return out;
 }
 function setLock(page, who) {
-  var lock = LockService.getScriptLock(); lock.tryLock(5000);
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
     var sh = lockSheet(); var vals = sh.getDataRange().getValues(); var now = Date.now(); var keep = [];
     vals.forEach(function (r) {
@@ -546,7 +858,7 @@ function setLock(page, who) {
   } finally { lock.releaseLock(); }
 }
 function clearLock(page, who) {
-  var lock = LockService.getScriptLock(); lock.tryLock(5000);
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
     var sh = lockSheet(); var vals = sh.getDataRange().getValues(); var now = Date.now(); var keep = [];
     vals.forEach(function (r) {

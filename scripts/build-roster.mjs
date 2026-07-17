@@ -10,10 +10,14 @@ const seedFile = process.argv[3] || 'docs/data/seed.json';
 
 // The real current clan, in 투력 order (as supplied by the user). In-game nicknames.
 const CANON = ['보스','냉정','붉으래','우소츠키','돈가츠','딱꽁','아싸다','치느','하나둘셋얍','이루릴',
-  '폭력','데드','빛싸다','여신민아','버기','제크로무','다무리','스팔','나유','Doberman',
+  '폭력','데드','빛싸다','망듕땅','버기','제크로무','다무리','스팔','나유','Doberman',
   '치치','헤세메','KDA','까치','승냉','윤재','해지슬','하도유','Babyee','xooos',
-  'oO서영Oo','s하울s','헤파이토스','EXE','v구름v','권성준','비타민나라','VISVIM','리턴','헤라클',
+  'oO서영Oo','s하울s','헤파이토스','EXE','v구름v','귄성준','비타민나라','VISVIM','리턴','헤라클',
   '배방3','잠원동쓰레빠','두비두밥','카운터펀치','여름빛','조말순','샬루키','노획','끝판왕랑사부','마무리'];
+const CLASS_OVERRIDES = {
+  '해지슬': '사냥꾼',
+  'v구름v': '마법사',
+};
 
 function parseCSV(text) {
   const rows = []; let row = [], f = '', q = false;
@@ -44,7 +48,7 @@ const members = CANON.map((name, i) => {
   const m = matchName(name, oldMembers, 0.7);     // fuzzy fallback for 직업 only
   return {
     id: i + 1, order: i + 1, name,
-    cls: w.cls || (m ? m.member.cls : ''),
+    cls: CLASS_OVERRIDES[name] || w.cls || (m ? m.member.cls : ''),
     power: w.power || (m ? m.member.power : 0),
     score: 0,                                     // fresh start (clan merger)
     active: true, note: !w.name ? '전투력 미입력' : '',

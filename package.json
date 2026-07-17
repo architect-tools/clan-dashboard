@@ -7,6 +7,12 @@
     "seed": "node scripts/build-seed.mjs",
     "check": "node scripts/check-imports.mjs",
     "smoke": "node scripts/smoke.mjs",
+    "test:concurrency": "node scripts/concurrency-test.mjs",
+    "test:supabase": "node scripts/supabase-test.mjs",
+    "test:supabase:live": "node scripts/supabase-live-test.mjs",
+    "test:sql": "node scripts/sql-migration-test.mjs",
+    "db:migrate:supabase": "node scripts/migrate-to-supabase.mjs",
+    "db:snapshot:supabase": "node scripts/supabase-snapshot.mjs",
     "ocr-test": "node scripts/ocr-test.mjs",
     "qa:list": "node scripts/qa-reports.mjs list",
     "qa:show": "node scripts/qa-reports.mjs show",
@@ -17,8 +23,9 @@
     "qa:live": "node scripts/live-dashboard-qa.mjs",
     "gas:check": "node --check --input-type=commonjs < apps-script/Code.gs"
   },
-  "comment": "deps are DEV/TEST only — the deployed static site loads tesseract.js from CDN and needs no npm install",
+  "comment": "Dependencies are for development/tests only; the static site loads browser libraries from CDNs.",
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
     "jsdom": "^29.1.1",
     "puppeteer-core": "^25.2.1",
     "sharp": "^0.35.2",

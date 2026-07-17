@@ -26,18 +26,23 @@ jobs:
 
       - name: Fetch live DB state (→ /tmp)
         env:
-          # getAll 은 읽기 전용·토큰 불필요. 이 URL 은 이미 docs/js/config.js 에 공개돼 있음.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CLAN_SLUG: insomnia
+          # Cutover 전 fallback. Supabase secrets가 등록되면 사용하지 않음.
           APPS_SCRIPT_URL: https://script.google.com/macros/s/AKfycbx6GJnd7PitETPxym-CZv_LIqL5h_MTEZ0mECcRtk6Rwo0p3f1c7xBZrrhUpoywDB9w/exec
         run: |
           set -euo pipefail
-          curl -fsSL "${APPS_SCRIPT_URL}?action=getAll&merge=1" -o /tmp/raw.json
-          # 유효 응답 확인(에러/빈 상태면 스냅샷 생략)
-          if ! jq -e '(.data.members | length) > 0' /tmp/raw.json >/dev/null; then
-            echo "::error::유효한 DB 응답이 아님"; head -c 400 /tmp/raw.json; exit 1
+          if [ -n "${SUPABASE_URL:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            node scripts/supabase-snapshot.mjs /tmp/state.json /tmp/summary.json
+          else
+            curl -fsSL "${APPS_SCRIPT_URL}?action=getAll&merge=1" -o /tmp/raw.json
+            if ! jq -e '(.data.members | length) > 0' /tmp/raw.json >/dev/null; then
+              echo "::error::유효한 DB 응답이 아님"; head -c 400 /tmp/raw.json; exit 1
+            fi
+            jq -S '.data' /tmp/raw.json > /tmp/state.json
+            jq -S '{members:(.data.members|length), participationDays:(.data.participation.byDate|length), distributions:(.data.distributionLog|length), settlements:(.data.settlements|length), qaReports:((.data.qaReports // [])|length), equipMembers:([.data.members[]|select((.equip|length)>0)]|length)}' /tmp/raw.json > /tmp/summary.json
           fi
-          # 키 정렬(jq -S)로 정규화 → 값이 실제 바뀔 때만 깔끔한 diff
-          jq -S '.data' /tmp/raw.json > /tmp/state.json
-          jq -S '{members:(.data.members|length), participationDays:(.data.participation.byDate|length), distributions:(.data.distributionLog|length), settlements:(.data.settlements|length), qaReports:((.data.qaReports // [])|length), equipMembers:([.data.members[]|select((.equip|length)>0)]|length)}' /tmp/raw.json > /tmp/summary.json
 
       - name: Commit to db-history branch if changed
         run: |

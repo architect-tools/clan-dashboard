@@ -4,6 +4,7 @@ import { DB } from '../db.js';
 import { Roles } from '../roles.js';
 import { el, toast, downloadFile, applyUiScale } from '../util.js';
 import { CONFIG } from '../config.js';
+import { SupabaseBackend } from '../supabase-backend.js';
 import { page, card, btn, input, field, confirmDialog } from './ui.js';
 
 export function renderSettings() {
@@ -40,7 +41,7 @@ export function renderSettings() {
 
   // ── 연동 · 데이터 ──
   body.appendChild(card('연동 · 데이터', el('div', {}, [
-    el('p.hint', { html: `현재 모드: <b>${CONFIG.APPS_SCRIPT_URL ? '클라우드 동기화' : '로컬 저장(localStorage)'}</b>. 클라우드 동기화는 <code>js/config.js</code>의 <code>APPS_SCRIPT_URL</code>을 채우면 활성화됩니다.` }),
+    el('p.hint', { html: `현재 모드: <b>${SupabaseBackend.isConfigured() ? 'Supabase 실시간 DB' : CONFIG.APPS_SCRIPT_URL ? 'Google Sheet 동기화(이전 모드)' : '로컬 저장(localStorage)'}</b>. 실시간 DB 연결값은 <code>js/config.js</code>에서 설정합니다.` }),
     el('div.row-actions', {}, [
       btn('전체 데이터 내보내기(JSON)', () => downloadFile('clandash-backup.json', JSON.stringify(DB.state, null, 2)), { kind: 'ghost' }),
       btn('데이터 가져오기(JSON)', () => importJson(), { kind: 'ghost' }),
@@ -54,8 +55,10 @@ export function renderSettings() {
       try {
         const data = JSON.parse(await fi.files[0].text());
         if (!data || typeof data !== 'object') throw new Error('형식 오류');
-        localStorage.setItem(CONFIG.STORE_KEY, JSON.stringify(data)); // re-normalized on reload
-        toast('가져왔습니다 — 새로고침합니다'); setTimeout(() => location.reload(), 600);
+        const saved = await DB.importState(data);
+        if (!saved) throw new Error('실시간 DB에 저장하지 못했습니다.');
+        toast(SupabaseBackend.isConfigured() ? '실시간 DB로 가져왔습니다.' : '데이터를 가져왔습니다.');
+        setTimeout(() => location.reload(), 600);
       } catch (e) { toast('가져오기 실패: ' + e.message, 'error'); }
     };
     document.body.appendChild(fi); fi.click(); fi.remove();

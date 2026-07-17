@@ -18,7 +18,7 @@ export function renderGear() {
   const s = DB.state;
   const adm = Roles.isAdmin();
   if (!s.statusBoards) s.statusBoards = [];
-  if (!s.statusBoards.length) seedDefaultBoards(s); // first run
+  if (!s.statusBoards.length) seedDefaultBoards(s, adm); // first run
 
   const body = page('장비/캐릭터 현황', {
     subtitle: '장착 장비(슬롯·표) + 주문석·성좌·탈것·엘릭서 등 클랜원별 현황',
@@ -151,7 +151,14 @@ export function renderGear() {
         const owned = !!rec[col];
         const cell = canEditRow
           ? el('button.sk-toggle', { class: owned ? 'on' : '', type: 'button', title: owned ? '있음 (클릭해 해제)' : '없음 (클릭해 표시)',
-              onclick: (e) => { if (rec[col]) delete rec[col]; else rec[col] = true; DB.commit(); const on = !!rec[col]; const b = e.currentTarget; b.classList.toggle('on', on); b.title = on ? '있음 (클릭해 해제)' : '없음 (클릭해 표시)'; } }, [el('span.sk-check', { text: '✓' })])
+              onclick: async (e) => {
+                const b = e.currentTarget; b.disabled = true;
+                const result = await DB.atomicAction('board.toggle', { boardId: board.id, memberId: m.id, column: col });
+                b.disabled = false; if (!result.ok) return;
+                const remoteBoard = DB.state.statusBoards.find((x) => String(x.id) === String(board.id));
+                const on = result.result?.on ?? !!((remoteBoard?.data || {})[String(m.id)] || {})[col];
+                b.classList.toggle('on', on); b.title = on ? '있음 (클릭해 해제)' : '없음 (클릭해 표시)';
+              } }, [el('span.sk-check', { text: '✓' })])
           : el('span.sk-check', { class: owned ? 'on' : '', text: owned ? '✓' : '' });
         row.appendChild(el('td', { style: { textAlign: 'center' } }, [cell]));
       });
@@ -196,7 +203,14 @@ export function renderGear() {
         const owned = !!((m.skills || {})[cat] || {})[c.key]; // 보유 여부(토글)
         const cell = canEdit
           ? el('button.sk-toggle', { class: owned ? 'on' : '', type: 'button', title: owned ? '보유 (클릭해 해제)' : '미보유 (클릭해 보유)',
-              onclick: (e) => { const on = toggleSkill(m, cat, c.key); const b = e.currentTarget; b.classList.toggle('on', on); b.title = on ? '보유 (클릭해 해제)' : '미보유 (클릭해 보유)'; } }, [el('span.sk-check', { text: '✓' })])
+              onclick: async (e) => {
+                const b = e.currentTarget; b.disabled = true;
+                const result = await toggleSkill(m, cat, c.key); b.disabled = false;
+                if (!result.ok) return;
+                const remote = DB.state.members.find((x) => x.id === m.id);
+                const on = result.result?.on ?? !!(((remote?.skills || {})[cat] || {})[c.key]);
+                b.classList.toggle('on', on); b.title = on ? '보유 (클릭해 해제)' : '미보유 (클릭해 보유)';
+              } }, [el('span.sk-check', { text: '✓' })])
           : el('span.sk-check', { class: owned ? 'on' : '', text: owned ? '✓' : '' });
         tr.appendChild(el('td', { class: i === 0 ? 'grp-start' : '', style: { textAlign: 'center' } }, [cell]));
       }));
@@ -207,11 +221,7 @@ export function renderGear() {
   }
   // 보유 여부 토글(있으면 true, 해제 시 삭제). 기존 텍스트값도 truthy라 보유로 표시.
   function toggleSkill(m, cat, key) {
-    m.skills ||= {}; m.skills[cat] ||= {};
-    let on;
-    if (m.skills[cat][key]) { delete m.skills[cat][key]; on = false; } else { m.skills[cat][key] = true; on = true; }
-    DB.commit();
-    return on;
+    return DB.atomicAction('skill.toggle', { memberId: m.id, category: cat, key });
   }
 
   // ── 공용 주문석: 관리자가 지정한 항목만 + 개수(2개 이상 보유) 스테퍼, 성급별 ──
@@ -249,18 +259,19 @@ export function renderGear() {
   function countCell(m, cat, key, cur, canEdit) {
     if (!canEdit) return el('span.sk-count', { class: cur ? 'on' : '', text: cur ? String(cur) : '·' });
     const num = el('span.sk-count', { class: cur ? 'on' : '', text: String(cur) });
-    const step = (d) => () => setCount(m, cat, key, d, num);
+    const step = (d) => (e) => setCount(m, cat, key, d, num, e.currentTarget);
     return el('div.sk-stepper', {}, [
       el('button.sk-step', { type: 'button', text: '−', title: '1 줄이기', onclick: step(-1) }),
       num,
       el('button.sk-step', { type: 'button', text: '+', title: '1 늘리기', onclick: step(+1) }),
     ]);
   }
-  function setCount(m, cat, key, delta, numEl) {
-    m.skills ||= {}; m.skills[cat] ||= {};
-    let v = (m.skills[cat][key] || 0) + delta;
-    if (v <= 0) { delete m.skills[cat][key]; v = 0; } else m.skills[cat][key] = v;
-    DB.commit();
+  async function setCount(m, cat, key, delta, numEl, button) {
+    button.disabled = true;
+    const result = await DB.atomicAction('skill.adjust', { memberId: m.id, key, delta });
+    button.disabled = false; if (!result.ok) return;
+    const remote = DB.state.members.find((x) => x.id === m.id);
+    const v = result.result?.count ?? (((remote?.skills || {})[cat] || {})[key] || 0);
     numEl.textContent = String(v); numEl.classList.toggle('on', v > 0);
   }
   // 관리자: 81종 중 관리할 공용 주문석을 성급별로 지정
@@ -317,10 +328,10 @@ function addBoard() {
 
 // 제네릭 보드(첫 방문 시): 성좌·탈것·플랫폼. 주문석·엘릭서는 직업별 전용 표(renderSkillSection),
 // 장착 장비는 슬롯 그리드+장비 현황 표가 담당하므로 보드에서 제외.
-function seedDefaultBoards(s) {
+function seedDefaultBoards(s, persist) {
   const push = (name, columns) => s.statusBoards.push({ id: uid(), name, columns, data: {} });
   push('성좌', ['바위를 삼키는 괴물', '자유로운 여행자', '바다의 괴물']);
   push('탈것', ['지진발굽', '심연의 수호자', '심연의 환영', '황혼의방랑자']);
   push('플랫폼 이용 현황', ['PC', '모바일', '디스코드']);
-  DB.commit({ history: false });
+  if (persist) DB.commit({ history: false });
 }

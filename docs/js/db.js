@@ -5,9 +5,12 @@
 // Every commit() creates an undo checkpoint.
 
 import { CONFIG } from './config.js';
+import { SupabaseBackend } from './supabase-backend.js';
 import { uid, toast } from './util.js';
 
-const LIVE = () => !!CONFIG.APPS_SCRIPT_URL;
+const APPS_LIVE = () => !!CONFIG.APPS_SCRIPT_URL;
+const SUPABASE_LIVE = () => SupabaseBackend.isConfigured();
+const REMOTE = () => SUPABASE_LIVE() || APPS_LIVE();
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
 // 분배 기준(운영 시트 '분배 기준(NEW)' 기준)
@@ -54,6 +57,10 @@ export const DB = {
   _savePromise: null,
   _saveError: false,
   _saveSeq: 0,
+  _writeTail: Promise.resolve(), // 모든 POST 쓰기를 한 탭 안에서도 순서대로 전송
+  _pendingAtomic: 0,
+  _backendProfile: null,
+  _realtimeTimer: null,
   _maxHistory: 80,
   _onHistory: null,        // () => update undo/redo button states
   _onRefresh: null,        // () => re-render current view (after undo/redo)
@@ -68,7 +75,17 @@ export const DB = {
 
   async init() {
     let data, fromBackend = false;
-    if (LIVE()) {
+    if (SUPABASE_LIVE()) {
+      try {
+        await SupabaseBackend.ensureAnonymousSession();
+        this._backendProfile = await SupabaseBackend.profile();
+        data = await SupabaseBackend.state();
+        fromBackend = !!data;
+      } catch (e) {
+        console.error('Supabase load failed', e);
+        throw new Error('실시간 DB 연결 실패: ' + (e.message || e));
+      }
+    } else if (APPS_LIVE()) {
       // 빠른 1차 로드: _state 만(merge 생략). 시트 편집은 아래 _bgMerge 로 곧이어 반영.
       try { data = await this._fetch('getAll'); fromBackend = !!data; }
       catch (e) { console.error('backend load failed, falling back to local', e); toast('백엔드 연결 실패 — 로컬 모드로 표시', 'error'); }
@@ -81,16 +98,34 @@ export const DB = {
     this.state = normalize(data);
     this._snapshot = clone(this.state);
     this._undo = []; this._redo = [];
-    if (!LIVE()) this._persistLocal();
+    if (!REMOTE()) this._persistLocal();
     // 라이브 첫 연결인데 백엔드가 비어 있으면, 로컬/시드 데이터를 클라우드로 1회 이관(데이터 유실 방지)
-    else if (!fromBackend) { try { await this._fetch('save', { data: this.state }); toast('현재 데이터를 클라우드로 옮겼습니다'); } catch (e) { console.warn('초기 이관 실패', e); } }
+    else if (!fromBackend && APPS_LIVE()) { try { await this._fetch('save', { data: this.state }); toast('현재 데이터를 클라우드로 옮겼습니다'); } catch (e) { console.warn('초기 이관 실패', e); } }
     this._emit(); this._onHistory && this._onHistory();
-    if (LIVE() && fromBackend) this.refresh({ merge: true });   // 백그라운드로 시트 편집 병합본 동기화
+    // 13개 시트 병합은 무거우므로 관리자만 수행한다. 멤버는 원자적 변경이 반영된
+    // _state 빠른 읽기만 사용해 다수 동시 접속 시 ScriptLock 대기열을 만들지 않는다.
+    if (SUPABASE_LIVE() && this._backendProfile?.clanId) {
+      await SupabaseBackend.subscribe(this._backendProfile.clanId, (revision) => {
+        if (+revision <= +(this.state?.meta?.revision || 0)) return;
+        clearTimeout(this._realtimeTimer);
+        this._realtimeTimer = setTimeout(() => this.refresh({ force: true }), 80);
+      });
+    } else if (APPS_LIVE() && fromBackend) {
+      this.refresh({ merge: localStorage.getItem(CONFIG.ROLE_KEY) === 'admin' });
+    }
     return this.state;
   },
 
   /** Persist current state + create an undo checkpoint. In live mode pushes to backend. */
   commit({ immediate = false, history = true } = {}) {
+    // 라이브 멤버 쓰기는 반드시 atomicAction 을 거쳐야 한다. 숨겨진 관리자 버튼을
+    // DOM에서 강제로 실행해도 전체 상태 save 로 다른 사람 데이터를 덮지 못한다.
+    if (REMOTE() && localStorage.getItem(CONFIG.ROLE_KEY) !== 'admin') {
+      if (this._snapshot) this.state = clone(this._snapshot);
+      this._emit(); this._onRefresh && this._onRefresh();
+      toast('멤버 변경은 본인 셀 단위 저장만 허용됩니다.', 'error');
+      return false;
+    }
     if (history && this._snapshot) {
       this._undo.push(this._snapshot);
       if (this._undo.length > this._maxHistory) this._undo.shift();
@@ -100,7 +135,22 @@ export const DB = {
     this._persistLocal();
     this._emit();
     this._onHistory && this._onHistory();
-    if (LIVE()) this._scheduleSave(immediate);
+    if (REMOTE()) this._scheduleSave(immediate);
+    return true;
+  },
+
+  /** Replace the complete administrator-managed state, then persist it through the active backend. */
+  async importState(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('올바른 대시보드 JSON이 아닙니다.');
+    this.state = normalize(clone(data));
+    if (!this.commit()) return false;
+    return await this.flushSave();
+  },
+
+  _queueWrite(task) {
+    const run = this._writeTail.catch(() => {}).then(task);
+    this._writeTail = run;
+    return run;
   },
 
   _scheduleSave(immediate) {
@@ -109,28 +159,48 @@ export const DB = {
     this._saveError = false;
     const doSave = () => {
       const seq = ++this._saveSeq;
-      this._savePromise = this._fetch('save', { data: this.state })
-        .then(() => { if (seq === this._saveSeq) { this._pendingSave = false; this._saveError = false; } })  // 최신 저장 성공 시에만 해제
-        .catch((e) => { if (seq === this._saveSeq) { this._pendingSave = false; this._saveError = true; } console.error(e); toast('동기화 실패 (변경은 로컬에 보관됨)', 'error'); });
+      this._savePromise = this._queueWrite(async () => {
+        // 실행 시점의 최신 로컬 상태와, 직전 직렬 저장이 반영한 adminRevision을 사용한다.
+        const data = clone(this.state);
+        const baseAdminRevision = +(this.state.meta?.adminRevision || 0);
+        const result = SUPABASE_LIVE()
+          ? await SupabaseBackend.save(data, baseAdminRevision)
+          : await this._fetch('save', { data, baseAdminRevision });
+        if (result) {
+          if (result.state && seq === this._saveSeq) {
+            this.state = normalize(clone(result.state));
+            this._snapshot = clone(this.state);
+            this._emit();
+          }
+          this.state.meta ||= {};
+          this.state.meta.revision = Math.max(+(this.state.meta.revision || 0), +(result.revision || 0));
+          this.state.meta.adminRevision = Math.max(+(this.state.meta.adminRevision || 0), +(result.adminRevision || 0));
+          if (this._snapshot?.meta) {
+            this._snapshot.meta.revision = this.state.meta.revision;
+            this._snapshot.meta.adminRevision = this.state.meta.adminRevision;
+          }
+          this._persistLocal();
+        }
+        return true;
+      }).then(() => {
+        if (seq === this._saveSeq) { this._pendingSave = false; this._saveError = false; }
+        return true;
+      }).catch((e) => {
+        if (seq === this._saveSeq) { this._pendingSave = false; this._saveError = true; }
+        console.error(e); toast(e.message?.startsWith('conflict:') ? e.message.slice(9).trim() : '동기화 실패 (변경은 로컬에 보관됨)', 'error');
+        return false;
+      });
       return this._savePromise;
     };
-    if (immediate) doSave(); else this._saveTimer = setTimeout(doSave, 1200);
+    if (immediate) return doSave();
+    this._saveTimer = setTimeout(doSave, 1200);
+    return null;
   },
 
   async flushSave() {
-    if (!LIVE() || !this._pendingSave) return true;
+    if (!REMOTE() || !this._pendingSave) return true;
     clearTimeout(this._saveTimer);
-    const seq = ++this._saveSeq;
-    try {
-      this._savePromise = this._fetch('save', { data: this.state });
-      await this._savePromise;
-      if (seq === this._saveSeq) { this._pendingSave = false; this._saveError = false; }
-      return true;
-    } catch (e) {
-      if (seq === this._saveSeq) { this._pendingSave = false; this._saveError = true; }
-      console.error(e); toast('동기화 실패 (변경은 로컬에 보관됨)', 'error');
-      return false;
-    }
+    return await this._scheduleSave(true);
   },
 
   canUndo() { return this._undo.length > 0; },
@@ -156,7 +226,7 @@ export const DB = {
     this._emit();
     this._onHistory && this._onHistory();
     this._onRefresh && this._onRefresh();
-    if (LIVE()) this._scheduleSave(false);
+    if (REMOTE()) this._scheduleSave(false);
   },
 
   _persistLocal() {
@@ -168,7 +238,8 @@ export const DB = {
     const url = CONFIG.APPS_SCRIPT_URL;
     const token = localStorage.getItem(CONFIG.TOKEN_KEY) || '';
     const opts = payload
-      ? { method: 'POST', body: JSON.stringify({ action, token, ...payload }),
+      ? { method: 'POST', body: JSON.stringify({ action, token,
+          actor: localStorage.getItem(CONFIG.ME_KEY) || '', role: localStorage.getItem(CONFIG.ROLE_KEY) || 'member', ...payload }),
           headers: { 'Content-Type': 'text/plain;charset=utf-8' } } // text/plain avoids CORS preflight
       : { method: 'GET', cache: 'no-store' };
     const u = payload ? url : `${url}?${new URLSearchParams({ action, token, _ts: String(Date.now()), ...(query || {}) })}`;
@@ -201,29 +272,44 @@ export const DB = {
   },
 
   async addQaReport(report) {
-    if (!LIVE()) {
+    if (!REMOTE()) {
       const rec = Mutations.addQaReport(report);
       this.commit({ immediate: true });
       return rec;
+    }
+    if (SUPABASE_LIVE()) {
+      const data = await SupabaseBackend.mutate('qa.add', { report }, `qa:${Date.now()}:${uid()}`);
+      if (data?.state) this._mergeAtomicState(data.state);
+      return data?.result || report;
     }
     const rec = await this._fetch('qaAdd', { report });
     return this._applyQaReport(rec);
   },
 
   async updateQaReport(idOrSlot, patch = {}) {
-    if (!LIVE()) {
+    if (!REMOTE()) {
       const rec = Mutations.updateQaReport(idOrSlot, patch);
       this.commit({ immediate: true });
       return rec;
+    }
+    if (SUPABASE_LIVE()) {
+      const data = await SupabaseBackend.mutate('qa.update', { idOrSlot, patch }, `qa:${Date.now()}:${uid()}`);
+      if (data?.state) this._mergeAtomicState(data.state);
+      return data?.result;
     }
     const rec = await this._fetch('qaUpdate', { idOrSlot, patch });
     return this._applyQaReport(rec);
   },
 
   async removeQaReport(idOrSlot) {
-    if (!LIVE()) {
+    if (!REMOTE()) {
       Mutations.removeQaReport(idOrSlot);
       this.commit({ immediate: true });
+      return true;
+    }
+    if (SUPABASE_LIVE()) {
+      const data = await SupabaseBackend.mutate('qa.delete', { idOrSlot }, `qa:${Date.now()}:${uid()}`);
+      if (data?.state) this._mergeAtomicState(data.state);
       return true;
     }
     await this._fetch('qaDelete', { idOrSlot });
@@ -234,19 +320,80 @@ export const DB = {
     return true;
   },
 
+  _mergeAtomicState(remote) {
+    const next = normalize(clone(remote));
+    const localMembers = new Map((this.state.members || []).map((m) => [String(m.id), m]));
+    for (const rm of next.members || []) {
+      const lm = localMembers.get(String(rm.id));
+      if (!lm) continue;
+      lm.equip ||= {}; lm.skills ||= {};
+      for (const k of Object.keys(lm.equip)) delete lm.equip[k];
+      Object.assign(lm.equip, clone(rm.equip || {}));
+      for (const k of Object.keys(lm.skills)) delete lm.skills[k];
+      Object.assign(lm.skills, clone(rm.skills || {}));
+    }
+    const localBoards = new Map((this.state.statusBoards || []).map((b) => [String(b.id), b]));
+    for (const rb of next.statusBoards || []) {
+      const lb = localBoards.get(String(rb.id));
+      if (!lb) continue;
+      lb.data ||= {};
+      for (const k of Object.keys(lb.data)) delete lb.data[k];
+      Object.assign(lb.data, clone(rb.data || {}));
+    }
+    this.state.sales = clone(next.sales || []);
+    this.state.distributionLog = clone(next.distributionLog || []);
+    this.state.qaReports = clone(next.qaReports || []);
+    this.state.meta = clone(next.meta || this.state.meta || {});
+    this._snapshot = clone(this.state);
+    this._persistLocal(); this._emit();
+  },
+
+  /** 서버가 최신 상태를 잠근 뒤 멤버 셀/입찰 한 건만 적용한다. */
+  async atomicAction(kind, payload = {}) {
+    const actor = localStorage.getItem(CONFIG.ME_KEY) || '';
+    const role = localStorage.getItem(CONFIG.ROLE_KEY) || 'member';
+    const mutationId = `${actor || 'anon'}:${Date.now()}:${uid()}`;
+    if (!REMOTE()) {
+      try {
+        const result = applyAtomicAction(this.state, kind, payload, { actor, role });
+        this.commit();
+        return { ok: true, result };
+      } catch (e) { toast(e.message || '변경 실패', 'error'); return { ok: false, error: e.message }; }
+    }
+    this._pendingAtomic++;
+    const run = async () => {
+      if (this._pendingSave) {
+        const saved = await this.flushSave();
+        if (!saved) throw new Error('먼저 진행 중인 저장을 완료하지 못했습니다.');
+      }
+      const data = await this._queueWrite(() => SUPABASE_LIVE()
+        ? SupabaseBackend.mutate(kind, payload, mutationId)
+        : this._fetch('mutate', { actor, role, kind, payload, mutationId }));
+      if (data?.state) this._mergeAtomicState(data.state);
+      return { ok: true, result: data?.result, duplicate: !!data?.duplicate };
+    };
+    try { return await run(); }
+    catch (e) { console.error(e); toast(e.message || '변경 실패', 'error'); return { ok: false, error: e.message }; }
+    finally { this._pendingAtomic = Math.max(0, this._pendingAtomic - 1); }
+  },
+
   // 백그라운드 새로고침: 다른 사용자/시트 변경을 반영. merge=true 면 시트 편집까지(느림), false 면 대시보드 편집만(빠름).
   // 내 미저장 편집(_pendingSave)·열린 모달 중에는 스킵(클로버/방해 방지). 데이터 동일하면 재렌더 안 함.
   // 반환: 'busy'(편집/모달 중 스킵) · true(갱신함) · false(이미 최신) · 'stale'/'error'. 수동 버튼이 피드백에 사용.
   refresh({ merge = false, force = false } = {}) {
-    if (!LIVE() || (!force && this._pendingSave)) return Promise.resolve('busy');
+    if (!REMOTE() || this._pendingAtomic || (!force && this._pendingSave)) return Promise.resolve('busy');
     if (!force && this._saveError) return Promise.resolve('save-error');
     if (typeof document !== 'undefined' && document.querySelector('.modal-overlay')) return Promise.resolve('busy');
     const token = ++this._loadToken;
     const saveSeqAtStart = this._saveSeq;   // 조회 중 내가 편집·저장하면 시퀀스가 바뀜 → 옛 응답 폐기(편집 되돌림 방지)
     this._setLoading(true);
-    return this._fetch('getAll', null, merge ? { merge: 1 } : undefined).then((data) => {
+    const request = SUPABASE_LIVE()
+      ? SupabaseBackend.state()
+      : this._fetch('getAll', null, merge ? { merge: 1 } : undefined);
+    return request.then((data) => {
       if (!data || token !== this._loadToken || this._pendingSave || saveSeqAtStart !== this._saveSeq) return 'stale';
       const next = normalize(data);
+      this._saveError = false; // 수동 강제 새로고침으로 충돌/저장 오류 상태 복구
       if (JSON.stringify(next) === JSON.stringify(this.state)) return false;
       this.state = next; this._snapshot = clone(this.state);
       this._persistLocal(); this._emit(); this._onRefresh && this._onRefresh();
@@ -257,7 +404,8 @@ export const DB = {
 
 // 장비 슬롯명 운영 시트 기준으로 교정(기존 데이터 키 이동, 값 보존)
 const EQUIP_RENAME = { '무기': '주무기', '보조무기1': '보조1', '보조무기2': '보조2', '흉갑': '상의', '각반': '하의', '허리띠': '벨트' };
-const MEMBER_RENAME = { '도베르만': 'Doberman', '페커리': '냉정' };
+const MEMBER_RENAME = { '도베르만': 'Doberman', '페커리': '냉정', '여신민아': '망듕땅', '권성준': '귄성준' };
+const MEMBER_CLASS_OVERRIDES = { '해지슬': '사냥꾼', 'v구름v': '마법사' };
 
 function migrateMemberName(name) {
   return MEMBER_RENAME[name] || name || '';
@@ -358,6 +506,8 @@ function normalizeQaReport(report, index = 0) {
 function normalize(d) {
   d = d || {};
   d.meta ||= { clanName: '불면증', schemaVersion: 2 };
+  d.meta.revision = +d.meta.revision || 0;
+  d.meta.adminRevision = +d.meta.adminRevision || 0;
   d.appSettings ||= {};                                  // site-wide app prefs (UI scale 등)
   if (d.appSettings.uiScale == null) d.appSettings.uiScale = 1;
   d.appSettings.managedStones ||= [];                    // 관리할 공용 주문석 [{name, star}]
@@ -365,14 +515,18 @@ function normalize(d) {
   d.tiers ||= [];
   d.powerRanks ||= [];
   d.staff ||= [];
-  d.members = (d.members || []).map((m, i) => ({
-    id: m.id || i + 1, order: m.order ?? i + 1, name: migrateMemberName(m.name),
-    cls: m.cls || '', power: +m.power || 0, score: +m.score || 0,
-    grade: m.grade || '정회원',        // 등급(멤버십): 운영진/정회원/준회원/신입
-    equip: migrateEquip(m.equip),      // 장착 장비: {슬롯: {star,tier,enhance}} (슬롯명 시트 기준)
-    skills: m.skills || {},            // 주문석/엘릭서: { 주문석:{스킬:값}, 엘릭서:{항목:값} }
-    active: m.active !== false, note: m.note || '',
-  }));
+  d.staff = d.staff.map((st) => ({ ...st, name: migrateMemberName(st.name) }));
+  d.members = (d.members || []).map((m, i) => {
+    const name = migrateMemberName(m.name);
+    return {
+      id: m.id || i + 1, order: m.order ?? i + 1, name,
+      cls: MEMBER_CLASS_OVERRIDES[name] || m.cls || '', power: +m.power || 0, score: +m.score || 0,
+      grade: m.grade || '정회원',        // 등급(멤버십): 운영진/정회원/준회원/신입
+      equip: migrateEquip(m.equip),      // 장착 장비: {슬롯: {star,tier,enhance}} (슬롯명 시트 기준)
+      skills: m.skills || {},            // 주문석/엘릭서: { 주문석:{스킬:값}, 엘릭서:{항목:값} }
+      active: m.active !== false, note: m.note || '',
+    };
+  });
   d.contentCatalog ||= [];
   d.contentCatalog = d.contentCatalog.filter((c) => !isCorruptContentEntry(c));
   // 콘텐츠 카테고리 보정: 앙그바르 투기장·클랜 원정대는 '클랜 활동'으로 분리(기존 데이터도 교정)
@@ -437,6 +591,125 @@ function normalize(d) {
   if (d.ocrCrop === undefined) d.ocrCrop = null;   // remembered OCR crop as image fractions {x,y,w,h}
   if (d.ocrAnchor === undefined) d.ocrAnchor = null; // OpenCV anchor template for auto-detect {tplDataUrl,relW,relH,refImgW}
   return d;
+}
+
+function atomicMemberLocal(state, payload, { actor, role }) {
+  const member = (state.members || []).find((m) => payload.memberId != null
+    ? String(m.id) === String(payload.memberId)
+    : m.name === (payload.memberName || actor));
+  if (!member) throw new Error('멤버를 찾을 수 없습니다.');
+  if (role !== 'admin' && member.name !== actor) throw new Error('본인 데이터만 변경할 수 있습니다.');
+  return member;
+}
+function atomicKeyLocal(value, label) {
+  const key = String(value || '').trim();
+  if (!key || key.length > 200 || ['__proto__', 'constructor', 'prototype'].includes(key)) throw new Error(`잘못된 ${label || '키'}입니다.`);
+  return key;
+}
+
+/** Standalone-mode equivalent of the server's locked mutation engine. */
+export function applyAtomicAction(state, kind, payload = {}, context = {}) {
+  const role = context.role === 'admin' ? 'admin' : 'member';
+  const actor = String(context.actor || '').trim();
+  const requireAdmin = () => { if (role !== 'admin') throw new Error('관리자만 변경할 수 있습니다.'); };
+  const saleOf = (id) => {
+    const sale = (state.sales || []).find((x) => String(x.id) === String(id));
+    if (!sale) throw new Error('내판을 찾을 수 없습니다.');
+    sale.bids ||= [];
+    return sale;
+  };
+  state.sales ||= []; state.statusBoards ||= [];
+  if (kind === 'equipment.set') {
+    const m = atomicMemberLocal(state, payload, { actor, role });
+    const slot = atomicKeyLocal(payload.slot, '슬롯');
+    const valid = new Set(['주무기','보조1','보조2','투구','견갑','상의','하의','벨트','장갑','신발','망토','목걸이','귀걸이','반지','팔찌','복종','충성','무한','심연']);
+    if (!valid.has(slot)) throw new Error('잘못된 장비 슬롯입니다.');
+    m.equip ||= {};
+    const raw = payload.value || null;
+    let value = null;
+    if (raw && ['복종','충성','무한','심연'].includes(slot)) {
+      const tier = Math.max(0, Math.min(20, Math.floor(+raw.tier || 0)));
+      if (tier) value = { tier };
+    } else if (raw) {
+      const star = Math.max(0, Math.min(6, Math.floor(+raw.star || 0)));
+      const tier = Math.max(0, Math.min(20, +raw.tier || 0));
+      const enhance = Math.max(0, Math.min(99, Math.floor(+raw.enhance || 0)));
+      if (star || tier || enhance) value = { star, tier, enhance };
+    }
+    if (value) m.equip[slot] = value; else delete m.equip[slot];
+    return { member: m, slot, value };
+  }
+  if (kind === 'skill.toggle') {
+    const m = atomicMemberLocal(state, payload, { actor, role });
+    if (!['주문석', '엘릭서'].includes(payload.category)) throw new Error('잘못된 스킬 분류입니다.');
+    const key = atomicKeyLocal(payload.key, '스킬');
+    m.skills ||= {}; const bag = (m.skills[payload.category] ||= {});
+    const on = !bag[key]; if (on) bag[key] = true; else delete bag[key];
+    return { member: m, category: payload.category, key, on };
+  }
+  if (kind === 'skill.adjust') {
+    const m = atomicMemberLocal(state, payload, { actor, role });
+    const key = atomicKeyLocal(payload.key, '스킬');
+    m.skills ||= {}; const bag = (m.skills['공용주문석'] ||= {});
+    const count = Math.max(0, Math.min(99, (+bag[key] || 0) + ((+payload.delta || 0) < 0 ? -1 : 1)));
+    if (count) bag[key] = count; else delete bag[key];
+    return { member: m, category: '공용주문석', key, count };
+  }
+  if (kind === 'board.toggle') {
+    const m = atomicMemberLocal(state, payload, { actor, role });
+    const board = state.statusBoards.find((b) => String(b.id) === String(payload.boardId));
+    if (!board) throw new Error('보드를 찾을 수 없습니다.');
+    const column = atomicKeyLocal(payload.column, '열');
+    if (!(board.columns || []).includes(column)) throw new Error('보드 열을 찾을 수 없습니다.');
+    board.data ||= {}; const rec = (board.data[String(m.id)] ||= {});
+    const on = !rec[column]; if (on) rec[column] = true; else delete rec[column];
+    if (!Object.keys(rec).length) delete board.data[String(m.id)];
+    return { member: m, board, column, on };
+  }
+  if (kind === 'sale.create') {
+    requireAdmin();
+    const sale = { id: payload.id || uid(), item: atomicKeyLocal(payload.item, '아이템'),
+      bidType: ['투력순','참여도순','경매','선착순'].includes(payload.bidType) ? payload.bidType : '투력순',
+      basePrice: Math.max(0, +payload.basePrice || 0), deadline: +payload.deadline || Date.now() + 3600000, bids: [] };
+    if (state.sales.some((x) => String(x.id) === String(sale.id))) throw new Error('이미 존재하는 내판입니다.');
+    state.sales.unshift(sale); return { sale };
+  }
+  if (kind === 'sale.bid') {
+    const sale = saleOf(payload.saleId);
+    if (+sale.deadline && +sale.deadline < Date.now()) throw new Error('마감된 내판입니다.');
+    const m = atomicMemberLocal(state, payload, { actor, role });
+    if (sale.bids.some((b) => b.name === m.name)) throw new Error('이미 입찰했습니다.');
+    const bid = { name: m.name, amount: sale.bidType === '경매' ? Math.max(0, +payload.amount || 0) : 0 };
+    sale.bids.push(bid); return { sale, bid };
+  }
+  if (kind === 'sale.cancelBid') {
+    const sale = saleOf(payload.saleId);
+    const m = role === 'admin' ? null : atomicMemberLocal(state, payload, { actor, role });
+    const memberName = role === 'admin' ? atomicKeyLocal(payload.memberName, '멤버') : m.name;
+    const before = sale.bids.length; sale.bids = sale.bids.filter((b) => b.name !== memberName);
+    if (before === sale.bids.length) throw new Error('입찰 내역이 없습니다.');
+    return { sale, member: m, memberName };
+  }
+  if (kind === 'sale.cancel') {
+    requireAdmin(); saleOf(payload.saleId);
+    state.sales = state.sales.filter((x) => String(x.id) !== String(payload.saleId)); return { saleId: payload.saleId };
+  }
+  if (kind === 'sale.close') {
+    requireAdmin(); const sale = saleOf(payload.saleId);
+    if (!sale.bids.length) throw new Error('입찰자가 없습니다.');
+    const byName = Object.fromEntries((state.members || []).map((m) => [m.name, m]));
+    const ranked = [...sale.bids];
+    if (sale.bidType === '투력순') ranked.sort((a, b) => (byName[b.name]?.power || 0) - (byName[a.name]?.power || 0));
+    else if (sale.bidType === '참여도순') ranked.sort((a, b) => (byName[b.name]?.score || 0) - (byName[a.name]?.score || 0));
+    else if (sale.bidType === '경매') ranked.sort((a, b) => (+b.amount || 0) - (+a.amount || 0));
+    const winner = ranked[0], price = sale.bidType === '경매' ? (+winner.amount || 0) : (+sale.basePrice || 0);
+    const date = new Date().toISOString().slice(0, 10);
+    state.distributionLog ||= [];
+    state.distributionLog.unshift({ id: uid(), date, item: sale.item, type: '내판', member: winner.name, from: '', price, note: sale.bidType });
+    state.sales = state.sales.filter((x) => String(x.id) !== String(sale.id));
+    return { saleId: sale.id, winner, price, bidType: sale.bidType, item: sale.item };
+  }
+  throw new Error(`알 수 없는 원자적 변경: ${kind}`);
 }
 
 // ── mutation helpers (operate on DB.state; caller commits) ──────────

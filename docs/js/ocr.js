@@ -192,16 +192,27 @@ async function ensureTesseract(onProgress) {
 }
 
 const _workers = {};  // single worker per language (used by experimental extractRefined/extractSlots)
+// The worker lives across check-ins, but a view-specific progress callback must not.
+// Keeping the callback in Tesseract's logger retained the first participation panel
+// (and all of its image/DOM state) for the lifetime of the app.
+const _workerProgress = {};
 async function getWorker(onProgress, lang = 'kor+eng') {
+  _workerProgress[lang] = onProgress;
   if (_workers[lang]) return _workers[lang];
   _workers[lang] = (async () => {
     await ensureTesseract(onProgress);
     onProgress({ stage: `OCR 데이터 준비(${lang}, 최초 1회)`, progress: 0.1 });
     return window.Tesseract.createWorker(lang, 1, {
-      logger: (m) => { if (m.status === 'recognizing text') onProgress({ stage: '문자 인식 중', progress: 0.3 + m.progress * 0.6 }); },
+      logger: (m) => {
+        const report = _workerProgress[lang];
+        if (report && m.status === 'recognizing text') report({ stage: '문자 인식 중', progress: 0.3 + m.progress * 0.6 });
+      },
     });
   })();
   return _workers[lang];
+}
+function releaseWorkerProgress(lang, onProgress) {
+  if (_workerProgress[lang] === onProgress) delete _workerProgress[lang];
 }
 
 // Worker POOL (scheduler) so the multi-pass extractLines recognizes passes in
@@ -311,7 +322,7 @@ function anchorBoxes(data, pre, roster) {
   for (const box of flattenBoxes(data)) {
     if (normName(box.text).length < 2) continue;
     const hit = bestRoster(box.text, roster);
-    if (!hit || hit.score < 0.72) continue;
+    if (!hit || hit.score < 0.70) continue;
     const b = box.bbox;
     const rect = {
       x: pre.ox + b.x0 / pre.scale,
@@ -321,7 +332,12 @@ function anchorBoxes(data, pre, roster) {
     };
     if (rect.w < 4 || rect.h < 4) continue;
     const cur = best.get(hit.member.id);
-    if (!cur || hit.score > cur.score) best.set(hit.member.id, { ...hit, token: box.text, rect });
+    const area = rect.w * rect.h, curArea = cur ? cur.rect.w * cur.rect.h : Infinity;
+    // Equal-confidence word boxes are more useful marker locations than a whole
+    // line containing surrounding UI text.
+    if (!cur || hit.score > cur.score || (hit.score === cur.score && area < curArea)) {
+      best.set(hit.member.id, { ...hit, token: box.text, rect });
+    }
   }
   return [...best.values()];
 }
@@ -371,47 +387,65 @@ async function recognizeWithLayout(worker, dataUrl) {
 async function extractAnchoredSlots(img, crop, roster, onProgress = () => {}, { lang = 'kor+eng' } = {}) {
   if (!Array.isArray(roster) || !roster.length) return { lines: [], anchors: [], slots: [] };
   const autoRegion = img.naturalWidth >= 1200 && img.naturalHeight >= 800 ? autoRosterRegion(img) : null;
-  const region = crop && isBroadRosterRegion(img, crop) ? crop : (autoRegion || crop);
-  if (!region) return { lines: [], anchors: [], slots: [] };
-  if (!isBroadRosterRegion(img, region)) return { lines: [], anchors: [], slots: [] };
-  const worker = await getWorker(onProgress, lang);
-  await worker.setParameters({ tessedit_pageseg_mode: '11' });
-  onProgress({ stage: '위치 앵커 탐색', progress: 0.02 });
-  const pre = preprocess(img, region, 2.8);
-  const layout = await recognizeWithLayout(worker, pre.dataUrl);
-  const anchors = anchorBoxes(layout, pre, roster);
-  const slots = inferRosterSlots(region, anchors);
-  const anchoredSlots = new Set();
-  for (const a of anchors.filter((x) => x.score >= 0.80)) {
-    const cx = a.rect.x + a.rect.w / 2, cy = a.rect.y + a.rect.h / 2;
-    const hit = slots.find((s) => cx >= s.x - s.w * 0.25 && cx <= s.x + s.w * 1.05 && cy >= s.y - s.h * 0.8 && cy <= s.y + s.h * 1.2);
-    if (hit) anchoredSlots.add(hit.key);
-  }
-  const targets = slots.filter((s) => !anchoredSlots.has(s.key));
-  await worker.setParameters({ tessedit_pageseg_mode: '7' });
-  const lines = [], matches = [];
-  const variants = [{ ops: ['unsharp'], binarize: 150 }, { binarize: 132 }];
-  let done = 0;
-  for (const slot of targets) {
-    let best = null;
-    for (const v of variants) {
-      const scale = Math.min(7, Math.max(2.2, TARGET_CELL_H / Math.max(8, slot.h)));
-      const { dataUrl } = preprocess(img, slot, scale, v);
-      const { data } = await worker.recognize(dataUrl);
-      for (const token of dedup(data.text || '')) {
-        if (normName(token).length < 2) continue;
-        const hit = bestRoster(token, roster);
-        if (!hit) continue;
-        if (!best || hit.score > best.score) best = { ...hit, token, slot };
+  // Use the user's region when supplied; otherwise use the known roster area (or
+  // the complete small screenshot). Even a non-grid crop can yield word boxes for
+  // markers, while slot inference remains limited to broad roster screenshots.
+  const region = crop || autoRegion || { x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight };
+  let worker = null;
+  try {
+    worker = await getWorker(onProgress, lang);
+    await worker.setParameters({ tessedit_pageseg_mode: '11' });
+    onProgress({ stage: '인식 위치 찾는 중', progress: 0.02 });
+    const pre = preprocess(img, region, 2.8);
+    const layout = await recognizeWithLayout(worker, pre.dataUrl);
+    const anchors = anchorBoxes(layout, pre, roster);
+    const anchorLines = anchors.map((a) => a.token);
+    if (!isBroadRosterRegion(img, region)) {
+      return {
+        lines: dedup(anchorLines.join('\n')),
+        anchors,
+        slots: [],
+        matches: [],
+        region,
+        engine: `tesseract-anchors(${anchors.length})`,
+      };
+    }
+
+    const slots = inferRosterSlots(region, anchors);
+    const anchoredSlots = new Set();
+    for (const a of anchors.filter((x) => x.score >= 0.80)) {
+      const cx = a.rect.x + a.rect.w / 2, cy = a.rect.y + a.rect.h / 2;
+      const hit = slots.find((s) => cx >= s.x - s.w * 0.25 && cx <= s.x + s.w * 1.05 && cy >= s.y - s.h * 0.8 && cy <= s.y + s.h * 1.2);
+      if (hit) anchoredSlots.add(hit.key);
+    }
+    const targets = slots.filter((s) => !anchoredSlots.has(s.key));
+    await worker.setParameters({ tessedit_pageseg_mode: '7' });
+    const lines = [...anchorLines], matches = [];
+    const variants = [{ ops: ['unsharp'], binarize: 150 }, { binarize: 132 }];
+    let done = 0;
+    for (const slot of targets) {
+      let best = null;
+      for (const v of variants) {
+        const scale = Math.min(7, Math.max(2.2, TARGET_CELL_H / Math.max(8, slot.h)));
+        const { dataUrl } = preprocess(img, slot, scale, v);
+        const { data } = await worker.recognize(dataUrl);
+        for (const token of dedup(data.text || '')) {
+          if (normName(token).length < 2) continue;
+          const hit = bestRoster(token, roster);
+          if (!hit) continue;
+          if (!best || hit.score > best.score) best = { ...hit, token, slot };
+        }
       }
+      if (best && best.score >= 0.80 && (best.score >= 0.94 || best.score - best.second >= 0.04)) {
+        lines.push(best.token);
+        matches.push(best);
+      }
+      onProgress({ stage: `앵커 기반 재인식 ${++done}/${targets.length}`, progress: targets.length ? done / targets.length : 1 });
     }
-    if (best && best.score >= 0.80 && (best.score >= 0.94 || best.score - best.second >= 0.04)) {
-      lines.push(best.token);
-      matches.push(best);
-    }
-    onProgress({ stage: `앵커 기반 재인식 ${++done}/${targets.length}`, progress: targets.length ? done / targets.length : 1 });
+    return { lines: dedup(lines.join('\n')), anchors, slots: targets, matches, region, engine: `tesseract-anchor-slots(${targets.length})` };
+  } finally {
+    releaseWorkerProgress(lang, onProgress);
   }
-  return { lines: dedup(lines.join('\n')), anchors, slots: targets, matches, engine: `tesseract-anchor-slots(${targets.length})` };
 }
 
 /**
@@ -448,15 +482,28 @@ export async function extractLines(img, crop, onProgress = () => {}, { psm = '11
   }
   const passes = [];
   for (const region of regions) for (const s of scales) for (const v of variants) passes.push({ region, s, v });
-  // preprocess on the main thread (cheap), then recognize all passes concurrently
-  // across the worker pool. Promise.all preserves input order in the result.
+  // Keep only one worker-sized batch of large preprocessed PNGs in memory. Queuing
+  // every pass at once retained many multi-megabyte data URLs and looked like a
+  // leak after several consecutive participation records.
   let done = 0;
-  const perScale = await Promise.all(passes.map(async (p) => {
-    const { dataUrl } = preprocess(img, p.region, p.s, p.v);
-    const { data } = await scheduler.addJob('recognize', dataUrl);
-    onProgress({ stage: `문자 인식 중 (${++done}/${passes.length})`, progress: 0.15 + done / passes.length * 0.8 });
-    return dedup(data.text || '');
-  }));
+  const perScale = [];
+  const locatedAnchors = [];
+  const batchSize = poolSize();
+  for (let i = 0; i < passes.length; i += batchSize) {
+    const batch = await Promise.all(passes.slice(i, i + batchSize).map(async (p) => {
+      const pre = preprocess(img, p.region, p.s, p.v);
+      const { data } = Array.isArray(roster) && roster.length
+        ? await scheduler.addJob('recognize', pre.dataUrl, {}, { text: true, blocks: true, tsv: true })
+        : await scheduler.addJob('recognize', pre.dataUrl);
+      onProgress({ stage: `문자 인식 중 (${++done}/${passes.length})`, progress: 0.15 + done / passes.length * 0.8 });
+      return {
+        lines: dedup(data.text || ''),
+        anchors: Array.isArray(roster) && roster.length ? anchorBoxes(data, pre, roster) : [],
+      };
+    }));
+    perScale.push(...batch.map((result) => result.lines));
+    for (const result of batch) locatedAnchors.push(...result.anchors);
+  }
   let anchoredPass = null;
   if (anchored && Array.isArray(roster) && roster.length) {
     try {
@@ -468,6 +515,11 @@ export async function extractLines(img, crop, onProgress = () => {}, { psm = '11
       console.warn('anchor slot OCR failed', e);
     }
   }
+  // Main multi-scale passes now return word boxes too, so a person recognized by
+  // any successful pass can still receive an on-image marker even when the extra
+  // grid/anchor pass did not find that word.
+  if (anchoredPass) anchoredPass.anchors = [...locatedAnchors, ...(anchoredPass.anchors || [])];
+  else if (locatedAnchors.length) anchoredPass = { lines: [], anchors: locatedAnchors, slots: [], matches: [], engine: 'tesseract-pass-boxes' };
   onProgress({ stage: '완료', progress: 1 });
   return {
     lines: dedup(perScale.flat().join('\n')),
@@ -475,6 +527,28 @@ export async function extractLines(img, crop, onProgress = () => {}, { psm = '11
     engine: `tesseract(${lang},${passes.length}pass×${poolSize()}w${anchoredPass ? '+anchor' : ''})`,
     anchored: anchoredPass,
   };
+}
+
+/**
+ * Attach the best source-image rectangle to each final OCR match. The normal
+ * layout pass gives a tight word box; a slot re-read is a coarser fallback.
+ * Kept pure/exported so the overlay mapping can be regression-tested without OCR.
+ */
+export function recognitionMarkers(anchored, entries) {
+  const accepted = new Map([...entries].map((e) => [String(e.member.id), e]));
+  const located = new Map();
+  const add = (hit, rect, precision) => {
+    const final = accepted.get(String(hit?.member?.id));
+    if (!final || !rect || !Number.isFinite(rect.x + rect.y + rect.w + rect.h) || rect.w <= 0 || rect.h <= 0) return;
+    const key = String(final.member.id);
+    const prev = located.get(key);
+    if (!prev || precision > prev.precision || (precision === prev.precision && hit.score > prev.locationScore)) {
+      located.set(key, { ...final, rect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h }, locationScore: hit.score, precision });
+    }
+  };
+  for (const hit of anchored?.matches || []) add(hit, hit.slot, 1);
+  for (const hit of anchored?.anchors || []) add(hit, hit.rect, 2);
+  return [...located.values()].map(({ precision, locationScore, ...marker }) => marker);
 }
 
 // Match rule (per user spec) — the score you SEE is the whole decision, no hidden
@@ -513,6 +587,7 @@ export function consensusMatch(perScale, roster, { checkAt = CHECK_AT, showAt = 
 export async function extractRefined(img, crop, onProgress = () => {}, { segPsm = '6' } = {}) {
   const pre = preprocess(img, crop, SCALE);
   const worker = await getWorker(onProgress);
+  try {
   // pass 1: segmentation — find line boxes (text content of this pass is ignored)
   await worker.setParameters({ tessedit_pageseg_mode: segPsm });
   onProgress({ stage: '줄 위치 감지', progress: 0.2 });
@@ -543,7 +618,10 @@ export async function extractRefined(img, crop, onProgress = () => {}, { segPsm 
     if (t) lines.push(t);
     onProgress({ stage: `줄 인식 ${done + 1}/${rects.length}`, progress: 0.4 + (++done) / rects.length * 0.6 });
   }
-  return { lines: dedup(lines.join('\n')), engine: `tesseract-refined(${rects.length}줄)` };
+    return { lines: dedup(lines.join('\n')), engine: `tesseract-refined(${rects.length}줄)` };
+  } finally {
+    releaseWorkerProgress('kor+eng', onProgress);
+  }
 }
 
 /**
@@ -556,6 +634,7 @@ export async function extractSlots(img, region, { rows, cols, nameLeftPct = 0.22
   const reg = region || { x: 0, y: 0, w: img.width, h: img.height };
   const colW = reg.w / cols, rowH = reg.h / rows;
   const worker = await getWorker(onProgress);
+  try {
   await worker.setParameters({ tessedit_pageseg_mode: '7' }); // SINGLE_LINE
   const cells = [];
   const total = rows * cols; let done = 0;
@@ -575,8 +654,11 @@ export async function extractSlots(img, region, { rows, cols, nameLeftPct = 0.22
       onProgress({ stage: `슬롯 인식 ${done + 1}/${total}`, progress: (++done) / total });
     }
   }
-  const lines = cells.map((c) => c.text).filter((t) => normName(t).length >= 1);
-  return { cells, lines, engine: 'tesseract-slot' };
+    const lines = cells.map((c) => c.text).filter((t) => normName(t).length >= 1);
+    return { cells, lines, engine: 'tesseract-slot' };
+  } finally {
+    releaseWorkerProgress('kor+eng', onProgress);
+  }
 }
 
 function dedup(text) {

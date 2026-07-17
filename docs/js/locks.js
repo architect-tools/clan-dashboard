@@ -1,9 +1,10 @@
 // locks.js — 소프트 락: 관리자가 편집 페이지에 있으면 백엔드에 '편집 중' 등록,
-// 같은 페이지에 다른 관리자가 있으면 배너로 알림(하드 차단 X, 마지막 저장 이김).
+// 같은 페이지에 다른 관리자가 있으면 배너로 알림(하드 차단 X, 오래된 저장은 revision 충돌로 거부).
 import { CONFIG } from './config.js';
+import { SupabaseBackend } from './supabase-backend.js';
 import { Roles } from './roles.js';
 
-const LIVE = () => !!CONFIG.APPS_SCRIPT_URL;
+const LIVE = () => !!CONFIG.APPS_SCRIPT_URL && !SupabaseBackend.isConfigured();
 const LOCKED_PAGES = new Set(['members', 'participation', 'diamond', 'dist-params', 'settings', 'rotation', 'gear']);
 
 export const Locks = {
@@ -25,7 +26,7 @@ export const Locks = {
     const others = (locks || []).filter((l) => l.page === this.page && l.who !== Roles.me());
     if (!this.page || !others.length) { this._banner.style.display = 'none'; this._banner.textContent = ''; return; }
     this._banner.style.display = '';
-    this._banner.textContent = `⚠ ${others.map((o) => o.who).join(', ')} 님이 이 페이지를 편집 중입니다 — 동시 수정 시 마지막 저장이 적용됩니다.`;
+    this._banner.textContent = `⚠ ${others.map((o) => o.who).join(', ')} 님이 이 페이지를 편집 중입니다 — 먼저 저장된 변경 이후에는 새로고침이 필요합니다.`;
   },
 
   // 페이지 진입 시 호출(관리자·라이브 한정). 이전 페이지 락 해제 후 새 페이지 락 등록 + 하트비트.

@@ -263,14 +263,23 @@ export function renderRotation() {
         el('span', { text: b.name + (b.amount ? ` · ${fmt(b.amount)}` : '') }),
         // 취소 ✕: 관리자는 전부, 멤버는 자기 입찰만
         Roles.canCancelBid(b)
-          ? btn('✕', () => { sale.bids.splice(i, 1); DB.commit(); renderRotation(); }, { kind: 'ghost-danger', title: Roles.isAdmin() ? '입찰 취소(관리자)' : '내 입찰 취소' })
+          ? btn('✕', async (e) => {
+            const button = e.currentTarget;
+            button.disabled = true;
+            const result = await DB.atomicAction('sale.cancelBid', { saleId: sale.id, memberName: b.name });
+            if (result.ok) { toast(`${b.name} 입찰을 삭제했습니다`); renderRotation(); }
+            else button.disabled = false;
+          }, { kind: 'ghost-danger', title: Roles.isAdmin() ? '입찰 취소(관리자)' : '내 입찰 취소' })
           : null,
       ]))
       : [el('span.muted', { text: '입찰 없음' })]);
     return el('div.sale-card', {}, [head, bids, el('div.row-actions', {}, [
       btn('+ 입찰', () => addBid(sale), { kind: 'ghost' }),
       btn('마감 & 정산', () => closeSale(sale), { admin: true }),
-      btn('내판 취소', () => confirmDialog(`'${sale.item}' 내판을 취소(삭제)할까요?`, () => { s.sales = s.sales.filter((x) => x.id !== sale.id); DB.commit(); renderRotation(); }, { danger: true, yesText: '취소' }), { kind: 'ghost-danger', admin: true }),
+      btn('내판 취소', () => confirmDialog(`'${sale.item}' 내판을 취소(삭제)할까요?`, async () => {
+        const result = await DB.atomicAction('sale.cancel', { saleId: sale.id });
+        if (result.ok) { toast(`${sale.item} 내판을 삭제했습니다`); renderRotation(); }
+      }, { danger: true, yesText: '취소' }), { kind: 'ghost-danger', admin: true }),
     ])]);
   }
   function postSale() {
@@ -284,11 +293,13 @@ export function renderRotation() {
       el('div.form-grid', {}, [field('입찰 타입', bidType), field('기준/시작가(다이아)', basePrice)]),
       field('마감 시간', deadline),
       el('p.hint', { text: '투력순/참여도순 = 입찰자 중 자동 순위 · 경매 = 입찰가 최고 · 선착순 = 먼저 입찰' }),
-      el('div.modal-actions', {}, [btn('취소', close), btn('올리기', () => {
+      el('div.modal-actions', {}, [btn('취소', close), btn('올리기', async () => {
         if (!item.value.trim()) return toast('아이템 입력', 'error');
         const dl = Date.parse(deadline.value);
-        (s.sales = s.sales || []).unshift({ id: uid(), item: item.value.trim(), bidType: bidType.value, basePrice: +basePrice.value || 0, deadline: isNaN(dl) ? Date.now() + 3600000 : dl, bids: [] });
-        DB.commit(); close(); toast('내판이 올라갔습니다'); renderRotation();
+        const result = await DB.atomicAction('sale.create', { id: uid(), item: item.value.trim(), bidType: bidType.value,
+          basePrice: +basePrice.value || 0, deadline: isNaN(dl) ? Date.now() + 3600000 : dl });
+        if (!result.ok) return;
+        close(); toast('내판이 올라갔습니다'); renderRotation();
       }, { kind: 'primary' })]),
     ]));
   }
@@ -304,12 +315,14 @@ export function renderRotation() {
     modal('입찰 추가', (close) => el('div.form', {}, [
       field(isAdm ? '클랜원(대리 입찰)' : '입찰자', member),
       sale.bidType === '경매' ? field('입찰가(다이아)', amount) : null,
-      el('div.modal-actions', {}, [btn('취소', close), btn('입찰', () => {
+      el('div.modal-actions', {}, [btn('취소', close), btn('입찰', async () => {
         const name = bidderName();
         if (!name) return toast('닉네임이 없습니다', 'error');
         if (sale.bids.some((b) => b.name === name)) return toast('이미 입찰함', 'error');
-        sale.bids.push({ name, amount: sale.bidType === '경매' ? (+amount.value || 0) : 0 });
-        DB.commit(); close(); renderRotation();
+        const result = await DB.atomicAction('sale.bid', { saleId: sale.id, memberName: name,
+          amount: sale.bidType === '경매' ? (+amount.value || 0) : 0 });
+        if (!result.ok) return;
+        close(); renderRotation();
       }, { kind: 'primary' })]),
     ]));
   }
@@ -322,10 +335,11 @@ export function renderRotation() {
     else if (sale.bidType === '경매') ranked.sort((a, b) => (b.amount || 0) - (a.amount || 0));
     const win = ranked[0];
     const price = sale.bidType === '경매' ? (win.amount || 0) : (sale.basePrice || 0);
-    confirmDialog(`'${sale.item}' 낙찰: ${win.name} (${fmt(price)} 다이아 · ${sale.bidType}). 분배 기록하고 마감할까요?`, () => {
-      Mutations.logDistribution({ date: new Date().toISOString().slice(0, 10), item: sale.item, type: '내판', member: win.name, from: '', price, note: sale.bidType });
-      s.sales = s.sales.filter((x) => x.id !== sale.id);
-      DB.commit(); toast(`${sale.item} → ${win.name} 낙찰`); renderRotation();
+    confirmDialog(`'${sale.item}' 현재 예상 낙찰: ${win.name} (${fmt(price)} 다이아 · ${sale.bidType}). 최신 입찰을 서버에서 다시 계산해 마감할까요?`, async () => {
+      const result = await DB.atomicAction('sale.close', { saleId: sale.id });
+      if (!result.ok) return;
+      const final = result.result;
+      toast(`${final?.item || sale.item} → ${final?.winner?.name || win.name} 낙찰`); renderRotation();
     }, { yesText: '마감 & 기록' });
   }
 }

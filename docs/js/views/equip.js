@@ -94,18 +94,20 @@ export function editSlot(member, slot, rerender) {
   const tier = select([{ value: '0', label: '없음' }, ...TIER_OPTS.map((t) => ({ value: String(t), label: tierLabel(t) }))], String(cur.tier || 0));
   const enh = input({ type: 'number', value: cur.enhance ?? '', placeholder: '강화 수치' });
   const filled = !!(cur.star || cur.tier || cur.enhance);
+  const save = async (value, close) => {
+    const result = await DB.atomicAction('equipment.set', { memberId: member.id, slot, value });
+    if (!result.ok) return;
+    close(); rerender();
+  };
   modal(`${member.name} · ${slot}`, (close) => el('div.form', {}, [
     field('성급', star), field('티어', tier), field('강화 (+)', enh),
     el('p.hint', { text: '3성급 이상 + 티어가 x.5(예: 3.5T)면 배경템 → 슬롯에 벌집무늬가 표시됩니다.' }),
     el('div.modal-actions', {}, [
-      filled ? btn('비우기', () => { if (member.equip) delete member.equip[slot]; DB.commit(); close(); rerender(); }, { kind: 'ghost-danger' }) : null,
+      filled ? btn('비우기', () => save(null, close), { kind: 'ghost-danger' }) : null,
       btn('취소', close),
       btn('저장', () => {
         const st = +star.value || 0, t = +tier.value || 0, e = +enh.value || 0;
-        member.equip ||= {};
-        if (!st && !t && !e) delete member.equip[slot];
-        else member.equip[slot] = { star: st, tier: t, enhance: e };
-        DB.commit(); close(); rerender();
+        save(st || t || e ? { star: st, tier: t, enhance: e } : null, close);
       }, { kind: 'primary' }),
     ]),
   ]));
@@ -115,18 +117,20 @@ export function editSlot(member, slot, rerender) {
 function editRelic(member, slot, cur, rerender) {
   const tier = select([{ value: '0', label: '없음' }, ...RELIC_TIERS.map((t) => ({ value: String(t), label: relicTierLabel(t) }))], String(cur.tier || 0));
   const filled = !!cur.tier;
+  const save = async (value, close) => {
+    const result = await DB.atomicAction('equipment.set', { memberId: member.id, slot, value });
+    if (!result.ok) return;
+    close(); rerender();
+  };
   modal(`${member.name} · ${slot} (성유물)`, (close) => el('div.form', {}, [
     field('티어', tier),
     el('p.hint', { text: '성유물은 티어만 있는 거래 불가 장비입니다 (성급·강화 없음). 색: T1~3 동색 · T4~6 은색 · T7~9 금색 · T10~ 프리즘.' }),
     el('div.modal-actions', {}, [
-      filled ? btn('비우기', () => { if (member.equip) delete member.equip[slot]; DB.commit(); close(); rerender(); }, { kind: 'ghost-danger' }) : null,
+      filled ? btn('비우기', () => save(null, close), { kind: 'ghost-danger' }) : null,
       btn('취소', close),
       btn('저장', () => {
         const t = +tier.value || 0;
-        member.equip ||= {};
-        if (!t) delete member.equip[slot];
-        else member.equip[slot] = { tier: t }; // 성급·강화 없음
-        DB.commit(); close(); rerender();
+        save(t ? { tier: t } : null, close);
       }, { kind: 'primary' }),
     ]),
   ]));

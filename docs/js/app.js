@@ -1,5 +1,6 @@
 // app.js — bootstrap: gate → load data → build shell → start router.
 import { CONFIG } from './config.js';
+import { SupabaseBackend } from './supabase-backend.js';
 import { DB } from './db.js';
 import { Auth } from './auth.js';
 import { Roles } from './roles.js';
@@ -34,16 +35,19 @@ function updateHistoryButtons() {
 }
 
 async function manualRefresh() {
-  const busy = busyOverlay('최신 데이터 불러오는 중…', '시트 변경사항 동기화');
+  const syncLabel = SupabaseBackend.isConfigured()
+    ? '실시간 DB 변경사항 동기화'
+    : Roles.isAdmin() ? '시트 변경사항 동기화' : '다른 멤버 변경사항 동기화';
+  const busy = busyOverlay('최신 데이터 불러오는 중…', syncLabel);
   let r;
   try {
     if (DB._pendingSave) {
       busy.update('변경사항 저장 중…', '대시보드 변경사항을 먼저 DB에 반영');
       const ok = await DB.flushSave();
       if (!ok) { toast('저장 실패로 새로고침을 중단했습니다', 'error'); return; }
-      busy.update('최신 데이터 불러오는 중…', '시트 변경사항 동기화');
+      busy.update('최신 데이터 불러오는 중…', syncLabel);
     }
-    r = await DB.refresh({ merge: true, force: true });
+    r = await DB.refresh({ merge: Roles.isAdmin(), force: true });
   } finally { busy.close(); } // ⟳ 버튼 회전은 onLoading 콜백이 담당
   if (r === 'busy') toast('편집/저장 중입니다 — 잠시 후 다시 시도하세요', 'error');
   else if (r === true) toast('최신 데이터로 갱신했습니다');
@@ -66,7 +70,7 @@ function buildShell() {
     el('div.sidebar-foot', {}, [
       el('div.whoami', { class: Roles.isAdmin() ? 'admin' : 'member' },
         [el('span.whoami-role', { text: Roles.isAdmin() ? '관리자' : '멤버' }), el('span.whoami-name', { text: Roles.me() || '?' })]),
-      el('div.ver', { text: 'v' + CONFIG.version + (CONFIG.APPS_SCRIPT_URL ? ' · 클라우드' : ' · 로컬') }),
+      el('div.ver', { text: 'v' + CONFIG.version + (SupabaseBackend.isConfigured() ? ' · 실시간 DB' : CONFIG.APPS_SCRIPT_URL ? ' · 시트 동기화' : ' · 로컬') }),
       el('a.nav-link.logout', { onclick: () => Auth.logout(), text: '잠금 / 전환' }),
     ]),
   ]);
@@ -133,9 +137,15 @@ async function main() {
   Locks.enter(route());
 
   // 다중 사용자 신선도: 페이지 전환·탭 복귀·30초 폴링 시 백그라운드 새로고침(내 편집/모달 중엔 자동 스킵).
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') DB.refresh({ merge: true }); });
-  let _poll = 0;
-  setInterval(() => { if (document.visibilityState === 'visible') DB.refresh({ merge: (++_poll % 4 === 0) }); }, 30000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') DB.refresh({ merge: !SupabaseBackend.isConfigured() && Roles.isAdmin() });
+  });
+  if (!SupabaseBackend.isConfigured()) {
+    let _poll = 0;
+    setInterval(() => {
+      if (document.visibilityState === 'visible') DB.refresh({ merge: Roles.isAdmin() && (++_poll % 4 === 0) });
+    }, 30000);
+  }
 }
 
 main();

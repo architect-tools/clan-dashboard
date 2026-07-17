@@ -12,7 +12,7 @@ const SAMPLES = [
   { file: '_sample.png', label: '#3 FULL 이미지(크롭X)', panel: null, gt: GT3 },
   { file: '_sample.png', label: '#3 패널 크롭', panel: { x: 0.15, y: 0.17, w: 0.72, h: 0.70 }, gt: GT3 },
   { file: '_sample2.png', label: '#4 (37명, 패널만)', panel: null,
-    gt: ['끝판왕랑사부','리턴','Doberman','노획','여신민아','카운터펀치','이루릴','치치','해지슬','붉으래','아싸다','두비두밥','승냉','딱꽁','윤재','헤파이토스','빛싸다','보스','s하울s','조말순','v구름v','VISVIM','oO서영Oo','폭력','권성준','버기','xooos','우소츠키','여름빛','잠원동쓰레빠','헤세메','Babyee','치느','EXE','헤라클','페커리','KDA'] },
+    gt: ['끝판왕랑사부','리턴','Doberman','노획','망듕땅','카운터펀치','이루릴','치치','해지슬','붉으래','아싸다','두비두밥','승냉','딱꽁','윤재','헤파이토스','빛싸다','보스','s하울s','조말순','v구름v','VISVIM','oO서영Oo','폭력','귄성준','버기','xooos','우소츠키','여름빛','잠원동쓰레빠','헤세메','Babyee','치느','EXE','헤라클','페커리','KDA'] },
 ];
 const norm = (s) => String(s).replace(/[\s　]/g, '').replace(/[^0-9a-z가-힣]/gi, '').toLowerCase();
 const eq = (a, b) => { const x = norm(a), y = norm(b); return x === y || x.includes(y) || y.includes(x); };

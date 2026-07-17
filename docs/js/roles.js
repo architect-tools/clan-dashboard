@@ -1,7 +1,7 @@
 // roles.js — client-side role + identity (UI gating only).
-// 입장 시 닉네임(ME)과 역할(ROLE)을 저장한다. 백엔드 쓰기 토큰은 항상 7979(멤버)로
-// 고정이므로 이 역할 구분은 화면 제어용이다(공개 repo·last-write-wins). 진짜 서버
-// 강제는 Phase 2(관리자 토큰 분리 + 입찰 전용 엔드포인트)에서.
+// 입장 시 닉네임(ME)과 역할(ROLE)을 저장한다. 멤버 쓰기는 백엔드의 원자적 mutate
+// 엔드포인트가 닉네임 범위(본인 장비/스킬/보드 셀/입찰)를 검사한다. 공유 비밀번호
+// 방식이므로 신원 자체는 보안 인증이 아니라 클랜 내부 식별자다.
 import { CONFIG } from './config.js';
 
 export const Roles = {

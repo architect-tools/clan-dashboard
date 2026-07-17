@@ -4,6 +4,7 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import process from 'node:process';
+import { supabaseServiceHeaders } from './load-env.mjs';
 import { CONFIG } from '../docs/js/config.js';
 
 const STATUS_LABEL = {
@@ -123,13 +124,16 @@ function usage(code = 0, message = '') {
   node scripts/qa-reports.mjs delete <slot-or-id>
 
 Options:
-  --state-file path   Use a local JSON state file instead of Apps Script.
+  --state-file path   Use a local JSON state file instead of the remote DB.
   --assignee name     Set the 담당 field.
   --all               Include resolved/closed reports in list.
 
 Environment:
-  CLANDASH_TOKEN      Apps Script write token. Defaults to docs/js/config.js GATE_PASSWORD.
-  CLANDASH_STATE_FILE Same as --state-file.`);
+  SUPABASE_URL              Supabase project URL.
+  SUPABASE_SERVICE_ROLE_KEY Server-only key for QA automation.
+  CLAN_SLUG                 Clan slug. Defaults to docs/js/config.js.
+  CLANDASH_TOKEN            Legacy Apps Script write token.
+  CLANDASH_STATE_FILE       Same as --state-file.`);
   process.exit(code);
 }
 
@@ -161,8 +165,30 @@ async function loadState() {
       },
     };
   }
+  const supabaseUrl = String(process.env.SUPABASE_URL || CONFIG.SUPABASE_URL || '').replace(/\/$/, '');
+  if (supabaseUrl) {
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    if (!serviceKey) throw new Error('SUPABASE_SERVICE_ROLE_KEY가 필요합니다. 브라우저용 publishable key를 사용하지 마세요.');
+    const slug = process.env.CLAN_SLUG || CONFIG.CLAN_SLUG || 'insomnia';
+    const headers = supabaseServiceHeaders(serviceKey);
+    const clans = await fetchSupabaseJson(`${supabaseUrl}/rest/v1/clans?slug=eq.${encodeURIComponent(slug)}&select=id`, { headers });
+    const clanId = clans?.[0]?.id;
+    if (!clanId) throw new Error(`Supabase 클랜을 찾을 수 없습니다: ${slug}`);
+    const rpc = (name, body) => fetchSupabaseJson(`${supabaseUrl}/rest/v1/rpc/${name}`, {
+      method: 'POST', headers, body: JSON.stringify(body),
+    });
+    const qaRpc = serviceKey.startsWith('sb_secret_') ? 'dashboard_service_qa_service' : 'dashboard_service_qa';
+    const state = await rpc('dashboard_state_for', { p_clan_id: clanId });
+    if (!state || typeof state !== 'object') throw new Error('Supabase DB 상태를 불러오지 못했습니다.');
+    return {
+      state,
+      add: async (report) => rpc(qaRpc, { p_slug: slug, p_action: 'add', p_id_or_slot: '', p_data: report }),
+      update: async (idOrSlot, patch) => rpc(qaRpc, { p_slug: slug, p_action: 'update', p_id_or_slot: idOrSlot, p_data: patch }),
+      remove: async (idOrSlot) => rpc(qaRpc, { p_slug: slug, p_action: 'delete', p_id_or_slot: idOrSlot, p_data: {} }),
+    };
+  }
   if (!CONFIG.APPS_SCRIPT_URL) {
-    throw new Error('APPS_SCRIPT_URL이 비어 있습니다. --state-file 또는 CLANDASH_STATE_FILE을 지정하세요.');
+    throw new Error('Supabase 또는 Apps Script 연결값이 없습니다. --state-file을 지정할 수도 있습니다.');
   }
   const state = await fetchJson(`${CONFIG.APPS_SCRIPT_URL}?${new URLSearchParams({ action: 'getAll', _ts: String(Date.now()) })}`);
   if (!state || typeof state !== 'object') throw new Error('원격 DB 상태를 불러오지 못했습니다.');
@@ -172,6 +198,13 @@ async function loadState() {
     update: async (idOrSlot, patch) => postAction('qaUpdate', { idOrSlot, patch }),
     remove: async (idOrSlot) => postAction('qaDelete', { idOrSlot }),
   };
+}
+
+async function fetchSupabaseJson(url, opts = {}) {
+  const res = await fetch(url, { cache: 'no-store', ...opts });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Supabase HTTP ${res.status}: ${text.slice(0, 400)}`);
+  return text ? JSON.parse(text) : null;
 }
 
 async function postAction(action, payload) {

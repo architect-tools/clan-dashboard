@@ -4,6 +4,7 @@ import { Roles } from '../roles.js';
 import { computeSettlement, tierForScore } from '../calc.js';
 import { el, fmt, toast, clear } from '../util.js';
 import { CONFIG, TIER_COLORS, CLASSES, CLASS_LIST } from '../config.js';
+import { SupabaseBackend } from '../supabase-backend.js';
 import { page, card, statCard, table, classBadge, tierBadge, btn, modal, select, field, input } from './ui.js';
 
 const QA_STATUS = {
@@ -35,12 +36,13 @@ export function renderDashboard() {
   const s = DB.state;
   const members = s.members.filter((m) => m.active !== false);
   const res = computeSettlement(s);
-  const live = !!CONFIG.APPS_SCRIPT_URL;
+  const realtime = SupabaseBackend.isConfigured();
+  const live = realtime || !!CONFIG.APPS_SCRIPT_URL;
 
   const body = page(`${s.meta?.clanName || ''} 클랜 대시보드`, {
     subtitle: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }),
     actions: [
-      el('span.mode-pill', { class: live ? 'live' : 'local', text: live ? '클라우드 동기화' : '로컬 저장' }),
+      el('span.mode-pill', { class: live ? 'live' : 'local', text: realtime ? '실시간 DB' : live ? '시트 동기화' : '로컬 저장' }),
       Roles.isAdmin() ? btn('QA 히스토리', () => openQaHistory(), { kind: 'ghost', admin: true }) : null,
       Roles.isAdmin() ? btn('콘텐츠 점수표', () => location.hash = '#/dist-params', { kind: 'ghost', admin: true }) : null,
       Roles.isAdmin() ? btn('직업 수정', () => openClassEditor(), { kind: 'ghost', admin: true }) : null,

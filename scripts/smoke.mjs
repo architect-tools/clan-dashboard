@@ -31,8 +31,15 @@ let pass = 0, fail = 0;
 const ok = (name) => { console.log('  ✅ ' + name); pass++; };
 const bad = (name, e) => { console.log('  ❌ ' + name + ' — ' + (e?.stack || e)); fail++; };
 
+// Smoke rendering uses the local seed; live transport has its own integration test.
+const { CONFIG } = await import('../docs/js/config.js');
+CONFIG.SUPABASE_URL = '';
+CONFIG.SUPABASE_PUBLISHABLE_KEY = '';
+
 const { DB, Mutations } = await import('../docs/js/db.js');
 const { computeSettlement, computeScores } = await import('../docs/js/calc.js');
+const { recognitionMarkers } = await import('../docs/js/ocr.js');
+const { applyAtomicAction } = await import('../docs/js/db.js');
 const app = document.getElementById('app');
 
 await DB.init();
@@ -107,6 +114,88 @@ try {
   if (rec.size === 2 && !rec.has(A) && rec.has(B) && rec.has(C)) ok('체크인 확정 = selected(단일소스): A제거·B·C추가'); else bad('checkin confirm', `got [${[...rec]}]`);
   Mutations.setEventMembers(todayISO, CONTENT, []);           // cleanup
 } catch (e) { bad('참여 체크인 단일선택', e); }
+
+console.log('\n── 멤버 UI: 본인 셀·입찰은 원자적 API만 사용 ──');
+try {
+  const savedState = JSON.parse(JSON.stringify(DB.state));
+  const originalAtomic = DB.atomicAction;
+  const me = DB.state.members.find((m) => m.active !== false);
+  localStorage.setItem('clandash.v1.role', 'member');
+  localStorage.setItem('clandash.v1.me', me.name);
+  const calls = [];
+  DB.atomicAction = async (kind, payload = {}) => {
+    calls.push({ kind, payload });
+    try { return { ok: true, result: applyAtomicAction(DB.state, kind, payload,
+      { actor: me.name, role: localStorage.getItem('clandash.v1.role') || 'member' }) }; }
+    catch (e) { return { ok: false, error: e.message }; }
+  };
+
+  app.innerHTML = ''; views.gear();
+  const ownEquip = app.querySelector('.equip-status-tbl tr.me-row td.editable');
+  const otherEditable = app.querySelector('.equip-status-tbl tr:not(.me-row) td.editable');
+  ownEquip?.click();
+  const equipSave = [...document.querySelectorAll('.modal-overlay button')].find((b) => b.textContent.trim() === '저장');
+  equipSave?.click(); await new Promise((resolve) => setTimeout(resolve, 0));
+  const ownToggle = app.querySelector('.me-row button.sk-toggle');
+  ownToggle?.click(); await new Promise((resolve) => setTimeout(resolve, 0));
+  if (ownEquip && !otherEditable && calls.some((c) => c.kind === 'equipment.set') && calls.some((c) => c.kind === 'skill.toggle' || c.kind === 'board.toggle')) {
+    ok('멤버 장비/현황: 본인만 편집 + atomicAction 호출');
+  } else bad('member atomic gear UI', JSON.stringify({ ownEquip: !!ownEquip, otherEditable: !!otherEditable, calls }));
+
+  DB.state.sales = [{ id: 'smoke-sale', item: '동시성 테스트', bidType: '선착순', basePrice: 10, deadline: Date.now() + 60000, bids: [] }];
+  app.innerHTML = ''; views.rotation();
+  [...app.querySelectorAll('button')].find((b) => b.textContent.trim() === '+ 입찰')?.click();
+  [...document.querySelectorAll('.modal-overlay button')].find((b) => b.textContent.trim() === '입찰')?.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  if (calls.some((c) => c.kind === 'sale.bid') && DB.state.sales[0]?.bids.some((b) => b.name === me.name)) ok('멤버 입찰: atomicAction으로 본인 입찰 추가');
+  else bad('member atomic bid UI', JSON.stringify(calls));
+
+  localStorage.setItem('clandash.v1.role', 'admin');
+  DB.state.sales = [{ id: 'smoke-cancel', item: '삭제 유지 테스트', bidType: '투력순', basePrice: 10,
+    deadline: Date.now() + 60000, bids: [{ name: '탈퇴한멤버', amount: 0 }] }];
+  app.innerHTML = ''; views.rotation();
+  app.querySelector('button[title="입찰 취소(관리자)"]')?.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const refreshedSales = JSON.parse(JSON.stringify(DB.state.sales));
+  if (calls.some((c) => c.kind === 'sale.cancelBid' && c.payload.memberName === '탈퇴한멤버')
+      && refreshedSales[0]?.bids.length === 0) ok('관리자 입찰 삭제: 서버 확인 후 새로고침 상태에도 유지');
+  else bad('admin atomic bid cancel UI', JSON.stringify({ calls, refreshedSales }));
+  localStorage.setItem('clandash.v1.role', 'member');
+
+  CONFIG.APPS_SCRIPT_URL = 'https://script.google.com/test-remote-guard';
+  DB._snapshot = JSON.parse(JSON.stringify(DB.state));
+  const beforePower = DB.state.members[0].power;
+  DB.state.members[0].power = beforePower + 999;
+  const blockedCommit = DB.commit();
+  if (blockedCommit === false && DB.state.members[0].power === beforePower) ok('멤버 전체 상태 저장 차단 + 로컬 변경 복구');
+  else bad('member full save guard', `commit=${blockedCommit}, power=${DB.state.members[0].power}`);
+
+  DB.atomicAction = originalAtomic;
+  CONFIG.APPS_SCRIPT_URL = '';
+  DB.state = savedState; DB._snapshot = JSON.parse(JSON.stringify(savedState));
+  localStorage.setItem('clandash.v1.role', 'admin');
+} catch (e) {
+  CONFIG.APPS_SCRIPT_URL = '';
+  localStorage.setItem('clandash.v1.role', 'admin');
+  bad('멤버 원자적 UI', e);
+}
+
+console.log('\n── OCR 인식 마커 좌표 연결 ──');
+try {
+  const [a, b, c] = DB.state.members.slice(0, 3);
+  const entries = [
+    { member: a, score: 0.96, token: a.name },
+    { member: b, score: 0.78, token: b.name },
+  ];
+  const markers = recognitionMarkers({
+    matches: [{ member: a, score: 0.91, slot: { x: 1, y: 2, w: 30, h: 10 } }, { member: b, score: 0.82, slot: { x: 40, y: 2, w: 30, h: 10 } }],
+    anchors: [{ member: a, score: 0.95, rect: { x: 5, y: 4, w: 12, h: 6 } }, { member: c, score: 0.99, rect: { x: 80, y: 2, w: 12, h: 6 } }],
+  }, entries);
+  const ma = markers.find((m) => m.member.id === a.id);
+  const mb = markers.find((m) => m.member.id === b.id);
+  if (markers.length === 2 && ma?.rect.x === 5 && mb?.rect.x === 40) ok('마커: 최종 인식자만 표시 + 단어 좌표 우선');
+  else bad('OCR marker mapping', JSON.stringify(markers));
+} catch (e) { bad('OCR marker mapping', e); }
 
 console.log('\n── undo / redo ──');
 try {

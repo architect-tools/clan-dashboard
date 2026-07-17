@@ -7,7 +7,7 @@ import { Roles } from '../roles.js';
 import { computeScores, tierForScore } from '../calc.js';
 import { el, fmt, toast, clear } from '../util.js';
 import { CATEGORY_ORDER } from '../config.js';
-import { loadImage, extractLines, consensusMatch, CHECK_AT } from '../ocr.js';
+import { loadImage, extractLines, consensusMatch, recognitionMarkers, CHECK_AT } from '../ocr.js';
 import { page, card, btn, modal, busyOverlay, tierBadge, classBadge, comboSelect } from './ui.js';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -195,7 +195,9 @@ function checkinPanel(content) {
     ]);
   }
   const current = new Set(Mutations.getEvent(selDate, content)); // memberIds already recorded
-  let curImg = null, crop = null, imgEl = null;
+  let curImg = null, crop = null, imgEl = null, markerLayer = null;
+  let markerHits = [], running = false, disposed = false, runSeq = 0;
+  let dragMove = null, dragUp = null;
   const selectedBadge = el('span.cbadge', { text: '선택 0명' });
 
   const wrap = el('div.checkin');
@@ -224,10 +226,11 @@ function checkinPanel(content) {
 
   async function pick(file) {
     if (!file || !file.type.startsWith('image/')) return;
+    if (running) return toast('현재 인식이 끝난 뒤 스크린샷을 바꿔주세요', 'error');
     try { curImg = await loadImage(file); } catch { return toast('이미지를 열 수 없습니다', 'error'); }
     // reset any prior recognition (so replacing the screenshot always starts clean).
     // selected 도 기존 기록(current) 기준으로 되돌려 이전 인식의 잔여 체크가 누적되지 않게.
-    crop = null; resetRecognitionState();
+    stopDragging(); crop = null; resetRecognitionState();
     drop.style.display = 'none'; buildPreview();
     // apply the remembered region (resolution-independent fractions) — cheap, no
     // OpenCV. Panel auto-detect is OPT-IN via a button: it loads a ~10MB WASM and
@@ -249,7 +252,8 @@ function checkinPanel(content) {
     const dispW = Math.min(620, curImg.naturalWidth);
     imgEl = el('img.ocr-img', { src: curImg.src, style: { width: dispW + 'px' } });
     selBox = el('div.crop-box', { style: { display: 'none' } });
-    const stage = el('div.crop-stage', {}, [imgEl, selBox]);
+    markerLayer = el('div.ocr-marker-layer');
+    const stage = el('div.crop-stage', {}, [imgEl, selBox, markerLayer]);
     previewWrap.appendChild(el('div.ocr-hint', {
       html: DB.state.ocrCrop
         ? '기억된 영역을 적용했습니다. 화면 구성이 다르면 다시 드래그하세요.'
@@ -262,14 +266,15 @@ function checkinPanel(content) {
     previewWrap.ondragover = (e) => { if (!isFileDrag(e)) return; e.preventDefault(); stage.classList.add('replace-over'); };
     previewWrap.ondragleave = () => stage.classList.remove('replace-over');
     previewWrap.ondrop = (e) => { stage.classList.remove('replace-over'); if (e.dataTransfer.files[0]) { e.preventDefault(); pick(e.dataTransfer.files[0]); } };
-    imgEl.onload = drawMemoryBox;
+    imgEl.onload = () => { drawMemoryBox(); renderMarkers(); };
     buildControls();
     // drag on the image to select the name region. Tracked on window (not the
     // stage) so a fast drag that leaves the image keeps selecting smoothly.
     const ptr = (e) => { const r = imgEl.getBoundingClientRect(); return { x: Math.max(0, Math.min(r.width, e.clientX - r.left)), y: Math.max(0, Math.min(r.height, e.clientY - r.top)), r }; };
     stage.onmousedown = (e) => {
-      e.preventDefault(); const s0 = ptr(e); dragging = { x0: s0.x, y0: s0.y };
+      e.preventDefault(); stopDragging(); const s0 = ptr(e); dragging = { x0: s0.x, y0: s0.y };
       const move = (ev) => {
+        if (!dragging) return;
         const p = ptr(ev);
         const x = Math.min(dragging.x0, p.x), y = Math.min(dragging.y0, p.y);
         const w = Math.abs(p.x - dragging.x0), h = Math.abs(p.y - dragging.y0);
@@ -277,10 +282,17 @@ function checkinPanel(content) {
         const sx = curImg.naturalWidth / p.r.width, sy = curImg.naturalHeight / p.r.height;
         if (w > 8 && h > 8) crop = { x: x * sx, y: y * sy, w: w * sx, h: h * sy };
       };
-      const up = () => { dragging = null; window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); buildControls(); setReadyHint(); };
-      window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+      const up = () => { stopDragging(); buildControls(); setReadyHint(); };
+      dragMove = move; dragUp = up;
+      window.addEventListener('mousemove', dragMove); window.addEventListener('mouseup', dragUp);
     };
-    drawMemoryBox();
+    drawMemoryBox(); renderMarkers();
+  }
+  function stopDragging() {
+    dragging = null;
+    if (dragMove) window.removeEventListener('mousemove', dragMove);
+    if (dragUp) window.removeEventListener('mouseup', dragUp);
+    dragMove = null; dragUp = null;
   }
   function drawMemoryBox() { // show the (remembered) crop rect on the preview
     if (!selBox || !imgEl || !crop) return;
@@ -299,7 +311,9 @@ function checkinPanel(content) {
     clear(controls); controls.style.display = 'flex';
     // single recognize button — uses the current region: your drag if you made
     // one, else the remembered/auto-detected area, else the whole image.
-    controls.appendChild(btn('인식', () => runOcr(), { kind: 'primary' }));
+    const recognizeBtn = btn(running ? '인식 중…' : '인식', () => runOcr(), { kind: 'primary' });
+    recognizeBtn.disabled = running;
+    controls.appendChild(recognizeBtn);
     controls.appendChild(el('span.ocr-ctrl-sep'));
     controls.appendChild(btn('다른 스크린샷', () => fileInput.click()));
     // NOTE: OpenCV 패널 자동감지는 제거됨 — 10MB WASM 로딩이 메인스레드를 막아 페이지가
@@ -322,9 +336,30 @@ function checkinPanel(content) {
   let saveBtn = null;
   const toggle = (id, on) => { if (on) selected.add(id); else selected.delete(id); syncChecks(); };
   function resetRecognitionState() {
-    picked.clear(); manual.clear(); clear(ocrResult);
+    picked.clear(); manual.clear(); markerHits = []; clear(ocrResult);
     selected.clear(); current.forEach((id) => selected.add(id));
     syncChecks();
+  }
+  function renderMarkers() {
+    if (!markerLayer || !curImg) return;
+    clear(markerLayer);
+    const iw = curImg.naturalWidth, ih = curImg.naturalHeight;
+    if (!iw || !ih) return;
+    for (const hit of markerHits) {
+      const r = hit.rect;
+      const x = Math.max(0, Math.min(iw, r.x)), y = Math.max(0, Math.min(ih, r.y));
+      const right = Math.max(x, Math.min(iw, r.x + r.w)), bottom = Math.max(y, Math.min(ih, r.y + r.h));
+      const on = selected.has(hit.member.id);
+      const confidence = Math.round(hit.score * 100);
+      markerLayer.appendChild(el('div.ocr-marker', {
+        class: on ? 'on' : 'review',
+        title: `${hit.member.name} · ${confidence}% · ${on ? '기록 선택됨' : '확인 필요'}`,
+        style: {
+          left: `${x / iw * 100}%`, top: `${y / ih * 100}%`,
+          width: `${(right - x) / iw * 100}%`, height: `${(bottom - y) / ih * 100}%`,
+        },
+      }, [el('span.ocr-marker-badge', { text: on ? '✓' : '?' })]));
+    }
   }
   // 두 목록(OCR 결과 · 명단 직접선택)의 모든 체크박스를 selected 기준으로 일치시킴
   function syncChecks() {
@@ -336,26 +371,39 @@ function checkinPanel(content) {
     });
     selectedBadge.textContent = `선택 ${selected.size}명`;
     if (saveBtn) saveBtn.textContent = `참여 기록 (${selected.size}명)`;
+    renderMarkers();
   }
   async function runOcr() {
-    if (!curImg) return;
+    if (!curImg || running) return;
+    const seq = ++runSeq;
+    running = true; buildControls();
     resetRecognitionState();
     const busy = busyOverlay('참여자 인식 중…', 'OCR 엔진 준비 중');
     try {
       const out = await extractLines(curImg, crop, (p) => {
+        if (disposed || seq !== runSeq) return;
         const pct = Math.round(p.progress * 100);
         busy.update(p.stage, `${pct}%`);
         progress.textContent = `${p.stage} (${pct}%)`;
       }, { roster });
+      if (disposed || seq !== runSeq) return;
       const { matched, maybe } = consensusMatch(out.perScale, roster);
       for (const mm of matched) { picked.set(mm.member.id, mm); selected.add(mm.member.id); } // 신뢰 → 자동 선택
       for (const mm of maybe) if (!picked.has(mm.member.id)) picked.set(mm.member.id, mm);      // 확인필요 → 표시만(선택 X)
+      markerHits = recognitionMarkers(out.anchored, picked.values());
       manualPick.open = true; // 동기화된 목록을 바로 펼쳐 보여줌
-      progress.textContent = `인식 완료 — 신뢰 ${matched.length}명(자동 체크) · 확인필요 ${maybe.length}명. 못 찾은 인원은 아래 “명단에서 직접 선택”으로 추가하세요.`;
+      progress.textContent = `인식 완료 — 신뢰 ${matched.length}명(자동 체크) · 확인필요 ${maybe.length}명 · 캡처 표시 ${markerHits.length}명. 표시 없는 인원은 아래 명단에서 추가하세요.`;
       renderResult([]);
       syncChecks(); // 두 목록의 체크를 selected 기준으로 일치
-    } catch (e) { console.error(e); toast('OCR 실패: ' + e.message, 'error'); progress.textContent = ''; }
-    finally { busy.close(); }
+    } catch (e) {
+      console.error(e);
+      if (!disposed && seq === runSeq) { toast('OCR 실패: ' + e.message, 'error'); progress.textContent = ''; }
+    }
+    finally {
+      if (seq === runSeq) running = false;
+      if (!disposed) buildControls();
+      busy.close();
+    }
   }
 
   // manual roster picker (always available, even without screenshot)
@@ -416,9 +464,20 @@ function checkinPanel(content) {
   // paste support while panel open
   const onPaste = (e) => { const it = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/')); if (it) pick(it.getAsFile()); };
   document.addEventListener('paste', onPaste);
+  let detachObserver = null;
+  const cleanup = () => {
+    if (disposed) return;
+    disposed = true; running = false; runSeq++;
+    stopDragging(); markerHits = []; curImg = null;
+    document.removeEventListener('paste', onPaste);
+    detachObserver?.disconnect(); detachObserver = null;
+  };
   setTimeout(() => { // detach when panel leaves DOM
-    const obs = new MutationObserver(() => { if (!document.body.contains(wrap)) { document.removeEventListener('paste', onPaste); obs.disconnect(); } });
-    obs.observe(document.getElementById('app'), { childList: true, subtree: true });
+    // The panel can be replaced before this timer runs (fast consecutive records).
+    // Check first so we do not leave a paste listener + observer behind forever.
+    if (!wrap.isConnected) return cleanup();
+    detachObserver = new MutationObserver(() => { if (!wrap.isConnected) cleanup(); });
+    detachObserver.observe(document.getElementById('app'), { childList: true, subtree: true });
   }, 0);
 
   wrap.append(drop, fileInput, previewWrap, controls, progress, ocrResult, manualPick, actions);

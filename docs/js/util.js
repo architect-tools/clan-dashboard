@@ -110,6 +110,25 @@ function foldYVowels(str) {
   return out;
 }
 
+const NAME_ALIASES = {
+  'v구름v': ['구름', '구름님', '구름v', 'v구름', '구릉', '구릉님'],
+  '샬루키': ['샬루기', '샤루키', '샤루기', '살루키'],
+  '제크로무': ['제크로무님', '제크로므', '제크로므님', '재크로무', '재크로무님'],
+};
+function aliasScore(na, nb) {
+  const aliasesA = NAME_ALIASES[na] || [];
+  const aliasesB = NAME_ALIASES[nb] || [];
+  if (aliasesA.includes(nb) || aliasesB.includes(na)) return 0.98;
+  return 0;
+}
+function stripHonorific(s) {
+  return String(s).replace(/님$/, '');
+}
+function stripDecorativeV(s) {
+  const match = String(s).match(/^v(.+)v$/i);
+  return match ? match[1] : s;
+}
+
 // Tense→plain consonant fold (ㄲ→ㄱ …) — Tesseract routinely confuses these.
 const TENSE = { 'ㄲ': 'ㄱ', 'ㄸ': 'ㄷ', 'ㅃ': 'ㅂ', 'ㅆ': 'ㅅ', 'ㅉ': 'ㅈ' };
 /** Decompose to jamo with tense-fold; optionally drop jongsung (받침),
@@ -159,7 +178,11 @@ function simCore(na, nb) {
 export function similarity(a, b) {
   const na = normName(a), nb = normName(b);
   if (!na || !nb) return 0;
-  let sim = simCore(na, nb);
+  let sim = Math.max(simCore(na, nb), aliasScore(na, nb));
+  const ha = stripHonorific(na), hb = stripHonorific(nb);
+  if (ha !== na || hb !== nb) sim = Math.max(sim, simCore(ha, hb) * 0.99, aliasScore(ha, hb));
+  const va = stripDecorativeV(ha), vb = stripDecorativeV(hb);
+  if (va !== ha || vb !== hb) sim = Math.max(sim, simCore(va, vb) * 0.98, aliasScore(va, vb));
   const fa = fold(na), fb = fold(nb);
   if (fa !== na || fb !== nb) sim = Math.max(sim, simCore(fa, fb) * 0.98); // tiny penalty so exact wins ties
   const ya = foldYVowels(fa), yb = foldYVowels(fb);

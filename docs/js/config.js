@@ -4,18 +4,26 @@
 
 export const CONFIG = {
   appName: '불면증 클랜 관리',
-  version: '1.0.3',
+  version: '2.0.0',
+
+  // ── Realtime backend (Supabase) ────────────────────────────────────────
+  // Publishable key는 브라우저에 공개되어도 되는 키입니다. 실제 권한은 RLS와
+  // dashboard_* 트랜잭션 함수가 검사합니다. 두 값을 채우면 Apps Script 대신
+  // Supabase가 자동으로 우선 사용됩니다.
+  SUPABASE_URL: 'https://yhefbwbflrwktrokvwpi.supabase.co',
+  SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_fArWKcE1vgFLKB9rVuP1EQ_4k44V1DM',
+  CLAN_SLUG: 'insomnia',
 
   // ── Backend (optional) ───────────────────────────────────────────
   // Paste the Apps Script Web App URL here (…/exec). Blank = standalone mode.
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbx6GJnd7PitETPxym-CZv_LIqL5h_MTEZ0mECcRtk6Rwo0p3f1c7xBZrrhUpoywDB9w/exec',
+  APPS_SCRIPT_URL: '',
 
   // Access gate. Change this password. (Obfuscation only — the real write
   // protection is the token checked by the Apps Script backend.)
-  GATE_PASSWORD: '7979',
+  GATE_PASSWORD: '',
   // 관리자 비밀번호 — 7979(멤버)와 다르게. 이 비번으로 입장하면 관리자 권한.
   // (공개 repo라 난독화 수준 — 강제는 클라이언트 UI에서. 원하는 값으로 바꾸세요.)
-  ADMIN_PASSWORD: 'insomnia97',
+  ADMIN_PASSWORD: '',
 
   // localStorage keys
   STORE_KEY: 'clandash.v1.data',

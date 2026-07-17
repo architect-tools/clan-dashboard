@@ -92,7 +92,7 @@
       "ratio": 0.025
     },
     {
-      "name": "권성준",
+      "name": "귄성준",
       "ratio": 0.025
     }
   ],
@@ -230,7 +230,7 @@
     {
       "id": 14,
       "order": 14,
-      "name": "여신민아",
+      "name": "망듕땅",
       "cls": "사냥꾼",
       "power": 92.7,
       "score": 0,
@@ -361,7 +361,7 @@
       "id": 27,
       "order": 27,
       "name": "해지슬",
-      "cls": "마법사",
+      "cls": "사냥꾼",
       "power": 81.3,
       "score": 0,
       "active": true,
@@ -441,7 +441,7 @@
       "id": 35,
       "order": 35,
       "name": "v구름v",
-      "cls": "전투사제",
+      "cls": "마법사",
       "power": 72.2,
       "score": 0,
       "active": true,
@@ -450,7 +450,7 @@
     {
       "id": 36,
       "order": 36,
-      "name": "권성준",
+      "name": "귄성준",
       "cls": "암살자",
       "power": 71.9,
       "score": 0,
