@@ -1,8 +1,9 @@
 {
-  "distributions": 238,
-  "equipMembers": 49,
   "members": 50,
   "participationDays": 32,
+  "distributions": 238,
+  "settlements": 1,
   "qaReports": 0,
-  "settlements": 1
+  "equipMembers": 49,
+  "revision": 5
 }
