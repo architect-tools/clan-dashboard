@@ -28,10 +28,21 @@ const NAV = [
   { path: 'settings', icon: '⚙️', label: '설정', admin: true },
 ];
 
-let undoBtn, redoBtn, refreshBtn;
+let undoBtn, redoBtn, refreshBtn, saveOverlay;
 function updateHistoryButtons() {
   if (undoBtn) undoBtn.disabled = !DB.canUndo();
   if (redoBtn) redoBtn.disabled = !DB.canRedo();
+}
+
+function showSavingOverlay(active, label = '변경사항 저장 중…') {
+  if (active) {
+    const detail = '서버 반영이 끝날 때까지 잠시 기다려 주세요';
+    if (saveOverlay) saveOverlay.update(label, detail);
+    else saveOverlay = busyOverlay(label, detail);
+    return;
+  }
+  if (saveOverlay) saveOverlay.close();
+  saveOverlay = null;
 }
 
 async function manualRefresh() {
@@ -117,7 +128,12 @@ async function main() {
 
   applyUiScale(DB.state.appSettings?.uiScale); // restore saved UI scale
   // onLoading: 백그라운드 새로고침 중 ⟳ 버튼 회전(비차단 표시)
-  DB.setCallbacks({ onHistory: updateHistoryButtons, onRefresh: () => Router.refresh(), onLoading: (active) => { if (refreshBtn) refreshBtn.classList.toggle('spinning', active); } });
+  DB.setCallbacks({
+    onHistory: updateHistoryButtons,
+    onRefresh: () => Router.refresh(),
+    onLoading: (active) => { if (refreshBtn) refreshBtn.classList.toggle('spinning', active); },
+    onSaving: showSavingOverlay,
+  });
 
   Router
     .on('dashboard', renderDashboard)

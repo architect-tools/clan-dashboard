@@ -66,17 +66,41 @@ await DB.init();
 assert.equal(DB.state.members.length, state.members.length);
 assert.ok(revisionHandler, 'realtime revision subscription must be active');
 
+const savingEvents = [];
+DB.setCallbacks({ onSaving: (active, label, count) => savingEvents.push({ active, label, count }) });
+
 localStorage.setItem(CONFIG.ROLE_KEY, 'member');
 const target = DB.state.members[0];
 const changed = await DB.atomicAction('equipment.set', { memberId: target.id, slot: '주무기', value: { star: 5, tier: 4.5, enhance: 7 } });
 assert.equal(changed.ok, true);
 assert.equal(DB.state.members[0].equip['주무기'].enhance, 7);
+assert.equal(savingEvents[0]?.active, true, 'atomic write must show the saving overlay');
+assert.equal(savingEvents.at(-1)?.active, false, 'atomic write must close the saving overlay');
+
+// Consecutive writes share one busy period: finishing the first must not hide the overlay.
+savingEvents.length = 0;
+let releaseFirstWrite;
+const firstQueuedWrite = DB._queueWrite(() => new Promise((resolve) => { releaseFirstWrite = resolve; }));
+let releaseSecondWrite;
+const secondQueuedWrite = DB._queueWrite(() => new Promise((resolve) => { releaseSecondWrite = resolve; }));
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.equal(savingEvents.at(-1)?.count, 2, 'queued writes must be counted together');
+releaseFirstWrite(true);
+await firstQueuedWrite;
+assert.equal(savingEvents.at(-1)?.active, true, 'overlay must remain while the next write is queued');
+await new Promise((resolve) => setTimeout(resolve, 0));
+releaseSecondWrite(true);
+await secondQueuedWrite;
+assert.equal(savingEvents.at(-1)?.active, false, 'overlay must close after the final queued write');
 
 localStorage.setItem(CONFIG.ROLE_KEY, 'admin');
+savingEvents.length = 0;
 DB.state.meta.clanName = '실시간 테스트';
 DB.commit();
 assert.equal(await DB.flushSave(), true);
 assert.equal(state.meta.clanName, '실시간 테스트');
+assert.equal(savingEvents[0]?.active, true, 'admin save must show the saving overlay');
+assert.equal(savingEvents.at(-1)?.active, false, 'admin save must close the saving overlay');
 
 state.settings ||= {};
 state.settings.totalDiamonds = 987654;

@@ -59,6 +59,8 @@ export const DB = {
   _saveSeq: 0,
   _writeTail: Promise.resolve(), // 모든 POST 쓰기를 한 탭 안에서도 순서대로 전송
   _pendingAtomic: 0,
+  _savingTasks: new Map(),
+  _savingSeq: 0,
   _backendProfile: null,
   _realtimeTimer: null,
   _maxHistory: 80,
@@ -67,10 +69,28 @@ export const DB = {
 
   subscribe(fn) { this._subs.add(fn); return () => this._subs.delete(fn); },
   _emit() { for (const fn of this._subs) try { fn(this.state); } catch (e) { console.error(e); } },
-  setCallbacks({ onHistory, onRefresh, onLoading }) { this._onHistory = onHistory; this._onRefresh = onRefresh; this._onLoading = onLoading; },
+  setCallbacks({ onHistory, onRefresh, onLoading, onSaving }) {
+    this._onHistory = onHistory;
+    this._onRefresh = onRefresh;
+    this._onLoading = onLoading;
+    this._onSaving = onSaving;
+  },
   _setLoading(on) {   // 진행 중 네트워크 새로고침 카운터 → UI 로딩 표시(⟳ 버튼 회전 등)
     this._loadingN = Math.max(0, (this._loadingN || 0) + (on ? 1 : -1));
     this._onLoading && this._onLoading(this._loadingN > 0);
+  },
+
+  _beginSaving(label = '변경사항 저장 중…') {
+    const token = ++this._savingSeq;
+    this._savingTasks.set(token, label);
+    this._onSaving && this._onSaving(true, label, this._savingTasks.size);
+    return token;
+  },
+
+  _endSaving(token) {
+    this._savingTasks.delete(token);
+    const labels = [...this._savingTasks.values()];
+    this._onSaving && this._onSaving(labels.length > 0, labels.at(-1) || '', labels.length);
   },
 
   async init() {
@@ -153,8 +173,10 @@ export const DB = {
     return await this.flushSave();
   },
 
-  _queueWrite(task) {
-    const run = this._writeTail.catch(() => {}).then(task);
+  _queueWrite(task, label = '변경사항 저장 중…') {
+    const savingToken = this._beginSaving(label);
+    const run = this._writeTail.catch(() => {}).then(task)
+      .finally(() => this._endSaving(savingToken));
     this._writeTail = run;
     return run;
   },
@@ -188,7 +210,7 @@ export const DB = {
           this._persistLocal();
         }
         return true;
-      }).then(() => {
+      }, '변경사항 저장 중…').then(() => {
         if (seq === this._saveSeq) { this._pendingSave = false; this._saveError = false; }
         return true;
       }).catch((e) => {
@@ -284,11 +306,14 @@ export const DB = {
       return rec;
     }
     if (SUPABASE_LIVE()) {
-      const data = await SupabaseBackend.mutate('qa.add', { report }, `qa:${Date.now()}:${uid()}`);
+      const data = await this._queueWrite(
+        () => SupabaseBackend.mutate('qa.add', { report }, `qa:${Date.now()}:${uid()}`),
+        'QA 리포트 저장 중…',
+      );
       if (data?.state) this._mergeAtomicState(data.state);
       return data?.result || report;
     }
-    const rec = await this._fetch('qaAdd', { report });
+    const rec = await this._queueWrite(() => this._fetch('qaAdd', { report }), 'QA 리포트 저장 중…');
     return this._applyQaReport(rec);
   },
 
@@ -299,11 +324,14 @@ export const DB = {
       return rec;
     }
     if (SUPABASE_LIVE()) {
-      const data = await SupabaseBackend.mutate('qa.update', { idOrSlot, patch }, `qa:${Date.now()}:${uid()}`);
+      const data = await this._queueWrite(
+        () => SupabaseBackend.mutate('qa.update', { idOrSlot, patch }, `qa:${Date.now()}:${uid()}`),
+        'QA 리포트 저장 중…',
+      );
       if (data?.state) this._mergeAtomicState(data.state);
       return data?.result;
     }
-    const rec = await this._fetch('qaUpdate', { idOrSlot, patch });
+    const rec = await this._queueWrite(() => this._fetch('qaUpdate', { idOrSlot, patch }), 'QA 리포트 저장 중…');
     return this._applyQaReport(rec);
   },
 
@@ -314,11 +342,14 @@ export const DB = {
       return true;
     }
     if (SUPABASE_LIVE()) {
-      const data = await SupabaseBackend.mutate('qa.delete', { idOrSlot }, `qa:${Date.now()}:${uid()}`);
+      const data = await this._queueWrite(
+        () => SupabaseBackend.mutate('qa.delete', { idOrSlot }, `qa:${Date.now()}:${uid()}`),
+        'QA 리포트 삭제 중…',
+      );
       if (data?.state) this._mergeAtomicState(data.state);
       return true;
     }
-    await this._fetch('qaDelete', { idOrSlot });
+    await this._queueWrite(() => this._fetch('qaDelete', { idOrSlot }), 'QA 리포트 삭제 중…');
     this.state.qaReports = (this.state.qaReports || []).filter((r) => r.id !== idOrSlot && r.slot !== idOrSlot);
     this._snapshot = clone(this.state);
     this._persistLocal();
@@ -374,7 +405,7 @@ export const DB = {
       }
       const data = await this._queueWrite(() => SUPABASE_LIVE()
         ? SupabaseBackend.mutate(kind, payload, mutationId)
-        : this._fetch('mutate', { actor, role, kind, payload, mutationId }));
+        : this._fetch('mutate', { actor, role, kind, payload, mutationId }), '변경사항 저장 중…');
       if (data?.state) this._mergeAtomicState(data.state);
       return { ok: true, result: data?.result, duplicate: !!data?.duplicate };
     };
