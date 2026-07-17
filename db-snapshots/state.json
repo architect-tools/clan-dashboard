@@ -1,83 +1,14 @@
 {
   "meta": {
     "clanName": "불면증",
-    "revision": 5,
+    "revision": 16,
     "rosterSource": "활동 클랜 50명 (게임 내 닉네임)",
-    "adminRevision": 1,
+    "adminRevision": 5,
     "generatedFrom": "Google Sheets CSV export",
     "generatedNote": "node scripts/build-seed.mjs",
     "schemaVersion": 1
   },
-  "sales": [
-    {
-      "id": "idttud5eaq",
-      "bids": [
-        {
-          "name": "까치",
-          "amount": 0
-        }
-      ],
-      "item": "2티 혜성 목걸이",
-      "bidType": "투력순",
-      "deadline": 1784205360000,
-      "basePrice": 10
-    },
-    {
-      "id": "idtvwg3xm9",
-      "bids": [
-        {
-          "name": "권성준",
-          "amount": 0
-        },
-        {
-          "name": "까치",
-          "amount": 0
-        }
-      ],
-      "item": "3티 악몽 성문석",
-      "bidType": "투력순",
-      "deadline": 1784205360000,
-      "basePrice": 10
-    },
-    {
-      "id": "idty07p2gv",
-      "bids": [
-        {
-          "name": "KDA",
-          "amount": 0
-        },
-        {
-          "name": "권성준",
-          "amount": 0
-        },
-        {
-          "name": "까치",
-          "amount": 0
-        },
-        {
-          "name": "보스",
-          "amount": 0
-        }
-      ],
-      "item": "3티 만월 반지",
-      "bidType": "투력순",
-      "deadline": 1784205240000,
-      "basePrice": 10
-    },
-    {
-      "id": "__LIVE_QA_20260708005154__-sale",
-      "bids": [
-        {
-          "name": "__LIVE_QA_20260708005154__",
-          "amount": 1
-        }
-      ],
-      "item": "__LIVE_QA_20260708005154__",
-      "bidType": "경매",
-      "deadline": 1783475522301,
-      "basePrice": 1
-    }
-  ],
+  "sales": [],
   "staff": [
     {
       "name": "끝판왕랑사부",
@@ -120,15 +51,7 @@
       "minScore": 0
     }
   ],
-  "dropLog": [
-    {
-      "id": "__LIVE_QA_20260708005154__-drop",
-      "date": "2099-12-31",
-      "item": "__LIVE_QA_20260708005154__",
-      "note": "__LIVE_QA_20260708005154__",
-      "content": "__LIVE_QA_20260708005154__"
-    }
-  ],
+  "dropLog": [],
   "members": [
     {
       "id": 1,
@@ -9758,14 +9681,6 @@
         },
         {
           "name": "Babyee"
-        }
-      ]
-    },
-    {
-      "name": "__LIVE_QA_20260708005154__",
-      "items": [
-        {
-          "name": "__LIVE_QA_20260708005154__"
         }
       ]
     }
