@@ -1,14 +1,6 @@
-name: Apps Script deploy
+name: Legacy Apps Script deploy
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps-script/**'
-      - 'docs/js/config.js'
-      - 'docs/js/db.js'
-      - 'scripts/live-dashboard-qa.mjs'
-      - '.github/workflows/apps-script-deploy.yml'
   workflow_dispatch:
     inputs:
       run_live_qa:
