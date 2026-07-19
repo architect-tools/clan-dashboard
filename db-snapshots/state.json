@@ -1,7 +1,7 @@
 {
   "meta": {
     "clanName": "불면증",
-    "revision": 18,
+    "revision": 22,
     "rosterSource": "활동 클랜 50명 (게임 내 닉네임)",
     "adminRevision": 5,
     "generatedFrom": "Google Sheets CSV export",
@@ -275,6 +275,9 @@
           "tier": 5.5,
           "enhance": 8
         },
+        "무한": {
+          "tier": 9
+        },
         "반지": {
           "star": 4,
           "tier": 4.5,
@@ -284,6 +287,9 @@
           "star": 4,
           "tier": 5.5,
           "enhance": 8
+        },
+        "복종": {
+          "tier": 13
         },
         "상의": {
           "star": 4,
@@ -295,10 +301,16 @@
           "tier": 5.5,
           "enhance": 9
         },
+        "심연": {
+          "tier": 10
+        },
         "장갑": {
           "star": 4,
           "tier": 4.5,
           "enhance": 8
+        },
+        "충성": {
+          "tier": 12
         },
         "투구": {
           "star": 4,
