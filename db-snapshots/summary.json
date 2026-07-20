@@ -1,9 +1,9 @@
 {
   "members": 50,
-  "participationDays": 34,
+  "participationDays": 35,
   "distributions": 238,
   "settlements": 1,
-  "qaReports": 0,
+  "qaReports": 4,
   "equipMembers": 49,
-  "revision": 38
+  "revision": 64
 }
