@@ -30,6 +30,13 @@ const QA_AUTOMATION = {
   completed: { label: '자동 처리 완료', cls: 'completed' },
   failed: { label: '자동 처리 실패', cls: 'failed' },
 };
+const QA_BACKLOG_FILTERS = [
+  { value: 'all', label: '전체', matches: () => true },
+  { value: 'open', label: '대기', matches: (r) => r.status === 'open' },
+  { value: 'in_progress', label: '처리중', matches: (r) => r.status === 'in_progress' },
+  { value: 'blocked', label: '보류', matches: (r) => r.status === 'blocked' },
+  { value: 'completed', label: '완료', matches: (r) => ['resolved', 'closed'].includes(r.status) },
+];
 const QA_AREAS = ['대시보드', '클랜원', '참여 기록', '다이아 정산', '전리품', '장비/캐릭터 현황', '분배 파라미터', '설정', 'DB/동기화', '기타'];
 const ROUTE_AREA = {
   dashboard: '대시보드',
@@ -53,7 +60,7 @@ export function renderDashboard() {
     subtitle: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }),
     actions: [
       el('span.mode-pill', { class: live ? 'live' : 'local', text: realtime ? '실시간 DB' : live ? '시트 동기화' : '로컬 저장' }),
-      Roles.isAdmin() ? btn('요청 히스토리', () => openQaHistory(), { kind: 'ghost', admin: true }) : null,
+      Roles.isAdmin() ? btn('백로그 히스토리', () => openQaBacklog(), { kind: 'ghost', admin: true }) : null,
       Roles.isAdmin() ? btn('콘텐츠 점수표', () => location.hash = '#/dist-params', { kind: 'ghost', admin: true }) : null,
       Roles.isAdmin() ? btn('직업 수정', () => openClassEditor(), { kind: 'ghost', admin: true }) : null,
     ],
@@ -153,19 +160,21 @@ function formatQaDate(value) {
 
 function qaSummaryCard() {
   const reports = qaReports();
-  const pending = reports.filter((r) => ['open', 'blocked'].includes(r.status)).length;
+  const pending = reports.filter((r) => r.status === 'open').length;
   const running = reports.filter((r) => r.status === 'in_progress').length;
+  const blocked = reports.filter((r) => r.status === 'blocked').length;
   const resolved = reports.filter((r) => r.status === 'resolved' || r.status === 'closed').length;
   const latest = reports.slice(0, 4);
-  return card('요청 자동 처리', el('div.qa-summary', {}, [
+  return card('요청 백로그', el('div.qa-summary', {}, [
     el('div.qa-metrics', {}, [
       qaMetric('대기', pending),
       qaMetric('처리중', running),
+      qaMetric('보류', blocked),
       qaMetric('완료', resolved),
       qaMetric('전체', reports.length),
     ]),
     latest.length
-      ? el('div.qa-mini-list', {}, latest.map((r) => el('button.qa-mini', { type: 'button', onclick: () => openQaHistory(r.id) }, [
+      ? el('div.qa-mini-list', {}, latest.map((r) => el('button.qa-mini', { type: 'button', onclick: () => openQaBacklog(r.id) }, [
         el('span.qa-mini-main', {}, [el('b', { text: r.slot }), qaTypeBadge(r), qaStatusBadge(r)]),
         el('span.qa-mini-title', { text: r.title || '(제목 없음)' }),
       ])))
@@ -174,7 +183,7 @@ function qaSummaryCard() {
     actions: [
       btn('버그 리포트', () => openBugReportForm(), { kind: 'ghost', admin: true }),
       btn('건의/개선', () => openImprovementForm(), { kind: 'ghost', admin: true }),
-      btn('내역', () => openQaHistory(), { kind: 'primary', admin: true }),
+      btn('전체 히스토리', () => openQaBacklog(), { kind: 'primary', admin: true }),
     ],
   });
 }
@@ -275,21 +284,35 @@ function openRequestForm(type) {
   ]), { wide: true });
 }
 
-function openQaHistory(initialId) {
+export function openQaBacklog(initialId) {
   let selectedId = initialId || qaReports()[0]?.id || '';
+  let selectedFilter = 'all';
   const host = el('div.qa-history');
   const render = () => {
     const reports = qaReports();
-    if (!selectedId || !reports.some((r) => r.id === selectedId)) selectedId = reports[0]?.id || '';
-    const selected = reports.find((r) => r.id === selectedId);
+    const filter = QA_BACKLOG_FILTERS.find((item) => item.value === selectedFilter) || QA_BACKLOG_FILTERS[0];
+    const visibleReports = reports.filter(filter.matches);
+    if (!selectedId || !visibleReports.some((r) => r.id === selectedId)) selectedId = visibleReports[0]?.id || '';
+    const selected = visibleReports.find((r) => r.id === selectedId);
     clear(host);
-    host.appendChild(el('div.qa-history-layout', {}, [
-      reports.length ? el('div.qa-slot-list', {}, reports.map((r) => qaSlotButton(r, r.id === selectedId, () => { selectedId = r.id; render(); })))
-        : el('div.empty.small', { text: '접수된 요청이 없습니다.' }),
-      selected ? qaDetail(selected, render) : el('div.qa-detail.empty-detail', { text: '선택된 리포트가 없습니다.' }),
-    ]));
+    host.append(
+      el('div.qa-backlog-toolbar', { role: 'group', 'aria-label': '백로그 상태 필터' }, QA_BACKLOG_FILTERS.map((item) =>
+        el('button.qa-backlog-filter', {
+          type: 'button',
+          class: item.value === selectedFilter ? 'active' : '',
+          dataset: { filter: item.value },
+          'aria-pressed': String(item.value === selectedFilter),
+          onclick: () => { selectedFilter = item.value; render(); },
+        }, [item.label, el('span.qa-backlog-count', { text: reports.filter(item.matches).length })]))),
+      el('div.qa-history-layout', {}, [
+        visibleReports.length
+          ? el('div.qa-slot-list', {}, visibleReports.map((r) => qaSlotButton(r, r.id === selectedId, () => { selectedId = r.id; render(); })))
+          : el('div.empty.small', { text: reports.length ? '해당 상태의 요청이 없습니다.' : '접수된 요청이 없습니다.' }),
+        selected ? qaDetail(selected, render) : el('div.qa-detail.empty-detail', { text: '선택된 백로그가 없습니다.' }),
+      ]),
+    );
   };
-  modal('요청 처리 히스토리', () => host, {
+  modal('요청 백로그 히스토리', () => host, {
     wide: 'x',
     headerActions: (close) => [
       btn('버그 리포트', () => { close(); openBugReportForm(); }, { kind: 'ghost', admin: true }),

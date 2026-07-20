@@ -110,6 +110,26 @@ try {
   if (request.type === 'improvement' && request.automationStatus === 'queued' && request.status === 'open') {
     ok('요청 유형·자동 처리 상태 저장');
   } else bad('request normalization', JSON.stringify(request));
+
+  const completed = Mutations.addQaReport({
+    type: 'bug',
+    title: '백로그 완료 항목',
+    automationStatus: 'completed',
+  });
+  Mutations.updateQaReport(completed.id, { status: 'resolved', reply: '검증 완료' });
+  dashboardModule.openQaBacklog(request.id);
+  modal = document.querySelector('.modal-overlay');
+  const filters = [...(modal?.querySelectorAll('.qa-backlog-filter') || [])];
+  const selectedSlot = modal?.querySelector('.qa-slot.active b')?.textContent;
+  const completedFilter = filters.find((button) => button.dataset.filter === 'completed');
+  completedFilter?.click();
+  const completedDetail = modal?.querySelector('.qa-detail')?.textContent || '';
+  if (modal?.textContent.includes('요청 백로그 히스토리') && filters.length === 5
+      && selectedSlot === request.slot && completedDetail.includes('백로그 완료 항목') && completedDetail.includes('해결')) {
+    ok('백로그 상태 필터·슬롯 상세 모달');
+  } else bad('backlog history modal', modal?.textContent || 'missing modal');
+  modal?.remove();
+  Mutations.removeQaReport(completed.id);
   Mutations.removeQaReport(request.id);
 } catch (e) { bad('request intake forms', e); }
 

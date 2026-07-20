@@ -8,7 +8,7 @@ import { Locks } from './locks.js';
 import { Router } from './router.js';
 import { el, $, toast, applyUiScale } from './util.js';
 import { busyOverlay, btn } from './views/ui.js';
-import { renderDashboard, openBugReportForm, openImprovementForm } from './views/dashboard.js';
+import { renderDashboard, openBugReportForm, openImprovementForm, openQaBacklog } from './views/dashboard.js';
 import { renderMembers } from './views/members.js';
 import { renderParticipation } from './views/participation.js';
 import { renderDiamond } from './views/diamond.js';
@@ -92,6 +92,8 @@ function buildShell() {
   qaReportBtn.classList.add('topbar-qa-btn');
   const improvementBtn = btn('건의/개선사항', () => openImprovementForm(), { kind: 'ghost', admin: true });
   improvementBtn.classList.add('topbar-qa-btn');
+  const backlogBtn = btn('백로그', () => openQaBacklog(), { kind: 'ghost', admin: true });
+  backlogBtn.classList.add('topbar-qa-btn');
   const lockBanner = el('div.lock-banner', { style: { display: 'none' } });
   Locks.setBanner(lockBanner);
   const main = el('main.main', {}, [lockBanner, el('div#app')]);
@@ -99,7 +101,7 @@ function buildShell() {
     el('button.menu-btn', { text: '☰', onclick: () => document.body.classList.toggle('nav-open') }),
     el('span.topbar-title', { text: CONFIG.appName }),
     el('span.role-badge', { class: Roles.isAdmin() ? 'admin' : 'member', text: (Roles.isAdmin() ? '관리자' : '멤버') + ' · ' + (Roles.me() || '?') }),
-    el('div.topbar-tools', {}, [undoBtn, redoBtn, improvementBtn, qaReportBtn]),
+    el('div.topbar-tools', {}, [undoBtn, redoBtn, backlogBtn, improvementBtn, qaReportBtn]),
   ]);
   root.appendChild(el('div.layout', {}, [nav, el('div.main-wrap', {}, [topbar, main])]));
   nav.addEventListener('click', (e) => { if (e.target.closest('.nav-link')) document.body.classList.remove('nav-open'); });
