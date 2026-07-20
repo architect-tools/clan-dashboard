@@ -485,7 +485,12 @@ async function mustRun(command, commandArgs, options = {}) {
 
 function run(command, commandArgs, { cwd = ROOT, env = process.env, timeoutMs = 5 * 60_000 } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, commandArgs, {
+    const windowsBatch = process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command);
+    const spawnCommand = windowsBatch ? (process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe') : command;
+    const spawnArgs = windowsBatch
+      ? ['/d', '/s', '/c', command, ...commandArgs]
+      : commandArgs;
+    const child = spawn(spawnCommand, spawnArgs, {
       cwd, env, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
