@@ -20,5 +20,5 @@ if ($task) {
 $log = Join-Path $root '.qa-worker\worker.log'
 if (Test-Path -LiteralPath $log) {
   Write-Output 'Recent worker log:'
-  Get-Content -LiteralPath $log -Tail 20
+  Get-Content -LiteralPath $log -Encoding UTF8 -Tail 20
 }
