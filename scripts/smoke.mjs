@@ -68,6 +68,21 @@ for (const [name, fn] of Object.entries(views)) {
   } catch (e) { bad(name, e); }
 }
 
+console.log('\n── 참여 기록 콘텐츠 정렬 ──');
+try {
+  const arcanon = DB.state.contentCatalog.find((c) => c.category === '거인의 탑' && c.name === '아르카논');
+  if (!arcanon) DB.state.contentCatalog.push({ category: '거인의 탑', name: '아르카논', points: 0, weekly: 0, active: true });
+  app.innerHTML = '';
+  views.participation();
+  const towerRow = [...app.querySelectorAll('.content-cat')]
+    .find((row) => row.querySelector('.content-cat-label')?.textContent === '거인의 탑');
+  const towerButtons = [...(towerRow?.querySelectorAll('.content-btn') || [])].map((button) => button.textContent.trim());
+  const expected = ['기슈칼', '할파시암', '드루가무', '아르카논'];
+  if (expected.every((name, index) => towerButtons[index] === name)) ok(`거인의 탑 버튼 순서: ${expected.join(' → ')}`);
+  else bad('거인의 탑 버튼 순서', `got [${towerButtons.join(', ')}]`);
+  if (!arcanon) DB.state.contentCatalog = DB.state.contentCatalog.filter((c) => !(c.category === '거인의 탑' && c.name === '아르카논'));
+} catch (e) { bad('참여 기록 콘텐츠 정렬', e); }
+
 
 console.log('\n── request intake forms ──');
 try {

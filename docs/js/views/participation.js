@@ -15,6 +15,8 @@ let selDate = todayISO();
 let selContent = null;
 let viewMonth = null; // {y, m} 0-based month
 
+const GIANTS_TOWER_ORDER = ['기슈칼', '할파시암', '드루가무', '아르카논'];
+
 function categoryRank(cat) {
   const i = CATEGORY_ORDER.indexOf(cat);
   return i >= 0 ? i : 99;
@@ -37,6 +39,15 @@ function contentCompare(a, b) {
   const ga = groupNumber(nameA);
   const gb = groupNumber(nameB);
   if (catA === '필드 보스' && ga != null && gb != null && ga !== gb) return ga - gb;
+  if (catA === '거인의 탑' && catB === catA) {
+    const towerA = GIANTS_TOWER_ORDER.indexOf(nameA);
+    const towerB = GIANTS_TOWER_ORDER.indexOf(nameB);
+    if (towerA !== towerB) {
+      if (towerA < 0) return 1;
+      if (towerB < 0) return -1;
+      return towerA - towerB;
+    }
+  }
   return nameA.localeCompare(nameB, 'ko', { numeric: true });
 }
 
