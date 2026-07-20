@@ -142,6 +142,12 @@ body[data-role="member"] .admin-only{display:none !important}
 
 /* ── toolbar / fields ────────────────────────────────────────────── */
 .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.member-password-toolbar{justify-content:space-between}
+.member-password-toolbar .input{min-width:220px}
+.member-password-value{display:inline-block;min-width:96px;padding:6px 10px;border:1px solid var(--line2);border-radius:8px;background:var(--bg2);color:var(--primary);font-family:var(--mono);font-size:16px;font-weight:700;letter-spacing:2px;text-align:center}
+.member-password-status{display:inline-flex;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700}
+.member-password-status.active{background:color-mix(in srgb,var(--good) 14%,transparent);color:var(--good)}
+.member-password-status.inactive{background:var(--bg2);color:var(--muted)}
 .input,select.input{padding:9px 12px;border-radius:8px;border:1px solid var(--line2);
   background:var(--bg2);color:var(--txt);font-size:13.5px;font-family:inherit;outline:none;min-width:60px}
 .input:focus{border-color:var(--primary)}

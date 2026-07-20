@@ -65,6 +65,24 @@ export const SupabaseBackend = {
     return unwrap(await c.rpc('dashboard_profile')) || null;
   },
 
+  async memberPasswords() {
+    await this.ensureAnonymousSession();
+    const rows = unwrap(await client.rpc('dashboard_member_passwords')) || [];
+    return rows.map((row) => ({
+      memberId: Number(row.member_id),
+      name: row.name,
+      password: row.password,
+      active: row.active !== false,
+    }));
+  },
+
+  async resetMemberPassword(memberId) {
+    await this.ensureAnonymousSession();
+    return unwrap(await client.rpc('dashboard_reset_member_password', {
+      p_member_id: Number(memberId),
+    }));
+  },
+
   async state() {
     await this.ensureAnonymousSession();
     return unwrap(await client.rpc('dashboard_state'));

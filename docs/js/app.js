@@ -16,6 +16,7 @@ import { renderRotation } from './views/rotation.js';
 import { renderGear } from './views/gear.js';
 import { renderSettings } from './views/settings.js';
 import { renderDistParams } from './views/distParams.js';
+import { renderMemberPasswords } from './views/memberPasswords.js';
 
 const NAV = [
   { path: 'dashboard', icon: '🏠', label: '대시보드' },
@@ -24,6 +25,7 @@ const NAV = [
   { path: 'diamond', icon: '💎', label: '다이아 정산' },
   { path: 'rotation', icon: '🎁', label: '전리품' },
   { path: 'gear', icon: '🛡️', label: '장비/캐릭터 현황' },
+  { path: 'member-passwords', icon: '🔑', label: '멤버 비밀번호', admin: true },
   { path: 'dist-params', icon: '🧮', label: '분배 파라미터', admin: true },
   { path: 'settings', icon: '⚙️', label: '설정', admin: true },
 ];
@@ -146,6 +148,7 @@ async function main() {
     .on('diamond', renderDiamond)
     .on('rotation', renderRotation)
     .on('gear', renderGear)
+    .on('member-passwords', renderMemberPasswords)
     .on('settings', renderSettings)
     .on('dist-params', renderDistParams)
     .start('dashboard');

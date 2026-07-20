@@ -1,7 +1,7 @@
-// auth.js — shared-password gate with identity (nickname) + role.
+// auth.js — per-member password gate with identity (nickname) + role.
 //   • 닉네임 드롭다운에서 본인 선택 → 입찰 귀속/자기 것만 취소에 사용.
-//   • 비밀번호: 7979 = 멤버, 관리자 비번 = 관리자. 멤버 변경은 서버의 원자적
-//     닉네임 범위 mutation 으로 저장되어 다른 멤버의 동시 편집과 병합된다.
+//   • 멤버는 본인에게 발급된 6자리 비밀번호, 관리자는 관리자 비밀번호를 사용한다.
+//     멤버 변경은 서버의 원자적 닉네임 범위 mutation 으로 저장된다.
 import { CONFIG } from './config.js';
 import { SupabaseBackend } from './supabase-backend.js';
 import { el } from './util.js';
@@ -62,7 +62,7 @@ export const Auth = {
       const who = names.length
         ? comboSelect(names, '', { class: 'gate-input gate-who', placeholder: '닉네임 검색…' })
         : el('input.gate-input.gate-who', { placeholder: '내 닉네임', autocomplete: 'off' });
-      const input = el('input.gate-input', { type: 'password', placeholder: '비밀번호', autocomplete: 'off' });
+      const input = el('input.gate-input', { type: 'password', placeholder: '개인 6자리 또는 관리자 비밀번호', autocomplete: 'off' });
       const err = el('div.gate-err');
       const submit = async () => {
         const me = (who.value || '').trim();
@@ -98,7 +98,7 @@ export const Auth = {
           el('p.gate-sub', { text: '닉네임을 선택하고 비밀번호를 입력하세요' }),
           who, input, err,
           el('button.btn.btn-primary.gate-btn', { text: '입장', onclick: submit }),
-          el('p.gate-foot', { text: '관리자는 관리자 비밀번호로 입장하세요.' }),
+          el('p.gate-foot', { text: '멤버는 본인에게 발급된 6자리 비밀번호를 입력하세요. 관리자는 관리자 비밀번호를 사용합니다.' }),
         ]),
       ]);
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });

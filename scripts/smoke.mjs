@@ -55,19 +55,43 @@ const views = {
   gear: (await import('../docs/js/views/gear.js')).renderGear,
   settings: (await import('../docs/js/views/settings.js')).renderSettings,
   distParams: (await import('../docs/js/views/distParams.js')).renderDistParams,
+  memberPasswords: (await import('../docs/js/views/memberPasswords.js')).renderMemberPasswords,
 };
 
 console.log('\n── render each view ──');
 for (const [name, fn] of Object.entries(views)) {
   try {
     app.innerHTML = '';
-    fn();
+    await fn();
     const html = app.innerHTML;
     if (app.childElementCount > 0 && html.length > 50) ok(`${name} rendered (${html.length} chars)`);
     else bad(name, 'empty output');
   } catch (e) { bad(name, e); }
 }
 
+console.log('\n── admin member password page ──');
+try {
+  const { SupabaseBackend } = await import('../docs/js/supabase-backend.js');
+  const previousUrl = CONFIG.SUPABASE_URL;
+  const previousKey = CONFIG.SUPABASE_PUBLISHABLE_KEY;
+  const previousList = SupabaseBackend.memberPasswords;
+  CONFIG.SUPABASE_URL = 'https://example.supabase.co';
+  CONFIG.SUPABASE_PUBLISHABLE_KEY = 'test-key';
+  SupabaseBackend.memberPasswords = async () => [
+    { memberId: 1, name: '테스트멤버', password: '123456', active: true },
+    { memberId: 2, name: '휴면멤버', password: '654321', active: false },
+  ];
+  app.innerHTML = '';
+  await views.memberPasswords();
+  const passwordText = app.textContent;
+  if (passwordText.includes('테스트멤버') && passwordText.includes('123456')
+      && passwordText.includes('활동 멤버 전체 복사') && passwordText.includes('재발급')) {
+    ok('관리자 목록·복사·재발급 UI');
+  } else bad('admin member password page', passwordText);
+  SupabaseBackend.memberPasswords = previousList;
+  CONFIG.SUPABASE_URL = previousUrl;
+  CONFIG.SUPABASE_PUBLISHABLE_KEY = previousKey;
+} catch (e) { bad('admin member password page', e); }
 console.log('\n── 참여 기록 콘텐츠 정렬 ──');
 try {
   const arcanon = DB.state.contentCatalog.find((c) => c.category === '거인의 탑' && c.name === '아르카논');
@@ -136,7 +160,7 @@ try {
 console.log('\n── render each view (member role) ──');
 localStorage.setItem('clandash.v1.role', 'member');
 for (const [name, fn] of Object.entries(views)) {
-  try { app.innerHTML = ''; fn(); ok(`${name} (member) rendered`); }
+  try { app.innerHTML = ''; await fn(); ok(`${name} (member) rendered`); }
   catch (e) { bad(name + ' (member)', e); }
 }
 localStorage.setItem('clandash.v1.role', 'admin');

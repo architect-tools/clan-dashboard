@@ -1,7 +1,6 @@
 // roles.js — client-side role + identity (UI gating only).
-// 입장 시 닉네임(ME)과 역할(ROLE)을 저장한다. 멤버 쓰기는 백엔드의 원자적 mutate
-// 엔드포인트가 닉네임 범위(본인 장비/스킬/보드 셀/입찰)를 검사한다. 공유 비밀번호
-// 방식이므로 신원 자체는 보안 인증이 아니라 클랜 내부 식별자다.
+// 입장 시 닉네임(ME)과 역할(ROLE)을 저장한다. 멤버별 비밀번호는 서버에서 검증하고,
+// 멤버 쓰기는 백엔드의 원자적 mutate 엔드포인트가 본인 범위만 허용한다.
 import { CONFIG } from './config.js';
 
 export const Roles = {

@@ -27,6 +27,7 @@ try {
   await db.exec(migration);
   await db.exec(await readFile(new URL('../supabase/migrations/002_opaque_secret_keys.sql', import.meta.url), 'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/003_request_automation.sql', import.meta.url), 'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/004_member_passwords.sql', import.meta.url), 'utf8'));
 
   const seed = JSON.parse(await readFile(new URL('../docs/data/seed.json', import.meta.url), 'utf8'));
   await db.query(`select set_config('request.jwt.claim.role','service_role',false)`);
@@ -41,7 +42,22 @@ try {
   await db.query('insert into auth.users(id) values($1)', [userId]);
   await db.query(`select set_config('request.jwt.claim.sub',$1,false)`, [userId]);
   const memberName = seed.members.find((m) => m.active !== false)?.name;
-  const claim = await db.query(`select public.dashboard_claim($1,$2,$3) as result`, ['insomnia', memberName, '7979']);
+  const issued = await db.query(
+    `select mp.password_plain as password
+     from public.member_passwords mp
+     join public.members m using(clan_id,member_id)
+     join public.clans c on c.id=m.clan_id
+     where c.slug=$1 and m.data->>'name'=$2`,
+    ['insomnia', memberName],
+  );
+  const memberPassword = issued.rows[0]?.password;
+  if (!/^\d{6}$/.test(memberPassword || '')) throw new Error('member password was not issued');
+  let sharedPasswordRejected = false;
+  try {
+    await db.query(`select public.dashboard_claim($1,$2,$3)`, ['insomnia', memberName, '7979']);
+  } catch { sharedPasswordRejected = true; }
+  if (!sharedPasswordRejected) throw new Error('shared member password still accepted');
+  const claim = await db.query(`select public.dashboard_claim($1,$2,$3) as result`, ['insomnia', memberName, memberPassword]);
   if (claim.rows[0].result.role !== 'member') throw new Error('member claim failed');
 
   const memberId = claim.rows[0].result.memberId;
@@ -55,6 +71,28 @@ try {
     [JSON.stringify({ memberId, slot: '주무기', value: { star: 1 } }), 'sql-test-1'],
   );
   if (!duplicate.rows[0].result.duplicate) throw new Error('mutation idempotency failed');
+
+  let memberAdminListDenied = false;
+  try { await db.query(`select * from public.dashboard_member_passwords()`); }
+  catch { memberAdminListDenied = true; }
+  if (!memberAdminListDenied) throw new Error('member could read admin password list');
+
+  await db.query(`select public.dashboard_release()`);
+  const adminClaim = await db.query(
+    `select public.dashboard_claim($1,$2,$3) as result`,
+    ['insomnia', memberName, 'admin-password'],
+  );
+  if (adminClaim.rows[0].result.role !== 'admin') throw new Error('admin claim failed');
+  const credentials = await db.query(`select * from public.dashboard_member_passwords()`);
+  if (credentials.rows.length !== seed.members.length) throw new Error('admin password list count mismatch');
+  if (new Set(credentials.rows.map((row) => row.password)).size !== seed.members.length) {
+    throw new Error('member passwords are not unique');
+  }
+  const previousPassword = credentials.rows.find((row) => row.member_id === memberId)?.password;
+  const reset = await db.query(`select public.dashboard_reset_member_password($1) as result`, [memberId]);
+  if (!/^\d{6}$/.test(reset.rows[0].result.password) || reset.rows[0].result.password === previousPassword) {
+    throw new Error('member password reset failed');
+  }
 
   await db.query(`select set_config('request.jwt.claim.role','service_role',false)`);
   const qa = await db.query(
@@ -76,7 +114,7 @@ try {
     throw new Error('request content mutation was not persisted');
   }
 
-  console.log(`Supabase SQL migration PASS (${seed.members.length} members, RPC/RLS schema, atomic write, duplicate guard, QA automation)`);
+  console.log(`Supabase SQL migration PASS (${seed.members.length} unique member passwords, shared PIN rejected, admin list/reset, atomic write, QA automation)`);
 } finally {
   await db.close();
 }

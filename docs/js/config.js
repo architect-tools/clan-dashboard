@@ -4,7 +4,7 @@
 
 export const CONFIG = {
   appName: '불면증 클랜 관리',
-  version: '2.1.0',
+  version: '2.2.0',
 
   // ── Realtime backend (Supabase) ────────────────────────────────────────
   // Publishable key는 브라우저에 공개되어도 되는 키입니다. 실제 권한은 RLS와
@@ -18,10 +18,10 @@ export const CONFIG = {
   // Paste the Apps Script Web App URL here (…/exec). Blank = standalone mode.
   APPS_SCRIPT_URL: '',
 
-  // Access gate. Change this password. (Obfuscation only — the real write
-  // protection is the token checked by the Apps Script backend.)
+  // Standalone/legacy fallback only. Supabase mode uses per-member passwords
+  // stored and verified by server-side RPC functions.
   GATE_PASSWORD: '',
-  // 관리자 비밀번호 — 7979(멤버)와 다르게. 이 비번으로 입장하면 관리자 권한.
+  // 관리자 비밀번호. 이 비번으로 입장하면 관리자 권한.
   // (공개 repo라 난독화 수준 — 강제는 클라이언트 UI에서. 원하는 값으로 바꾸세요.)
   ADMIN_PASSWORD: '',
 
