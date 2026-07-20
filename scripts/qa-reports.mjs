@@ -20,6 +20,10 @@ const SEVERITY_LABEL = {
   high: '높음',
   critical: '긴급',
 };
+const TYPE_LABEL = {
+  bug: '버그 리포트',
+  improvement: '건의/개선사항',
+};
 const VALID_STATUS = new Set(Object.keys(STATUS_LABEL));
 
 const { command, positionals, options } = parseArgs(process.argv.slice(2));
@@ -47,7 +51,9 @@ try {
     const title = options.title || positionals.join(' ') || '[E2E] QA 리포트 검증';
     const r = await store.add({
       title,
+      type: options.type === 'improvement' ? 'improvement' : 'bug',
       status: 'open',
+      automationStatus: 'queued',
       severity: options.severity || 'low',
       area: options.area || 'DB/동기화',
       reporter: options.reporter || process.env.USERNAME || process.env.USER || 'Codex',
@@ -62,9 +68,27 @@ try {
     const r = requireReport(reports, positionals[0]);
     const rec = await store.update(r.slot || r.id, {
       status: 'in_progress',
+      automationStatus: 'running',
+      automationStartedAt: new Date().toISOString(),
       assignee: options.assignee || positionals[1] || process.env.USERNAME || process.env.USER || 'Codex',
     });
     console.log(`${rec.slot} 처리중: ${rec.assignee}`);
+  } else if (command === 'requeue') {
+    const r = requireReport(reports, positionals[0]);
+    const rec = await store.update(r.slot || r.id, {
+      type: options.type === 'improvement' ? 'improvement' : options.type === 'bug' ? 'bug' : (r.type || 'bug'),
+      status: 'open',
+      automationStatus: 'queued',
+      automationStartedAt: '',
+      automationCompletedAt: '',
+      automationBranch: '',
+      automationCommit: '',
+      automationWorktree: '',
+      assignee: '',
+      reply: '',
+      resolvedAt: '',
+    });
+    console.log(`${rec.slot} 자동 처리 대기열에 다시 등록됨`);
   } else if (command === 'reply' || command === 'resolve') {
     const r = requireReport(reports, positionals[0]);
     const status = normalizeStatus(options.status || (command === 'resolve' ? 'resolved' : 'resolved'));
@@ -74,6 +98,8 @@ try {
     }
     const rec = await store.update(r.slot || r.id, {
       status,
+      automationStatus: ['resolved', 'closed'].includes(status) ? 'completed' : status === 'blocked' ? 'failed' : r.automationStatus,
+      automationCompletedAt: ['resolved', 'closed', 'blocked'].includes(status) ? new Date().toISOString() : '',
       reply: message.trim(),
       assignee: options.assignee || r.assignee || process.env.USERNAME || process.env.USER || 'Codex',
     });
@@ -117,8 +143,9 @@ function usage(code = 0, message = '') {
   node scripts/qa-reports.mjs list [--all] [--status open]
   node scripts/qa-reports.mjs show <slot-or-id>
   node scripts/qa-reports.mjs prompt <slot-or-id>
-  node scripts/qa-reports.mjs create --title "..."
+  node scripts/qa-reports.mjs create --type bug|improvement --title "..."
   node scripts/qa-reports.mjs claim <slot-or-id> [assignee]
+  node scripts/qa-reports.mjs requeue <slot-or-id> [--type bug|improvement]
   node scripts/qa-reports.mjs reply <slot-or-id> [--status resolved] [--message "..."]
   node scripts/qa-reports.mjs reply <slot-or-id> --file reply.txt
   node scripts/qa-reports.mjs delete <slot-or-id>
@@ -278,16 +305,19 @@ async function replyMessage(opts) {
 function formatRow(r) {
   const status = STATUS_LABEL[r.status] || r.status || '접수';
   const severity = SEVERITY_LABEL[r.severity] || r.severity || '보통';
+  const type = TYPE_LABEL[r.type] || TYPE_LABEL.bug;
   const date = formatDate(r.createdAt);
-  return `${r.slot || r.id} [${status}/${severity}] ${r.title || '(제목 없음)'} · ${r.area || '기타'} · ${date}`;
+  return `${r.slot || r.id} [${type}/${status}/${severity}] ${r.title || '(제목 없음)'} · ${r.area || '기타'} · ${date}`;
 }
 
 function formatReport(r) {
   return `${formatRow(r)}
 
 id: ${r.id || '-'}
+유형: ${TYPE_LABEL[r.type] || TYPE_LABEL.bug}
 제보자: ${r.reporter || '-'}
 담당: ${r.assignee || '-'}
+자동 처리: ${r.automationStatus || '-'}
 수정: ${formatDate(r.updatedAt || r.createdAt)}
 해결: ${formatDate(r.resolvedAt)}
 
@@ -318,9 +348,14 @@ function formatDate(value) {
 }
 
 function buildPrompt(report) {
-  return `ClanDashboard QA 리포트를 처리하세요.
+  const typeLabel = TYPE_LABEL[report.type] || TYPE_LABEL.bug;
+  const handling = report.type === 'improvement'
+    ? '현재 구조와 요청 의도를 확인하고, 기존 동작을 보존하면서 개선사항을 구현하세요.'
+    : '재현 가능한 원인을 찾고 회귀를 막는 방식으로 수정하세요.';
+  return `ClanDashboard ${typeLabel}을 처리하세요.
 
 슬롯: ${report.slot}
+유형: ${typeLabel}
 상태: ${STATUS_LABEL[report.status] || report.status || '접수'}
 심각도: ${SEVERITY_LABEL[report.severity] || report.severity || '보통'}
 영역: ${report.area || '-'}
@@ -343,7 +378,7 @@ ${report.actual || '-'}
 ${report.note || '-'}
 
 요청:
-1. 현재 워크트리에서 원인을 찾아 수정하세요.
+1. ${handling}
 2. 가능한 검증 명령을 실행하세요.
 3. 완료 후 다음 명령으로 QA 히스토리에 응답을 남기세요.
 

@@ -45,8 +45,9 @@ const app = document.getElementById('app');
 await DB.init();
 console.log('DB.init: members=' + DB.state.members.length);
 
+const dashboardModule = await import('../docs/js/views/dashboard.js');
 const views = {
-  dashboard: (await import('../docs/js/views/dashboard.js')).renderDashboard,
+  dashboard: dashboardModule.renderDashboard,
   members: (await import('../docs/js/views/members.js')).renderMembers,
   participation: (await import('../docs/js/views/participation.js')).renderParticipation,
   diamond: (await import('../docs/js/views/diamond.js')).renderDiamond,
@@ -66,6 +67,36 @@ for (const [name, fn] of Object.entries(views)) {
     else bad(name, 'empty output');
   } catch (e) { bad(name, e); }
 }
+
+
+console.log('\n── request intake forms ──');
+try {
+  dashboardModule.openBugReportForm();
+  let modal = document.querySelector('.modal-overlay');
+  const bugText = modal?.textContent || '';
+  if (bugText.includes('버그 리포트 접수') && bugText.includes('재현 절차') && bugText.includes('자동 처리 요청')) {
+    ok('버그 리포트 전용 접수 폼');
+  } else bad('bug request form', bugText);
+  modal?.remove();
+
+  dashboardModule.openImprovementForm();
+  modal = document.querySelector('.modal-overlay');
+  const improvementText = modal?.textContent || '';
+  if (improvementText.includes('건의/개선사항 접수') && improvementText.includes('현재 불편/요청 배경') && improvementText.includes('자동 처리 요청')) {
+    ok('건의/개선사항 전용 접수 폼');
+  } else bad('improvement request form', improvementText);
+  modal?.remove();
+
+  const request = Mutations.addQaReport({
+    type: 'improvement',
+    title: '자동 처리 스모크',
+    automationStatus: 'queued',
+  });
+  if (request.type === 'improvement' && request.automationStatus === 'queued' && request.status === 'open') {
+    ok('요청 유형·자동 처리 상태 저장');
+  } else bad('request normalization', JSON.stringify(request));
+  Mutations.removeQaReport(request.id);
+} catch (e) { bad('request intake forms', e); }
 
 console.log('\n── render each view (member role) ──');
 localStorage.setItem('clandash.v1.role', 'member');

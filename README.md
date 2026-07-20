@@ -113,9 +113,11 @@ OCR은 브라우저의 Tesseract.js(`kor+eng`)로 실행하므로 별도 OCR 서
 - 확인 필요 항목은 후보를 선택해 바로 보정할 수 있습니다.
 - 닉네임은 운영 명단과 fuzzy matching하며, 원본 캡처는 DB에 저장하지 않습니다.
 
-## QA 리포트 CLI
+## 요청 자동 처리
 
-관리자 화면에서 접수한 리포트를 조회·응답할 수 있습니다.
+관리자 화면에는 `버그 리포트`와 `건의/개선사항` 접수 폼이 분리되어 있습니다. 두 유형 모두 같은 자동 처리 큐를 사용하며, 대시보드에서 `대기 → Codex 처리중 → 완료/보류` 상태와 응답·배포 커밋을 확인할 수 있습니다.
+
+로컬 CLI로 큐를 확인하거나 수동 응답할 수 있습니다.
 
 ```bash
 npm run qa:list
@@ -124,7 +126,21 @@ npm run qa:prompt -- <slot>
 npm run qa:reply -- <slot> --status resolved --message "수정 내용과 검증 결과"
 ```
 
-Supabase 전환 후 CLI에는 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CLAN_SLUG` 환경 변수를 사용합니다. 로컬 JSON은 `--state-file <path>` 또는 `CLANDASH_STATE_FILE`로 처리할 수 있습니다. Apps Script 방식은 전환 전 fallback으로만 유지합니다.
+자동 워커는 요청마다 `codex/qa-*` 브랜치와 격리된 Git worktree를 만들고 Codex CLI를 실행합니다. 정적 검사, 스모크 테스트, Apps Script 구문 검사가 모두 통과하면 `main`에 푸시하고 결과를 요청 히스토리에 기록합니다. 인증·권한·DB 마이그레이션·배포 워크플로·워커 자체처럼 고위험 파일을 건드리는 요청은 자동 배포하지 않고 `보류` 처리합니다.
+
+Windows 로그인 시 자동 실행되도록 설치합니다.
+
+```bash
+npm run qa:worker:dry-run
+npm run qa:worker:install
+npm run qa:worker:status
+# 제거할 때
+npm run qa:worker:uninstall
+```
+
+워커는 저장소의 `.env.local`에서 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CLAN_SLUG`를 읽습니다. 서비스 키는 Codex 자식 프로세스에 전달하지 않습니다. 실행 로그와 임시 worktree는 각각 `.qa-worker/`, `.qa-worktrees/`에 저장되며 Git에서 제외됩니다.
+
+로컬 JSON은 CLI의 `--state-file <path>` 또는 `CLANDASH_STATE_FILE`로 처리할 수 있습니다. Apps Script 방식은 전환 전 fallback으로만 유지합니다.
 
 ## 저장소 구조
 

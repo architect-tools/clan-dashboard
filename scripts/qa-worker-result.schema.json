@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "summary", "verification", "blocker", "dataMutations"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["resolved", "blocked"]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "verification": {
+      "type": "array",
+      "items": { "type": "string", "maxLength": 500 },
+      "maxItems": 20
+    },
+    "blocker": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "dataMutations": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "category", "name", "points", "weekly", "active"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["content.upsert"] },
+          "category": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "points": { "type": "number", "minimum": 0, "maximum": 100000 },
+          "weekly": { "type": "integer", "minimum": 1, "maximum": 100 },
+          "active": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

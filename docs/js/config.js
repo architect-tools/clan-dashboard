@@ -4,7 +4,7 @@
 
 export const CONFIG = {
   appName: '불면증 클랜 관리',
-  version: '2.0.0',
+  version: '2.1.0',
 
   // ── Realtime backend (Supabase) ────────────────────────────────────────
   // Publishable key는 브라우저에 공개되어도 되는 키입니다. 실제 권한은 RLS와

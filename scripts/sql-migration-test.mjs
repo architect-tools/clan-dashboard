@@ -26,6 +26,7 @@ try {
     .replace(/^create extension if not exists pgcrypto with schema extensions;\s*$/m, '');
   await db.exec(migration);
   await db.exec(await readFile(new URL('../supabase/migrations/002_opaque_secret_keys.sql', import.meta.url), 'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/003_request_automation.sql', import.meta.url), 'utf8'));
 
   const seed = JSON.parse(await readFile(new URL('../docs/data/seed.json', import.meta.url), 'utf8'));
   await db.query(`select set_config('request.jwt.claim.role','service_role',false)`);
@@ -62,7 +63,20 @@ try {
   );
   if (!qa.rows[0].result.id || !qa.rows[0].result.slot) throw new Error('service QA normalization failed');
 
-  console.log(`Supabase SQL migration PASS (${seed.members.length} members, RPC/RLS schema, atomic write, duplicate guard, QA)`);
+  const requestMutation = await db.query(
+    `select public.dashboard_service_request_mutate_service($1,'content.upsert',$2::jsonb) as result`,
+    ['insomnia', JSON.stringify({ category: '거인의 탑', name: 'SQL 자동화 테스트', points: 3, weekly: 1, active: true })],
+  );
+  if (requestMutation.rows[0].result.name !== 'SQL 자동화 테스트') throw new Error('request mutation failed');
+  const requestState = await db.query(
+    `select public.dashboard_state_for((select id from public.clans where slug=$1)) as state`,
+    ['insomnia'],
+  );
+  if (!requestState.rows[0].state.contentCatalog.some((item) => item.name === 'SQL 자동화 테스트')) {
+    throw new Error('request content mutation was not persisted');
+  }
+
+  console.log(`Supabase SQL migration PASS (${seed.members.length} members, RPC/RLS schema, atomic write, duplicate guard, QA automation)`);
 } finally {
   await db.close();
 }

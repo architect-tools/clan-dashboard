@@ -521,8 +521,11 @@ function normalizeQaReport(report, index = 0) {
   return {
     id: String(r.id || r.slot || uid()),
     slot: String(r.slot || `QA-LEGACY-${String(index + 1).padStart(3, '0')}`),
+    type: r.type === 'improvement' ? 'improvement' : 'bug',
     status: normalizeQaStatus(r.status),
     severity: normalizeQaSeverity(r.severity),
+    automationStatus: String(r.automationStatus || (r.status === 'open' ? 'queued' : '')),
+    automationAttempt: Math.max(0, Number(r.automationAttempt) || 0),
     area: String(r.area || ''),
     title: String(r.title || '').trim(),
     reporter: String(r.reporter || ''),
@@ -536,6 +539,11 @@ function normalizeQaReport(report, index = 0) {
     createdAt: createdAt || nowIso(),
     updatedAt: String(r.updatedAt || createdAt || ''),
     resolvedAt: String(r.resolvedAt || ''),
+    automationStartedAt: String(r.automationStartedAt || ''),
+    automationCompletedAt: String(r.automationCompletedAt || ''),
+    automationBranch: String(r.automationBranch || ''),
+    automationCommit: String(r.automationCommit || ''),
+    automationWorktree: String(r.automationWorktree || ''),
   };
 }
 

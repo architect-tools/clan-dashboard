@@ -20,6 +20,16 @@ const QA_SEVERITY = {
   high: '높음',
   critical: '긴급',
 };
+const QA_TYPE = {
+  bug: { label: '버그', cls: 'bug' },
+  improvement: { label: '건의/개선', cls: 'improvement' },
+};
+const QA_AUTOMATION = {
+  queued: { label: '자동 처리 대기', cls: 'queued' },
+  running: { label: 'Codex 처리중', cls: 'running' },
+  completed: { label: '자동 처리 완료', cls: 'completed' },
+  failed: { label: '자동 처리 실패', cls: 'failed' },
+};
 const QA_AREAS = ['대시보드', '클랜원', '참여 기록', '다이아 정산', '전리품', '장비/캐릭터 현황', '분배 파라미터', '설정', 'DB/동기화', '기타'];
 const ROUTE_AREA = {
   dashboard: '대시보드',
@@ -43,7 +53,7 @@ export function renderDashboard() {
     subtitle: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }),
     actions: [
       el('span.mode-pill', { class: live ? 'live' : 'local', text: realtime ? '실시간 DB' : live ? '시트 동기화' : '로컬 저장' }),
-      Roles.isAdmin() ? btn('QA 히스토리', () => openQaHistory(), { kind: 'ghost', admin: true }) : null,
+      Roles.isAdmin() ? btn('요청 히스토리', () => openQaHistory(), { kind: 'ghost', admin: true }) : null,
       Roles.isAdmin() ? btn('콘텐츠 점수표', () => location.hash = '#/dist-params', { kind: 'ghost', admin: true }) : null,
       Roles.isAdmin() ? btn('직업 수정', () => openClassEditor(), { kind: 'ghost', admin: true }) : null,
     ],
@@ -123,6 +133,17 @@ function qaSeverityBadge(report) {
   return el('span.qa-severity', { class: report.severity || 'normal', text: QA_SEVERITY[report.severity] || '보통' });
 }
 
+function qaTypeBadge(report) {
+  const meta = QA_TYPE[report.type] || QA_TYPE.bug;
+  return el('span.qa-type', { class: meta.cls, text: meta.label });
+}
+
+function qaAutomationBadge(report) {
+  const meta = QA_AUTOMATION[report.automationStatus];
+  if (!meta) return null;
+  return el('span.qa-automation', { class: meta.cls, text: meta.label });
+}
+
 function formatQaDate(value) {
   if (!value) return '-';
   const d = new Date(value);
@@ -132,24 +153,27 @@ function formatQaDate(value) {
 
 function qaSummaryCard() {
   const reports = qaReports();
-  const pending = reports.filter((r) => !['resolved', 'closed'].includes(r.status)).length;
+  const pending = reports.filter((r) => ['open', 'blocked'].includes(r.status)).length;
+  const running = reports.filter((r) => r.status === 'in_progress').length;
   const resolved = reports.filter((r) => r.status === 'resolved' || r.status === 'closed').length;
   const latest = reports.slice(0, 4);
-  return card('QA 리포트', el('div.qa-summary', {}, [
+  return card('요청 자동 처리', el('div.qa-summary', {}, [
     el('div.qa-metrics', {}, [
       qaMetric('대기', pending),
-      qaMetric('해결', resolved),
+      qaMetric('처리중', running),
+      qaMetric('완료', resolved),
       qaMetric('전체', reports.length),
     ]),
     latest.length
       ? el('div.qa-mini-list', {}, latest.map((r) => el('button.qa-mini', { type: 'button', onclick: () => openQaHistory(r.id) }, [
-        el('span.qa-mini-main', {}, [el('b', { text: r.slot }), qaStatusBadge(r)]),
+        el('span.qa-mini-main', {}, [el('b', { text: r.slot }), qaTypeBadge(r), qaStatusBadge(r)]),
         el('span.qa-mini-title', { text: r.title || '(제목 없음)' }),
       ])))
-      : el('div.empty.small', { text: '등록된 QA 리포트가 없습니다.' }),
+      : el('div.empty.small', { text: '접수된 요청이 없습니다.' }),
   ]), {
     actions: [
-      btn('작성', () => openBugReportForm(), { kind: 'ghost', admin: true }),
+      btn('버그 리포트', () => openBugReportForm(), { kind: 'ghost', admin: true }),
+      btn('건의/개선', () => openImprovementForm(), { kind: 'ghost', admin: true }),
       btn('내역', () => openQaHistory(), { kind: 'primary', admin: true }),
     ],
   });
@@ -170,46 +194,81 @@ function textarea(attrs = {}) {
 }
 
 export function openBugReportForm() {
-  const title = input({ placeholder: '예: 참여 기록 저장 후 새로고침 시 인원이 사라짐' });
+  openRequestForm('bug');
+}
+
+export function openImprovementForm() {
+  openRequestForm('improvement');
+}
+
+function openRequestForm(type) {
+  const isImprovement = type === 'improvement';
+  const typeLabel = isImprovement ? '건의/개선사항' : '버그 리포트';
+  const title = input({
+    placeholder: isImprovement
+      ? '예: 거인의 탑 보스 목록에 아르카논 추가'
+      : '예: 참여 기록 저장 후 새로고침 시 인원이 사라짐',
+  });
   const area = select(QA_AREAS, currentArea());
   const severity = select(Object.entries(QA_SEVERITY).map(([value, label]) => ({ value, label })), 'normal');
   const environment = input({ value: `${navigator.platform || 'browser'} · ${location.href}` });
-  const steps = textarea({ rows: 5, placeholder: '1. ...\n2. ...\n3. ...' });
-  const expected = textarea({ rows: 3, placeholder: '기대했던 결과' });
-  const actual = textarea({ rows: 3, placeholder: '실제로 발생한 문제' });
-  const note = textarea({ rows: 3, placeholder: '관련 데이터, 계정, 스크린샷 위치 등' });
+  const steps = textarea({
+    rows: 5,
+    placeholder: isImprovement ? '현재 불편한 점이나 요청 배경' : '1. ...\n2. ...\n3. ...',
+  });
+  const expected = textarea({
+    rows: 3,
+    placeholder: isImprovement ? '개선 후 원하는 모습' : '기대했던 결과',
+  });
+  const actual = isImprovement ? null : textarea({ rows: 3, placeholder: '실제로 발생한 문제' });
+  const note = textarea({
+    rows: 3,
+    placeholder: isImprovement ? '구체적인 제안, 참고 사례, 필요한 데이터 등' : '관련 데이터, 계정, 스크린샷 위치 등',
+  });
 
-  modal('버그 리포트 작성', (close) => el('div.form.qa-form', {}, [
-    el('div.form-grid', {}, [field('영역', area), field('심각도', severity)]),
+  modal(`${typeLabel} 접수`, (close) => el('div.form.qa-form', {}, [
+    el('div.form-grid', {}, [
+      field('영역', area),
+      field(isImprovement ? '우선순위' : '심각도', severity),
+    ]),
     field('제목', title),
     field('환경', environment),
-    field('재현 절차', steps),
-    field('기대 결과', expected),
-    field('실제 결과', actual),
-    field('추가 메모', note),
+    field(isImprovement ? '현재 불편/요청 배경' : '재현 절차', steps),
+    field(isImprovement ? '원하는 개선 결과' : '기대 결과', expected),
+    actual ? field('실제 결과', actual) : null,
+    field(isImprovement ? '구체적인 제안/참고' : '추가 메모', note),
+    el('div.qa-auto-notice', {
+      text: '접수 후 이 PC의 Codex가 자동으로 별도 작업공간에서 처리하고, 테스트 통과 시 배포 결과를 여기에 남깁니다.',
+    }),
     el('div.modal-actions', {}, [
       btn('취소', close),
-      btn('제출', async () => {
+      btn('자동 처리 요청', async () => {
         if (!title.value.trim()) return toast('제목을 입력하세요', 'error');
-        if (!steps.value.trim() && !actual.value.trim()) return toast('재현 절차 또는 실제 결과를 입력하세요', 'error');
+        if (!steps.value.trim() && !expected.value.trim() && !(actual?.value || '').trim()) {
+          return toast(isImprovement ? '요청 배경 또는 원하는 결과를 입력하세요' : '재현 절차 또는 실제 결과를 입력하세요', 'error');
+        }
         try {
           const rec = await DB.addQaReport({
+            type,
             title: title.value.trim(),
             area: area.value,
             severity: severity.value,
+            automationStatus: 'queued',
+            automationAttempt: 0,
+            automationRequestedAt: new Date().toISOString(),
             environment: environment.value.trim(),
             steps: steps.value.trim(),
             expected: expected.value.trim(),
-            actual: actual.value.trim(),
+            actual: (actual?.value || '').trim(),
             note: note.value.trim(),
             reporter: Roles.me(),
           });
-          toast(`${rec.slot} 리포트가 접수되었습니다`);
+          toast(`${rec.slot} 자동 처리 대기열에 접수되었습니다`);
           close();
           if (isDashboardRoute()) renderDashboard();
         } catch (e) {
           console.error(e);
-          toast('QA 리포트 저장 실패: ' + e.message, 'error');
+          toast(`${typeLabel} 저장 실패: ${e.message}`, 'error');
         }
       }, { kind: 'primary' }),
     ]),
@@ -226,64 +285,101 @@ function openQaHistory(initialId) {
     clear(host);
     host.appendChild(el('div.qa-history-layout', {}, [
       reports.length ? el('div.qa-slot-list', {}, reports.map((r) => qaSlotButton(r, r.id === selectedId, () => { selectedId = r.id; render(); })))
-        : el('div.empty.small', { text: '등록된 QA 리포트가 없습니다.' }),
+        : el('div.empty.small', { text: '접수된 요청이 없습니다.' }),
       selected ? qaDetail(selected, render) : el('div.qa-detail.empty-detail', { text: '선택된 리포트가 없습니다.' }),
     ]));
   };
-  modal('QA 리포트 히스토리', () => host, {
+  modal('요청 처리 히스토리', () => host, {
     wide: 'x',
-    headerActions: (close) => [btn('새 리포트', () => { close(); openBugReportForm(); }, { kind: 'primary', admin: true })],
+    headerActions: (close) => [
+      btn('버그 리포트', () => { close(); openBugReportForm(); }, { kind: 'ghost', admin: true }),
+      btn('건의/개선', () => { close(); openImprovementForm(); }, { kind: 'primary', admin: true }),
+    ],
   });
   render();
 }
 
 function qaSlotButton(report, active, onclick) {
   return el('button.qa-slot', { type: 'button', class: active ? 'active' : '', onclick }, [
-    el('span.qa-slot-head', {}, [el('b', { text: report.slot }), qaStatusBadge(report)]),
+    el('span.qa-slot-head', {}, [
+      el('b', { text: report.slot }),
+      qaTypeBadge(report),
+      qaStatusBadge(report),
+      qaAutomationBadge(report),
+    ]),
     el('span.qa-slot-title', { text: report.title || '(제목 없음)' }),
     el('span.qa-slot-meta', { text: `${QA_SEVERITY[report.severity] || '보통'} · ${report.area || '기타'} · ${formatQaDate(report.createdAt)}` }),
   ]);
 }
 
 function qaDetail(report, rerender) {
+  const isImprovement = report.type === 'improvement';
+  const typeMeta = QA_TYPE[report.type] || QA_TYPE.bug;
+  const automationMeta = QA_AUTOMATION[report.automationStatus];
   return el('div.qa-detail', {}, [
     el('div.qa-detail-head', {}, [
       el('div', {}, [
         el('div.qa-detail-slot', { text: report.slot }),
         el('h3.qa-detail-title', { text: report.title || '(제목 없음)' }),
       ]),
-      el('div.qa-detail-badges', {}, [qaStatusBadge(report), qaSeverityBadge(report)]),
+      el('div.qa-detail-badges', {}, [
+        qaTypeBadge(report),
+        qaStatusBadge(report),
+        qaSeverityBadge(report),
+        qaAutomationBadge(report),
+      ]),
     ]),
     el('div.qa-meta-grid', {}, [
+      qaMeta('유형', typeMeta.label),
       qaMeta('영역', report.area || '-'),
       qaMeta('제보자', report.reporter || '-'),
       qaMeta('담당', report.assignee || '-'),
+      qaMeta('자동 처리', automationMeta?.label || '-'),
+      qaMeta('시도', report.automationAttempt ? `${report.automationAttempt}회` : '-'),
       qaMeta('접수', formatQaDate(report.createdAt)),
+      qaMeta('처리 시작', formatQaDate(report.automationStartedAt)),
       qaMeta('수정', formatQaDate(report.updatedAt || report.createdAt)),
-      qaMeta('해결', formatQaDate(report.resolvedAt)),
+      qaMeta('완료', formatQaDate(report.automationCompletedAt || report.resolvedAt)),
+      report.automationCommit ? qaMeta('배포 커밋', report.automationCommit.slice(0, 12)) : null,
     ]),
     qaBlock('환경', report.environment),
-    qaBlock('재현 절차', report.steps),
-    qaBlock('기대 결과', report.expected),
-    qaBlock('실제 결과', report.actual),
-    qaBlock('추가 메모', report.note),
-    el('div.modal-sec', { text: 'Codex 응답' }),
-    report.reply ? el('div.qa-reply', { text: report.reply }) : el('div.empty.small', { text: '아직 응답이 없습니다.' }),
+    qaBlock(isImprovement ? '현재 불편/요청 배경' : '재현 절차', report.steps),
+    qaBlock(isImprovement ? '원하는 개선 결과' : '기대 결과', report.expected),
+    isImprovement ? null : qaBlock('실제 결과', report.actual),
+    qaBlock(isImprovement ? '구체적인 제안/참고' : '추가 메모', report.note),
+    el('div.modal-sec', { text: 'Codex 자동 처리 응답' }),
+    report.reply ? el('div.qa-reply', { text: report.reply }) : el('div.empty.small', { text: '자동 처리 대기 중입니다.' }),
     Roles.isAdmin() ? el('div.row-actions', { class: 'qa-detail-actions' }, [
       btn('프롬프트 복사', () => copyText(buildCodexPrompt(report)), { kind: 'ghost' }),
-      !['resolved', 'closed'].includes(report.status) ? btn('처리중 표시', async () => {
-        try {
-          await DB.updateQaReport(report.id, { status: 'in_progress', assignee: Roles.me() });
-          toast('처리중으로 표시했습니다');
-          rerender();
-        } catch (e) {
-          console.error(e);
-          toast('QA 상태 저장 실패: ' + e.message, 'error');
-        }
-      }, { kind: 'ghost' }) : null,
-      btn(report.reply ? '응답 수정' : '응답 작성', () => openQaReplyEditor(report, rerender), { kind: 'primary' }),
+      (report.status === 'blocked' || report.automationStatus === 'failed')
+        ? btn('자동 처리 다시 시도', () => retryQaAutomation(report, rerender), { kind: 'ghost' })
+        : null,
+      btn(report.reply ? '응답 수정' : '수동 응답', () => openQaReplyEditor(report, rerender), { kind: 'primary' }),
     ]) : null,
   ]);
+}
+
+async function retryQaAutomation(report, rerender) {
+  try {
+    await DB.updateQaReport(report.id, {
+      status: 'open',
+      automationStatus: 'queued',
+      automationRequestedAt: new Date().toISOString(),
+      automationStartedAt: '',
+      automationCompletedAt: '',
+      automationBranch: '',
+      automationCommit: '',
+      automationWorktree: '',
+      assignee: '',
+      reply: '',
+      resolvedAt: '',
+    });
+    toast(`${report.slot} 자동 처리를 다시 요청했습니다`);
+    rerender();
+  } catch (e) {
+    console.error(e);
+    toast('자동 처리 재요청 실패: ' + e.message, 'error');
+  }
 }
 
 function qaMeta(label, value) {
@@ -313,6 +409,8 @@ function openQaReplyEditor(report, onSaved) {
         try {
           await DB.updateQaReport(report.id, {
             status: status.value,
+            automationStatus: ['resolved', 'closed'].includes(status.value) ? 'completed' : status.value === 'blocked' ? 'failed' : report.automationStatus,
+            automationCompletedAt: ['resolved', 'closed', 'blocked'].includes(status.value) ? new Date().toISOString() : '',
             assignee: assignee.value.trim(),
             reply: reply.value.trim(),
           });
@@ -329,11 +427,17 @@ function openQaReplyEditor(report, onSaved) {
 }
 
 function buildCodexPrompt(report) {
-  return `ClanDashboard QA 리포트를 처리하세요.
+  const isImprovement = report.type === 'improvement';
+  const typeLabel = isImprovement ? '건의/개선사항' : '버그 리포트';
+  const handling = isImprovement
+    ? '요청 의도를 확인하고 기존 동작을 보존하면서 개선사항을 구현하세요.'
+    : '문제를 재현하고 원인을 찾아 회귀를 막는 방식으로 수정하세요.';
+  return `ClanDashboard ${typeLabel}을 처리하세요.
 
 슬롯: ${report.slot}
+유형: ${typeLabel}
 상태: ${(QA_STATUS[report.status] || QA_STATUS.open).label}
-심각도: ${QA_SEVERITY[report.severity] || '보통'}
+${isImprovement ? '우선순위' : '심각도'}: ${QA_SEVERITY[report.severity] || '보통'}
 영역: ${report.area || '-'}
 제보자: ${report.reporter || '-'}
 제목: ${report.title || '-'}
@@ -341,22 +445,22 @@ function buildCodexPrompt(report) {
 환경:
 ${report.environment || '-'}
 
-재현 절차:
+${isImprovement ? '현재 불편/요청 배경' : '재현 절차'}:
 ${report.steps || '-'}
 
-기대 결과:
+${isImprovement ? '원하는 개선 결과' : '기대 결과'}:
 ${report.expected || '-'}
 
-실제 결과:
-${report.actual || '-'}
+${isImprovement ? '구체적인 제안/참고' : '실제 결과'}:
+${isImprovement ? (report.note || '-') : (report.actual || '-')}
 
 추가 메모:
-${report.note || '-'}
+${isImprovement ? '-' : (report.note || '-')}
 
 요청:
-1. 현재 워크트리에서 원인을 찾아 수정하세요.
+1. ${handling}
 2. 가능한 검증 명령을 실행하세요.
-3. 완료 후 다음 명령으로 QA 히스토리에 응답을 남기세요.
+3. 완료 후 다음 명령으로 요청 히스토리에 응답을 남기세요.
 
 node scripts/qa-reports.mjs reply ${report.slot} --status resolved --message "수정 내용과 검증 결과"`;
 }

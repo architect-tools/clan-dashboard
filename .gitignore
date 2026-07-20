@@ -23,3 +23,5 @@ docs/_sample80.png
 docs/_sampleA.png
 docs/_sampleB.png
 docs/_sampleC.png
+.qa-worker/
+.qa-worktrees/

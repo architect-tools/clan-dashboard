@@ -20,6 +20,12 @@
     "qa:create": "node scripts/qa-reports.mjs create",
     "qa:reply": "node scripts/qa-reports.mjs reply",
     "qa:delete": "node scripts/qa-reports.mjs delete",
+    "qa:worker": "node scripts/qa-worker.mjs",
+    "qa:worker:once": "node scripts/qa-worker.mjs --once",
+    "qa:worker:dry-run": "node scripts/qa-worker.mjs --once --dry-run",
+    "qa:worker:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-qa-worker.ps1",
+    "qa:worker:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/qa-worker-status.ps1",
+    "qa:worker:uninstall": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/uninstall-qa-worker.ps1",
     "qa:live": "node scripts/live-dashboard-qa.mjs",
     "gas:check": "node --check --input-type=commonjs < apps-script/Code.gs"
   },
