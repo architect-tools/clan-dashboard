@@ -366,8 +366,8 @@ function checkinPanel(content) {
         class: on ? 'on' : 'review',
         title: `${hit.member.name} · ${confidence}% · ${on ? '기록 선택됨' : '확인 필요'}`,
         style: {
-          left: `${x / iw * 100}%`, top: `${y / ih * 100}%`,
-          width: `${(right - x) / iw * 100}%`, height: `${(bottom - y) / ih * 100}%`,
+          left: `calc(${x / iw * 100}% - 8px)`, top: `calc(${y / ih * 100}% - 3px)`,
+          width: `calc(${(right - x) / iw * 100}% + 16px)`, height: `calc(${(bottom - y) / ih * 100}% + 6px)`,
         },
       }, [el('span.ocr-marker-badge', { text: on ? '✓' : '?' })]));
     }
