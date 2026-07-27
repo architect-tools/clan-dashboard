@@ -1,9 +1,9 @@
 {
   "meta": {
     "clanName": "불면증",
-    "revision": 226,
+    "revision": 231,
     "rosterSource": "활동 클랜 50명 (게임 내 닉네임)",
-    "adminRevision": 35,
+    "adminRevision": 40,
     "generatedFrom": "Google Sheets CSV export",
     "generatedNote": "node scripts/build-seed.mjs",
     "schemaVersion": 1
@@ -495,108 +495,6 @@
           "영혼 화살": true,
           "정신 집중": true,
           "추적 화살": true
-        },
-        "공용주문석": {}
-      }
-    },
-    {
-      "id": 5,
-      "cls": "전사",
-      "name": "돈가츠",
-      "note": "",
-      "equip": {
-        "견갑": {
-          "star": 4,
-          "tier": 5.5,
-          "enhance": 8
-        },
-        "망토": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "반지": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "벨트": {
-          "star": 4,
-          "tier": 5.5,
-          "enhance": 8
-        },
-        "상의": {
-          "star": 4,
-          "tier": 5.5,
-          "enhance": 8
-        },
-        "신발": {
-          "star": 4,
-          "tier": 5.5,
-          "enhance": 8
-        },
-        "장갑": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "투구": {
-          "star": 4,
-          "tier": 5.5,
-          "enhance": 8
-        },
-        "팔찌": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "하의": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "보조1": {
-          "star": 4,
-          "tier": 5.5,
-          "enhance": 8
-        },
-        "보조2": {
-          "star": 4,
-          "tier": 5.5,
-          "enhance": 8
-        },
-        "귀걸이": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 10
-        },
-        "목걸이": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "주무기": {
-          "star": 4,
-          "tier": 5.5,
-          "enhance": 8
-        }
-      },
-      "grade": "정회원",
-      "order": 5,
-      "power": 112.2,
-      "score": 402,
-      "active": true,
-      "skills": {
-        "엘릭서": {
-          "집중 호흡": true,
-          "강철의 분노": true,
-          "영웅의 기운": true,
-          "전사의 기운": true,
-          "철벽의 수호": true,
-          "타오르는 분노": true
-        },
-        "주문석": {
-          "다중 궤적": true
         },
         "공용주문석": {}
       }
@@ -2126,103 +2024,6 @@
       }
     },
     {
-      "id": 21,
-      "cls": "암살자",
-      "name": "치치",
-      "note": "",
-      "equip": {
-        "견갑": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "망토": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "반지": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "벨트": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "상의": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "신발": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "장갑": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "투구": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "팔찌": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "하의": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "보조1": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "보조2": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "귀걸이": {
-          "star": 4,
-          "tier": 2,
-          "enhance": 8
-        },
-        "목걸이": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "주무기": {
-          "star": 4,
-          "tier": 5.5,
-          "enhance": 8
-        }
-      },
-      "grade": "정회원",
-      "order": 21,
-      "power": 86.9,
-      "score": 335,
-      "active": true,
-      "skills": {
-        "엘릭서": {
-          "집중 호흡": true,
-          "영웅의 기운": true,
-          "그림자의 칼날": true,
-          "암살자의 기운": true
-        },
-        "공용주문석": {}
-      }
-    },
-    {
       "id": 22,
       "cls": "전투사제",
       "name": "헤세메",
@@ -2890,7 +2691,7 @@
     {
       "id": 29,
       "cls": "전투사제",
-      "name": "Babyee",
+      "name": "아쉽",
       "note": "",
       "equip": {
         "견갑": {
@@ -2971,7 +2772,7 @@
       },
       "grade": "정회원",
       "order": 29,
-      "power": 80.2,
+      "power": 88,
       "score": 216,
       "active": true,
       "skills": {
@@ -2992,110 +2793,6 @@
           "정신 집중": true,
           "집중 치유": true,
           "비틀린 격류": true
-        },
-        "공용주문석": {}
-      }
-    },
-    {
-      "id": 30,
-      "cls": "사냥꾼",
-      "name": "xooos",
-      "note": "",
-      "equip": {
-        "견갑": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "망토": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "반지": {
-          "star": 4,
-          "tier": 2.5,
-          "enhance": 8
-        },
-        "벨트": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "상의": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "신발": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 12
-        },
-        "장갑": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "투구": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 12
-        },
-        "팔찌": {
-          "star": 4,
-          "tier": 2.5,
-          "enhance": 8
-        },
-        "하의": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "보조1": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "보조2": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 12
-        },
-        "귀걸이": {
-          "star": 4,
-          "tier": 2.5,
-          "enhance": 8
-        },
-        "목걸이": {
-          "star": 4,
-          "tier": 2.5,
-          "enhance": 8
-        },
-        "주무기": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 10
-        }
-      },
-      "grade": "정회원",
-      "order": 30,
-      "power": 78.2,
-      "score": 3,
-      "active": true,
-      "skills": {
-        "엘릭서": {
-          "집중 호흡": true,
-          "사냥꾼의 기운": true
-        },
-        "주문석": {
-          "연사": true,
-          "화살비": true,
-          "약점포착": true,
-          "다발 화살": true,
-          "사냥 감각": true,
-          "영혼 화살": true,
-          "추적 화살": true
         },
         "공용주문석": {}
       }
@@ -4444,113 +4141,6 @@
       }
     },
     {
-      "id": 44,
-      "cls": "마법사",
-      "name": "카운터펀치",
-      "note": "",
-      "equip": {
-        "견갑": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "망토": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "반지": {
-          "star": 4,
-          "tier": 2,
-          "enhance": 8
-        },
-        "벨트": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "상의": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "신발": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "장갑": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "투구": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "팔찌": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "하의": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "보조1": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "보조2": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "귀걸이": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "목걸이": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "주무기": {
-          "star": 4,
-          "tier": 5.5,
-          "enhance": 8
-        }
-      },
-      "grade": "정회원",
-      "order": 44,
-      "power": 68.1,
-      "score": 320,
-      "active": true,
-      "skills": {
-        "엘릭서": {
-          "정신 폭발": true,
-          "집중 호흡": true,
-          "마법사의 기운": true
-        },
-        "주문석": {
-          "가호": true,
-          "지옥불": true,
-          "공간압축": true,
-          "마력 순환": true,
-          "신체 강화": true,
-          "얼음 기둥": true,
-          "정신 집중": true,
-          "고밀도마력": true,
-          "마법 보호막": true
-        },
-        "공용주문석": {}
-      }
-    },
-    {
       "id": 45,
       "cls": "마법사",
       "name": "여름빛",
@@ -5712,11 +5302,6 @@
           "자유로운 여행자": true,
           "바위를 삼키는 괴물": true
         },
-        "5": {
-          "바다의 괴물": true,
-          "자유로운 여행자": true,
-          "바위를 삼키는 괴물": true
-        },
         "6": {
           "바다의 괴물": true,
           "자유로운 여행자": true,
@@ -5792,10 +5377,6 @@
           "자유로운 여행자": true,
           "바위를 삼키는 괴물": true
         },
-        "21": {
-          "자유로운 여행자": true,
-          "바위를 삼키는 괴물": true
-        },
         "22": {
           "자유로운 여행자": true,
           "바위를 삼키는 괴물": true
@@ -5825,10 +5406,6 @@
           "바위를 삼키는 괴물": true
         },
         "29": {
-          "자유로운 여행자": true,
-          "바위를 삼키는 괴물": true
-        },
-        "30": {
           "자유로운 여행자": true,
           "바위를 삼키는 괴물": true
         },
@@ -5885,9 +5462,6 @@
           "자유로운 여행자": true,
           "바위를 삼키는 괴물": true
         },
-        "44": {
-          "바위를 삼키는 괴물": true
-        },
         "45": {
           "바위를 삼키는 괴물": true
         },
@@ -5922,10 +5496,6 @@
         "4": {
           "지진발굽": true,
           "심연의 수호자": true
-        },
-        "5": {
-          "지진발굽": true,
-          "황혼의방랑자": true
         },
         "6": {
           "지진발굽": true,
@@ -5974,9 +5544,6 @@
         "20": {
           "지진발굽": true
         },
-        "21": {
-          "지진발굽": true
-        },
         "22": {
           "지진발굽": true
         },
@@ -5990,9 +5557,6 @@
           "지진발굽": true
         },
         "29": {
-          "지진발굽": true
-        },
-        "30": {
           "지진발굽": true
         },
         "31": {
