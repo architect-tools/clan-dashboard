@@ -1,7 +1,7 @@
 {
   "meta": {
     "clanName": "불면증",
-    "revision": 231,
+    "revision": 232,
     "rosterSource": "활동 클랜 50명 (게임 내 닉네임)",
     "adminRevision": 40,
     "generatedFrom": "Google Sheets CSV export",
@@ -5523,6 +5523,9 @@
           "지진발굽": true
         },
         "13": {
+          "지진발굽": true
+        },
+        "14": {
           "지진발굽": true
         },
         "15": {
