@@ -1,7 +1,7 @@
 {
   "meta": {
     "clanName": "불면증",
-    "revision": 232,
+    "revision": 235,
     "rosterSource": "활동 클랜 50명 (게임 내 닉네임)",
     "adminRevision": 40,
     "generatedFrom": "Google Sheets CSV export",
@@ -5467,6 +5467,9 @@
         },
         "47": {
           "바위를 삼키는 괴물": true
+        },
+        "49": {
+          "자유로운 여행자": true
         }
       },
       "name": "성좌",
