@@ -21,6 +21,7 @@ const RESULT_SCHEMA = path.join(ROOT, 'scripts', 'qa-worker-result.schema.json')
 const POLL_MS = Math.max(5_000, Number(process.env.QA_WORKER_POLL_MS) || 15_000);
 const CODEX_TIMEOUT_MS = Math.max(5, Number(process.env.QA_WORKER_MAX_MINUTES) || 45) * 60_000;
 const WORKER_NAME = process.env.QA_WORKER_NAME || 'Codex 자동 처리';
+const GITHUB_PUSH_USER = process.env.QA_WORKER_GITHUB_USER || 'ProToolery';
 const argv = process.argv.slice(2);
 const once = argv.includes('--once');
 const dryRun = argv.includes('--dry-run');
@@ -297,7 +298,10 @@ async function processReport(store, report) {
           '처리 중 main 브랜치가 변경되어 자동 병합을 중단했습니다. 다시 시도해 주세요.', verification);
         return;
       }
-      await mustRun('git', ['push', 'origin', 'HEAD:main'], { cwd: worktree, timeoutMs: 5 * 60_000 });
+      const pushEnv = await authenticatedGitEnv();
+      await mustRun('git', ['push', 'origin', 'HEAD:main'], {
+        cwd: worktree, env: pushEnv, timeoutMs: 5 * 60_000,
+      });
     }
 
     for (const mutation of mutations) {
@@ -481,6 +485,28 @@ async function mustRun(command, commandArgs, options = {}) {
     throw new Error(`${command} ${commandArgs.join(' ')} failed (exit ${result.code}): ${tail(result.stderr || result.stdout, 2200)}`);
   }
   return result;
+}
+
+async function authenticatedGitEnv() {
+  const result = await run(tool('gh'), [
+    'auth', 'token', '--hostname', 'github.com', '--user', GITHUB_PUSH_USER,
+  ], { cwd: ROOT, timeoutMs: 30_000 });
+  if (result.code !== 0 || !result.stdout.trim()) {
+    throw new Error(
+      `GitHub 배포 계정 ${GITHUB_PUSH_USER}의 인증 정보를 불러오지 못했습니다. `
+      + `gh auth login --hostname github.com 명령으로 해당 계정을 로그인해 주세요.`,
+    );
+  }
+
+  const token = result.stdout.trim();
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+  const existingCount = Number.parseInt(env.GIT_CONFIG_COUNT || '0', 10);
+  const index = Number.isSafeInteger(existingCount) && existingCount >= 0 ? existingCount : 0;
+  env.GIT_CONFIG_COUNT = String(index + 1);
+  env[`GIT_CONFIG_KEY_${index}`] = 'http.https://github.com/.extraheader';
+  env[`GIT_CONFIG_VALUE_${index}`] =
+    `AUTHORIZATION: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
+  return env;
 }
 
 function run(command, commandArgs, { cwd = ROOT, env = process.env, timeoutMs = 5 * 60_000 } = {}) {
