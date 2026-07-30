@@ -762,12 +762,13 @@ export const Mutations = {
   // members ----------------------------------------------------------
   upsertMember(m) {
     const list = DB.state.members;
-    if (m.id) {
+    if (m.id != null) {
       const i = list.findIndex((x) => x.id === m.id);
       if (i >= 0) { list[i] = { ...list[i], ...m }; return list[i]; }
     }
-    const nm = { id: Math.max(0, ...list.map((x) => x.id)) + 1, order: list.length + 1,
-      name: '', cls: '', power: 0, score: 0, grade: '정회원', active: true, note: '', ...m };
+    const generatedId = Math.max(0, ...list.map((x) => x.id)) + 1;
+    const nm = { order: list.length + 1, name: '', cls: '', power: 0, score: 0,
+      grade: '정회원', active: true, note: '', ...m, id: m.id ?? generatedId };
     list.push(nm); return nm;
   },
   removeMember(id) { DB.state.members = DB.state.members.filter((m) => m.id !== id); },

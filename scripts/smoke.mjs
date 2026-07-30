@@ -168,6 +168,13 @@ localStorage.setItem('clandash.v1.role', 'admin');
 console.log('\n── core mutations ──');
 try {
   const before = DB.state.members.length;
+  const formShapedMember = Mutations.upsertMember({ id: undefined });
+  if (Number.isSafeInteger(formShapedMember.id) && formShapedMember.id > 0
+      && JSON.parse(JSON.stringify(formShapedMember)).id === formShapedMember.id) {
+    ok('upsertMember replaces an undefined form id with a persistable generated id');
+  } else bad('upsertMember undefined id', String(formShapedMember.id));
+  Mutations.removeMember(formShapedMember.id);
+
   const m = Mutations.upsertMember({ name: '테스트원', cls: '전사', power: 50, score: 100 });
   if (DB.state.members.length === before + 1 && m.id) ok('upsertMember adds'); else bad('upsertMember', 'count');
   Mutations.upsertMember({ id: m.id, score: 175 });
