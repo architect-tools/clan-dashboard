@@ -1,7 +1,7 @@
 {
   "meta": {
     "clanName": "불면증",
-    "revision": 246,
+    "revision": 248,
     "rosterSource": "활동 클랜 50명 (게임 내 닉네임)",
     "adminRevision": 48,
     "generatedFrom": "Google Sheets CSV export",
@@ -4476,6 +4476,32 @@
   },
   "ocrAnchor": null,
   "qaReports": [
+    {
+      "id": "qa-3b026c10-2fd7-4227-baa8-ae94f07a30b4",
+      "area": "대시보드",
+      "note": "",
+      "slot": "QA-20260730-134323490-779F1A",
+      "type": "bug",
+      "reply": "Codex가 별도 작업공간에서 요청을 분석하고 있습니다.",
+      "steps": "대시보드에서 클랜원 추가가 안됩니당",
+      "title": "대시보드에서 클랜원 추가가 안됩니당",
+      "actual": "",
+      "status": "in_progress",
+      "assignee": "Codex 자동 처리",
+      "expected": "",
+      "reporter": "KDA",
+      "severity": "normal",
+      "createdAt": "2026-07-30T13:43:23.496446+00:00",
+      "updatedAt": "2026-07-30T13:43:27.792577+00:00",
+      "environment": "Win32 · https://architect-tools.github.io/clan-dashboard/",
+      "automationBranch": "codex/qa-qa-20260730-134323490-779f1a-1",
+      "automationStatus": "running",
+      "automationAttempt": 1,
+      "automationWorktree": ".qa-worktrees/qa-20260730-134323490-779f1a-1",
+      "automationStartedAt": "2026-07-30T13:43:26.879Z",
+      "automationCompletedAt": "",
+      "automationRequestedAt": "2026-07-30T13:43:22.565Z"
+    },
     {
       "id": "qa-9f4dd857-e6f2-4605-a076-2800ac1b59b8",
       "area": "클랜원",
