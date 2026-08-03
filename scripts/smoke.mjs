@@ -190,6 +190,43 @@ try {
   if (DB.state.members.length === before) ok('removeMember'); else bad('removeMember', 'count');
 } catch (e) { bad('mutations', e); }
 
+console.log('\n── 클랜원 추가 데이터 무결성 ──');
+{
+  const savedState = JSON.parse(JSON.stringify(DB.state));
+  try {
+    const duplicateState = JSON.parse(JSON.stringify(savedState));
+    duplicateState.members = [
+      { id: 4, order: 3, name: '기존A', cls: '전사', power: 10, score: 20, active: true },
+      { id: 8, order: 3, name: '기존B', cls: '마법사', power: 30, score: 40, active: true },
+    ];
+    await DB.importState(duplicateState);
+    const repairedOrders = DB.state.members.map((member) => member.order);
+    if (new Set(repairedOrders).size === repairedOrders.length && repairedOrders.join(',') === '3,4') {
+      ok('기존 중복 순번 자동 복구');
+    } else bad('member order normalization', JSON.stringify(repairedOrders));
+
+    DB.state.members = [
+      { id: 4, order: 1, name: '기존A', cls: '전사', power: 10, score: 20, active: true },
+      { id: 8, order: 3, name: '기존B', cls: '마법사', power: 30, score: 40, active: true },
+    ];
+    const created = Mutations.upsertMember({ name: '신규멤버', cls: '사냥꾼' });
+    const orders = DB.state.members.map((member) => member.order);
+    const completeDefaults = created.id === 9 && created.order === 4 && created.power === 0 && created.score === 0
+      && created.grade === '정회원' && created.active === true && created.note === ''
+      && created.equip && !Object.keys(created.equip).length
+      && created.skills && !Object.keys(created.skills).length;
+    if (completeDefaults && new Set(orders).size === orders.length) {
+      ok('빈 순번이 있는 명단에서도 최댓값 다음 순번·ID·기본 데이터로 추가');
+    } else bad('member add data integrity', JSON.stringify({ created, orders }));
+  } catch (e) { bad('member add data integrity', e); }
+  finally {
+    DB.state = savedState;
+    DB._snapshot = JSON.parse(JSON.stringify(savedState));
+    DB._undo = []; DB._redo = [];
+    DB._persistLocal();
+  }
+}
+
 console.log('\n── 클랜원 추가: 서버 저장 확인 ──');
 try {
   const savedState = JSON.parse(JSON.stringify(DB.state));

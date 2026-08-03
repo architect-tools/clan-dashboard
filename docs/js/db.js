@@ -456,6 +456,33 @@ function migrateEquip(eq) {
   return out;
 }
 
+function nextMemberNumber(members, key) {
+  const max = (members || []).reduce((current, member) => {
+    const value = Number(member?.[key]);
+    return Number.isSafeInteger(value) && value > current ? value : current;
+  }, 0);
+  return max + 1;
+}
+
+// 삭제 등으로 순번에 빈칸이 있어도 기존 순번은 유지한다. 과거 추가 버그로 생긴
+// 중복/잘못된 순번만 현재 최댓값 뒤로 보내 이미 저장된 데이터도 한 번에 복구한다.
+function normalizeMemberOrders(members) {
+  const used = new Set();
+  let nextOrder = nextMemberNumber(members, 'order');
+  for (const member of members) {
+    const order = Number(member.order);
+    if (Number.isSafeInteger(order) && order > 0 && !used.has(order)) {
+      member.order = order;
+      used.add(order);
+      continue;
+    }
+    while (used.has(nextOrder)) nextOrder++;
+    member.order = nextOrder;
+    used.add(nextOrder++);
+  }
+  return members;
+}
+
 function normalizeFieldBossCatalog(catalog) {
   const specs = [
     { name: '3그룹', points: 3, weekly: 5 },
@@ -561,7 +588,7 @@ function normalize(d) {
   d.powerRanks ||= [];
   d.staff ||= [];
   d.staff = d.staff.map((st) => ({ ...st, name: migrateMemberName(st.name) }));
-  d.members = (d.members || []).map((m, i) => {
+  d.members = normalizeMemberOrders((d.members || []).map((m, i) => {
     const name = migrateMemberName(m.name);
     return {
       id: m.id || i + 1, order: m.order ?? i + 1, name,
@@ -571,7 +598,7 @@ function normalize(d) {
       skills: m.skills || {},            // 주문석/엘릭서: { 주문석:{스킬:값}, 엘릭서:{항목:값} }
       active: m.active !== false, note: m.note || '',
     };
-  });
+  }));
   d.contentCatalog ||= [];
   d.contentCatalog = d.contentCatalog.filter((c) => !isCorruptContentEntry(c));
   // 콘텐츠 카테고리 보정: 앙그바르 투기장·클랜 원정대는 '클랜 활동'으로 분리(기존 데이터도 교정)
@@ -763,12 +790,14 @@ export const Mutations = {
   upsertMember(m) {
     const list = DB.state.members;
     if (m.id != null) {
-      const i = list.findIndex((x) => x.id === m.id);
-      if (i >= 0) { list[i] = { ...list[i], ...m }; return list[i]; }
+      const i = list.findIndex((x) => String(x.id) === String(m.id));
+      if (i >= 0) { list[i] = { ...list[i], ...m, id: list[i].id }; return list[i]; }
     }
-    const generatedId = Math.max(0, ...list.map((x) => x.id)) + 1;
-    const nm = { order: list.length + 1, name: '', cls: '', power: 0, score: 0,
-      grade: '정회원', active: true, note: '', ...m, id: m.id ?? generatedId };
+    const generatedId = nextMemberNumber(list, 'id');
+    const suppliedId = Number(m.id);
+    const id = Number.isSafeInteger(suppliedId) && suppliedId > 0 ? suppliedId : generatedId;
+    const nm = { name: '', cls: '', power: 0, score: 0, grade: '정회원', active: true,
+      note: '', equip: {}, skills: {}, ...m, order: nextMemberNumber(list, 'order'), id };
     list.push(nm); return nm;
   },
   removeMember(id) { DB.state.members = DB.state.members.filter((m) => m.id !== id); },
