@@ -81,6 +81,7 @@ export function renderMembers() {
 
 function editMember(m) {
   const isNew = !m;
+  let pendingId = m?.id;
   const name = input({ value: m?.name || '', placeholder: '닉네임' });
   const cls = select(CLASS_LIST, m?.cls || CLASS_LIST[0]);
   const grade = select([...new Set([...GRADES, m?.grade].filter(Boolean))], m?.grade || '정회원');
@@ -99,11 +100,30 @@ function editMember(m) {
     el('label.field.field-inline', {}, [active, el('span', { text: '활동 중' })]),
     el('div.modal-actions', {}, [
       btn('취소', close),
-      btn('저장', () => {
+      btn('저장', async (event) => {
         if (!name.value.trim()) return toast('닉네임을 입력하세요', 'error');
-        Mutations.upsertMember({ id: m?.id, name: name.value.trim(), cls: cls.value, grade: grade.value,
+        const saveButton = event.currentTarget;
+        saveButton.disabled = true;
+        const savedMember = Mutations.upsertMember({ id: pendingId, name: name.value.trim(), cls: cls.value, grade: grade.value,
           power: +power.value || 0, score: +score.value || 0, note: note.value.trim(), active: active.checked });
-        DB.commit(); toast('저장되었습니다'); close(); renderMembers();
+        pendingId = savedMember.id;
+        let saved = false;
+        try { saved = await DB.commitNow(); }
+        catch (e) { console.error('member save failed', e); }
+        if (saved) {
+          toast('저장되었습니다'); close(); renderMembers();
+          return;
+        }
+        const refreshed = await DB.refresh({ force: true });
+        if (isNew && refreshed === true) {
+          const remoteMember = DB.state.members.find((member) => member.id === pendingId);
+          const sameDraft = remoteMember && ['name', 'cls', 'grade', 'power', 'score', 'note', 'active']
+            .every((key) => remoteMember[key] === savedMember[key]);
+          if (!sameDraft) pendingId = undefined;
+        }
+        toast('클랜원 정보를 저장하지 못했습니다. 다시 시도해 주세요.', 'error');
+        renderMembers();
+        if (saveButton.isConnected) saveButton.disabled = false;
       }, { kind: 'primary' }),
     ]),
   ]));

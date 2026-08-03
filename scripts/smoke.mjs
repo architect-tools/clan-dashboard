@@ -190,6 +190,79 @@ try {
   if (DB.state.members.length === before) ok('removeMember'); else bad('removeMember', 'count');
 } catch (e) { bad('mutations', e); }
 
+console.log('\n── 클랜원 추가: 서버 저장 확인 ──');
+try {
+  const savedState = JSON.parse(JSON.stringify(DB.state));
+  const originalCommitNow = DB.commitNow;
+  const originalRefresh = DB.refresh;
+  const openMemberForm = (memberName) => {
+    app.innerHTML = ''; views.members();
+    [...app.querySelectorAll('button')].find((button) => button.textContent.trim() === '+ 클랜원 추가')?.click();
+    const modal = document.querySelector('.modal-overlay');
+    const nameInput = modal?.querySelector('input[placeholder=닉네임]');
+    const saveButton = [...(modal?.querySelectorAll('button') || [])]
+      .find((button) => button.textContent.trim() === '저장');
+    if (nameInput) nameInput.value = memberName;
+    return { modal, saveButton };
+  };
+
+  try {
+    let finishSave;
+    DB.commitNow = () => new Promise((resolve) => { finishSave = resolve; });
+    const failedName = '추가실패회귀테스트';
+    const concurrentName = '동시추가멤버';
+    DB.refresh = async () => {
+      const draft = DB.state.members.find((member) => member.name === failedName);
+      DB.state = JSON.parse(JSON.stringify(savedState));
+      DB.state.members.push({ ...draft, name: concurrentName });
+      DB._snapshot = JSON.parse(JSON.stringify(DB.state));
+      return true;
+    };
+    const failedForm = openMemberForm(failedName);
+    failedForm.saveButton?.click();
+    const waitsForFailure = failedForm.modal?.isConnected && failedForm.saveButton?.disabled
+      && DB.state.members.some((member) => member.name === failedName);
+    finishSave?.(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const failureToast = [...document.querySelectorAll('#toast-host .toast')]
+      .some((toast) => toast.textContent.includes('저장하지 못했습니다'));
+    DB.commitNow = async () => true;
+    failedForm.saveButton?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const retriedMember = DB.state.members.find((member) => member.name === failedName);
+    const concurrentMember = DB.state.members.find((member) => member.name === concurrentName);
+    const retryIsolated = retriedMember && concurrentMember && retriedMember.id !== concurrentMember.id
+      && !failedForm.modal?.isConnected;
+    if (waitsForFailure && failureToast && retryIsolated) {
+      ok('클랜원 추가 실패: 폼 유지 후 동시 추가 멤버를 덮지 않고 재시도');
+    } else bad('member add failure handling', JSON.stringify({ waitsForFailure, modal: failedForm.modal?.isConnected,
+      disabled: failedForm.saveButton?.disabled, failureToast, retryIsolated }));
+    failedForm.modal?.remove();
+
+    DB.state = JSON.parse(JSON.stringify(savedState));
+    DB._snapshot = JSON.parse(JSON.stringify(savedState));
+    let confirmSave;
+    DB.commitNow = () => new Promise((resolve) => { confirmSave = resolve; });
+    const successName = '추가성공회귀테스트';
+    const successForm = openMemberForm(successName);
+    successForm.saveButton?.click();
+    const waitsForSuccess = successForm.modal?.isConnected && successForm.saveButton?.disabled;
+    confirmSave?.(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const savedRow = [...app.querySelectorAll('.member-link')].some((link) => link.textContent === successName);
+    if (waitsForSuccess && !successForm.modal?.isConnected && savedRow) {
+      ok('클랜원 추가 성공: 서버 확인 후 폼 닫기·목록 반영');
+    } else bad('member add success handling', JSON.stringify({ waitsForSuccess,
+      modal: successForm.modal?.isConnected, savedRow }));
+  } finally {
+    DB.commitNow = originalCommitNow;
+    DB.refresh = originalRefresh;
+    DB.state = savedState;
+    DB._snapshot = JSON.parse(JSON.stringify(savedState));
+    document.querySelector('.modal-overlay')?.remove();
+  }
+} catch (e) { bad('클랜원 추가 저장 확인', e); }
+
 console.log('\n── 참여 체크인: 단일 선택 소스(두 목록 일치) ──');
 try {
   localStorage.setItem('clandash.v1.role', 'admin');
