@@ -1,9 +1,9 @@
 {
   "meta": {
     "clanName": "불면증",
-    "revision": 262,
+    "revision": 332,
     "rosterSource": "활동 클랜 50명 (게임 내 닉네임)",
-    "adminRevision": 54,
+    "adminRevision": 117,
     "generatedFrom": "Google Sheets CSV export",
     "generatedNote": "node scripts/build-seed.mjs",
     "schemaVersion": 1
@@ -137,7 +137,7 @@
       },
       "grade": "정회원",
       "order": 1,
-      "power": 152.9,
+      "power": 153.3,
       "score": 329,
       "active": true,
       "skills": {
@@ -259,7 +259,7 @@
       },
       "grade": "정회원",
       "order": 3,
-      "power": 137.6,
+      "power": 139.5,
       "score": 423,
       "active": true,
       "skills": {
@@ -372,7 +372,7 @@
       },
       "grade": "정회원",
       "order": 4,
-      "power": 112.7,
+      "power": 128.2,
       "score": 433,
       "active": true,
       "skills": {
@@ -485,7 +485,7 @@
       },
       "grade": "정회원",
       "order": 6,
-      "power": 112.1,
+      "power": 118.4,
       "score": 331,
       "active": true,
       "skills": {
@@ -598,7 +598,7 @@
       },
       "grade": "정회원",
       "order": 7,
-      "power": 106.7,
+      "power": 119.8,
       "score": 398,
       "active": true,
       "skills": {
@@ -709,7 +709,7 @@
       },
       "grade": "정회원",
       "order": 8,
-      "power": 106.6,
+      "power": 119.3,
       "score": 423,
       "active": true,
       "skills": {
@@ -820,7 +820,7 @@
       },
       "grade": "정회원",
       "order": 11,
-      "power": 103.3,
+      "power": 113.1,
       "score": 252,
       "active": true,
       "skills": {
@@ -829,6 +829,10 @@
           "영웅의 기운": true,
           "그림자의 칼날": true,
           "암살자의 기운": true
+        },
+        "주문석": {
+          "독안개": true,
+          "정신 집중": true
         },
         "공용주문석": {}
       }
@@ -917,7 +921,7 @@
       },
       "grade": "정회원",
       "order": 12,
-      "power": 98.2,
+      "power": 110.3,
       "score": 378,
       "active": true,
       "skills": {
@@ -1020,7 +1024,7 @@
       },
       "grade": "정회원",
       "order": 13,
-      "power": 97.5,
+      "power": 108.8,
       "score": 423,
       "active": true,
       "skills": {
@@ -1129,7 +1133,7 @@
       },
       "grade": "정회원",
       "order": 14,
-      "power": 92.7,
+      "power": 82.2,
       "score": 333,
       "active": true,
       "skills": {
@@ -1225,7 +1229,7 @@
       },
       "grade": "정회원",
       "order": 15,
-      "power": 91.4,
+      "power": 101.7,
       "score": 438,
       "active": true,
       "skills": {
@@ -1234,6 +1238,9 @@
           "집중 호흡": true,
           "영웅의 기운": true,
           "사냥꾼의 기운": true
+        },
+        "주문석": {
+          "화살비": true
         },
         "공용주문석": {}
       }
@@ -1322,7 +1329,7 @@
       },
       "grade": "정회원",
       "order": 16,
-      "power": 91,
+      "power": 101.9,
       "score": 398,
       "active": true,
       "skills": {
@@ -1425,7 +1432,7 @@
       },
       "grade": "정회원",
       "order": 17,
-      "power": 90.8,
+      "power": 99.4,
       "score": 160,
       "active": true,
       "skills": {
@@ -1434,6 +1441,9 @@
           "집중 호흡": true,
           "영웅의 기운": true,
           "사냥꾼의 기운": true
+        },
+        "주문석": {
+          "전투해방": true
         },
         "공용주문석": {}
       }
@@ -1522,7 +1532,7 @@
       },
       "grade": "정회원",
       "order": 19,
-      "power": 89.2,
+      "power": 94.8,
       "score": 365,
       "active": true,
       "skills": {
@@ -1619,7 +1629,7 @@
       },
       "grade": "정회원",
       "order": 20,
-      "power": 87.1,
+      "power": 96.3,
       "score": 347,
       "active": true,
       "skills": {
@@ -1716,7 +1726,7 @@
       },
       "grade": "정회원",
       "order": 22,
-      "power": 86.5,
+      "power": 99.3,
       "score": 360,
       "active": true,
       "skills": {
@@ -1737,6 +1747,7 @@
           "신체 강화": true,
           "심연의 샘": true,
           "자연의 힘": true,
+          "정신 집중": true,
           "집중 치유": true,
           "뒤틀린 운명": true
         },
@@ -1839,7 +1850,7 @@
       },
       "grade": "정회원",
       "order": 23,
-      "power": 85.3,
+      "power": 91.8,
       "score": 398,
       "active": true,
       "skills": {
@@ -1861,7 +1872,7 @@
       "equip": {},
       "grade": "정회원",
       "order": 24,
-      "power": 83.3,
+      "power": 87.9,
       "score": 69,
       "active": true,
       "skills": {
@@ -1961,7 +1972,7 @@
       },
       "grade": "정회원",
       "order": 25,
-      "power": 82.5,
+      "power": 93.5,
       "score": 375,
       "active": true,
       "skills": {
@@ -2071,7 +2082,7 @@
       },
       "grade": "정회원",
       "order": 26,
-      "power": 82.1,
+      "power": 90.2,
       "score": 343,
       "active": true,
       "skills": {
@@ -2168,7 +2179,7 @@
       },
       "grade": "정회원",
       "order": 27,
-      "power": 81.3,
+      "power": 90.8,
       "score": 448,
       "active": true,
       "skills": {
@@ -2275,7 +2286,7 @@
       },
       "grade": "정회원",
       "order": 28,
-      "power": 80.5,
+      "power": 85.8,
       "score": 165,
       "active": true,
       "skills": {
@@ -2381,7 +2392,7 @@
       },
       "grade": "정회원",
       "order": 29,
-      "power": 88,
+      "power": 88.4,
       "score": 216,
       "active": true,
       "skills": {
@@ -2490,7 +2501,7 @@
       },
       "grade": "정회원",
       "order": 31,
-      "power": 78.1,
+      "power": 82.9,
       "score": 423,
       "active": true,
       "skills": {
@@ -2807,7 +2818,7 @@
       },
       "grade": "정회원",
       "order": 34,
-      "power": 73.9,
+      "power": 78.5,
       "score": 355,
       "active": true,
       "skills": {
@@ -2902,7 +2913,7 @@
       },
       "grade": "정회원",
       "order": 35,
-      "power": 72.2,
+      "power": 81.1,
       "score": 448,
       "active": true,
       "skills": {
@@ -3003,7 +3014,7 @@
       },
       "grade": "정회원",
       "order": 37,
-      "power": 71.5,
+      "power": 80.9,
       "score": 403,
       "active": true,
       "skills": {
@@ -3110,7 +3121,7 @@
       },
       "grade": "정회원",
       "order": 38,
-      "power": 70.9,
+      "power": 79.6,
       "score": 348,
       "active": true,
       "skills": {
@@ -3212,7 +3223,7 @@
       },
       "grade": "정회원",
       "order": 39,
-      "power": 70.4,
+      "power": 78.9,
       "score": 378,
       "active": true,
       "skills": {
@@ -3311,7 +3322,7 @@
       },
       "grade": "정회원",
       "order": 40,
-      "power": 70.3,
+      "power": 78.1,
       "score": 435,
       "active": true,
       "skills": {
@@ -3420,7 +3431,7 @@
       },
       "grade": "정회원",
       "order": 41,
-      "power": 69.5,
+      "power": 73,
       "score": 387,
       "active": true,
       "skills": {
@@ -3520,7 +3531,7 @@
       },
       "grade": "정회원",
       "order": 42,
-      "power": 68.6,
+      "power": 74.4,
       "score": 336,
       "active": true,
       "skills": {
@@ -3623,7 +3634,7 @@
       },
       "grade": "정회원",
       "order": 43,
-      "power": 68.4,
+      "power": 76.8,
       "score": 395,
       "active": true,
       "skills": {
@@ -3718,7 +3729,7 @@
       },
       "grade": "정회원",
       "order": 45,
-      "power": 64.4,
+      "power": 72.4,
       "score": 361,
       "active": true,
       "skills": {
@@ -3824,8 +3835,8 @@
       },
       "grade": "정회원",
       "order": 47,
-      "power": 61.7,
-      "score": 395,
+      "power": 69.3,
+      "score": 396,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -3927,7 +3938,7 @@
       },
       "grade": "정회원",
       "order": 48,
-      "power": 58.7,
+      "power": 67,
       "score": 207,
       "active": true,
       "skills": {
@@ -4025,7 +4036,7 @@
       },
       "grade": "정회원",
       "order": 49,
-      "power": 57.6,
+      "power": 61.9,
       "score": 125,
       "active": true,
       "skills": {
@@ -4121,7 +4132,7 @@
       },
       "grade": "정회원",
       "order": 50,
-      "power": 52,
+      "power": 57.3,
       "score": 354,
       "active": true,
       "skills": {
@@ -4224,7 +4235,7 @@
       },
       "grade": "정회원",
       "order": 46,
-      "power": 64.1,
+      "power": 68.2,
       "score": 185,
       "active": true,
       "skills": {
@@ -4239,6 +4250,97 @@
         },
         "공용주문석": {}
       }
+    },
+    {
+      "id": 51,
+      "cls": "사냥꾼",
+      "name": "충실",
+      "note": "",
+      "equip": {},
+      "grade": "정회원",
+      "order": 51,
+      "power": 132.2,
+      "score": 0,
+      "active": true,
+      "skills": {}
+    },
+    {
+      "id": 52,
+      "cls": "전사",
+      "name": "개싸다",
+      "note": "",
+      "equip": {},
+      "grade": "정회원",
+      "order": 52,
+      "power": 116.4,
+      "score": 0,
+      "active": true,
+      "skills": {}
+    },
+    {
+      "id": 53,
+      "cls": "사냥꾼",
+      "name": "점성어",
+      "note": "",
+      "equip": {},
+      "grade": "정회원",
+      "order": 53,
+      "power": 79.2,
+      "score": 0,
+      "active": true,
+      "skills": {}
+    },
+    {
+      "id": 54,
+      "cls": "마법사",
+      "name": "홍철",
+      "note": "",
+      "equip": {},
+      "grade": "정회원",
+      "order": 54,
+      "power": 76.3,
+      "score": 0,
+      "active": true,
+      "skills": {}
+    },
+    {
+      "id": 55,
+      "cls": "사냥꾼",
+      "name": "애로선인",
+      "note": "",
+      "equip": {},
+      "grade": "정회원",
+      "order": 55,
+      "power": 75.8,
+      "score": 0,
+      "active": true,
+      "skills": {}
+    },
+    {
+      "id": 56,
+      "cls": "사냥꾼",
+      "name": "로봇청소기",
+      "note": "",
+      "equip": {},
+      "grade": "정회원",
+      "order": 56,
+      "power": 70.2,
+      "score": 0,
+      "active": true,
+      "skills": {}
+    },
+    {
+      "id": 57,
+      "cls": "전투사제",
+      "name": "달려라",
+      "note": "",
+      "equip": {},
+      "grade": "정회원",
+      "order": 57,
+      "power": 58.2,
+      "score": 0,
+      "active": true,
+      "skills": {}
     }
   ],
   "ocrCrop": null,
@@ -5043,6 +5145,10 @@
           "바위를 삼키는 괴물": true
         },
         "45": {
+          "자유로운 여행자": true,
+          "바위를 삼키는 괴물": true
+        },
+        "46": {
           "바위를 삼키는 괴물": true
         },
         "47": {
@@ -9888,6 +9994,165 @@
           32,
           6,
           36,
+          47
+        ]
+      },
+      "2026-08-03": {
+        "3그룹": [
+          4,
+          1,
+          15,
+          54,
+          56,
+          35,
+          27,
+          37,
+          7,
+          22,
+          45,
+          8,
+          6
+        ],
+        "4그룹": [
+          3,
+          45,
+          35,
+          7,
+          4,
+          56,
+          26,
+          43,
+          27,
+          15,
+          13,
+          37,
+          19,
+          55,
+          40,
+          22,
+          1,
+          8,
+          54,
+          47,
+          6
+        ],
+        "5그룹": [
+          3,
+          12,
+          7,
+          25,
+          4,
+          41,
+          13,
+          8,
+          51,
+          40,
+          56,
+          43,
+          38,
+          26,
+          55,
+          15,
+          37,
+          45,
+          33,
+          27,
+          54,
+          1,
+          19,
+          48,
+          47,
+          6,
+          22,
+          35
+        ],
+        "6그룹": [
+          51,
+          3,
+          7,
+          25,
+          4,
+          38,
+          22,
+          33,
+          8,
+          35,
+          56,
+          26,
+          15,
+          37,
+          27,
+          1,
+          45,
+          13,
+          19,
+          55,
+          43,
+          12,
+          54,
+          48,
+          40,
+          47,
+          6
+        ],
+        "기슈칼": [
+          35,
+          12,
+          3,
+          45,
+          25,
+          4,
+          23,
+          16,
+          27,
+          38,
+          43,
+          55,
+          57,
+          33,
+          8,
+          56,
+          51,
+          15,
+          40,
+          13,
+          34,
+          26,
+          22,
+          42,
+          1,
+          54,
+          48,
+          47
+        ],
+        "아가 +샤흐": [
+          35,
+          12,
+          3,
+          45,
+          25,
+          4,
+          23,
+          16,
+          27,
+          38,
+          43,
+          55,
+          57,
+          33,
+          8,
+          56,
+          51,
+          15,
+          40,
+          13,
+          34,
+          26,
+          22,
+          42,
+          1,
+          54,
+          48,
           47
         ]
       },
