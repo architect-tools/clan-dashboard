@@ -1,9 +1,9 @@
 {
   "meta": {
     "clanName": "불면증",
-    "revision": 400,
+    "revision": 401,
     "rosterSource": "활동 클랜 50명 (게임 내 닉네임)",
-    "adminRevision": 185,
+    "adminRevision": 186,
     "generatedFrom": "Google Sheets CSV export",
     "generatedNote": "node scripts/build-seed.mjs",
     "schemaVersion": 1
@@ -11832,6 +11832,23 @@
         ]
       },
       "2026-08-25": {
+        "4그룹": [
+          4,
+          23,
+          15,
+          16,
+          8,
+          22,
+          51,
+          37,
+          55,
+          11,
+          43,
+          13,
+          45,
+          48,
+          32
+        ],
         "5그룹": [
           3,
           15,
