@@ -1,9 +1,9 @@
 {
   "meta": {
     "clanName": "불면증",
-    "revision": 409,
+    "revision": 418,
     "rosterSource": "활동 클랜 50명 (게임 내 닉네임)",
-    "adminRevision": 194,
+    "adminRevision": 203,
     "generatedFrom": "Google Sheets CSV export",
     "generatedNote": "node scripts/build-seed.mjs",
     "schemaVersion": 1
@@ -4051,106 +4051,6 @@
       }
     },
     {
-      "id": 50,
-      "cls": "전투사제",
-      "name": "마무리",
-      "note": "",
-      "equip": {
-        "견갑": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "망토": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "반지": {
-          "star": 4,
-          "tier": 2,
-          "enhance": 8
-        },
-        "벨트": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "상의": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 9
-        },
-        "신발": {
-          "star": 4,
-          "tier": 3.5,
-          "enhance": 8
-        },
-        "장갑": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "투구": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "팔찌": {
-          "star": 4,
-          "tier": 2,
-          "enhance": 8
-        },
-        "하의": {
-          "star": 4,
-          "tier": 2.5,
-          "enhance": 8
-        },
-        "보조1": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "보조2": {
-          "star": 4,
-          "tier": 2,
-          "enhance": 8
-        },
-        "귀걸이": {
-          "star": 4,
-          "tier": 2,
-          "enhance": 8
-        },
-        "목걸이": {
-          "star": 4,
-          "tier": 2,
-          "enhance": 10
-        },
-        "주무기": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 10
-        }
-      },
-      "grade": "정회원",
-      "order": 46,
-      "power": 68.2,
-      "score": 185,
-      "active": true,
-      "skills": {
-        "엘릭서": {
-          "집중 호흡": true,
-          "전투사제의 기운": true
-        },
-        "주문석": {
-          "정화": true,
-          "치유": true,
-          "바람쇄도": true
-        },
-        "공용주문석": {}
-      }
-    },
-    {
       "id": 51,
       "cls": "사냥꾼",
       "name": "충실",
@@ -4237,6 +4137,58 @@
       "grade": "정회원",
       "order": 57,
       "power": 58.2,
+      "score": 0,
+      "active": true,
+      "skills": {}
+    },
+    {
+      "id": 58,
+      "cls": "마법사",
+      "name": "zara",
+      "note": "",
+      "equip": {},
+      "grade": "정회원",
+      "order": 58,
+      "power": 62.6,
+      "score": 0,
+      "active": true,
+      "skills": {}
+    },
+    {
+      "id": 59,
+      "cls": "사냥꾼",
+      "name": "겸손공장",
+      "note": "",
+      "equip": {},
+      "grade": "정회원",
+      "order": 59,
+      "power": 66.4,
+      "score": 0,
+      "active": true,
+      "skills": {}
+    },
+    {
+      "id": 60,
+      "cls": "전사",
+      "name": "지니1",
+      "note": "",
+      "equip": {},
+      "grade": "정회원",
+      "order": 60,
+      "power": 68.1,
+      "score": 0,
+      "active": true,
+      "skills": {}
+    },
+    {
+      "id": 61,
+      "cls": "사냥꾼",
+      "name": "루네트",
+      "note": "",
+      "equip": {},
+      "grade": "정회원",
+      "order": 61,
+      "power": 70.4,
       "score": 0,
       "active": true,
       "skills": {}
@@ -12062,6 +12014,102 @@
         ]
       },
       "2026-08-27": {
+        "5그룹": [
+          3,
+          53,
+          25,
+          41,
+          48,
+          55,
+          58,
+          8,
+          13,
+          15,
+          20,
+          51,
+          52,
+          57,
+          4,
+          43,
+          19,
+          40,
+          46,
+          37,
+          16,
+          49,
+          45,
+          11,
+          6
+        ],
+        "6그룹": [
+          3,
+          53,
+          25,
+          41,
+          58,
+          11,
+          15,
+          55,
+          51,
+          37,
+          40,
+          46,
+          19,
+          4,
+          45,
+          8,
+          13,
+          48,
+          56,
+          52,
+          57,
+          16,
+          49,
+          43,
+          6
+        ],
+        "기슈칼": [
+          3,
+          53,
+          7,
+          49,
+          51,
+          15,
+          52,
+          13,
+          40,
+          38,
+          37,
+          57,
+          56,
+          48,
+          55,
+          43,
+          8,
+          4,
+          46,
+          45,
+          25,
+          47,
+          6
+        ],
+        "아르카논": [
+          3,
+          7,
+          4,
+          15,
+          8,
+          25,
+          1,
+          51,
+          13,
+          53,
+          26,
+          52,
+          40,
+          37,
+          6
+        ],
         "심연 중앙": [
           3,
           12,
