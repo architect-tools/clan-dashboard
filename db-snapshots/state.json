@@ -1,9 +1,9 @@
 {
   "meta": {
     "clanName": "불면증",
-    "revision": 467,
+    "revision": 469,
     "rosterSource": "활동 클랜 50명 (게임 내 닉네임)",
-    "adminRevision": 252,
+    "adminRevision": 254,
     "generatedFrom": "Google Sheets CSV export",
     "generatedNote": "node scripts/build-seed.mjs",
     "schemaVersion": 1
@@ -1045,102 +1045,6 @@
           "영혼 화살": true,
           "정신 집중": true,
           "추적 화살": true
-        },
-        "공용주문석": {}
-      }
-    },
-    {
-      "id": 14,
-      "cls": "사냥꾼",
-      "name": "망듕땅",
-      "note": "",
-      "equip": {
-        "견갑": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "망토": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "반지": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "벨트": {
-          "star": 4,
-          "tier": 4,
-          "enhance": 8
-        },
-        "상의": {
-          "star": 4,
-          "tier": 4,
-          "enhance": 8
-        },
-        "신발": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "장갑": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "투구": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "팔찌": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "하의": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "보조1": {
-          "star": 4,
-          "tier": 5.5,
-          "enhance": 8
-        },
-        "보조2": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "귀걸이": {
-          "star": 4,
-          "tier": 2.5,
-          "enhance": 8
-        },
-        "목걸이": {
-          "star": 4,
-          "tier": 2.5,
-          "enhance": 8
-        },
-        "주무기": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        }
-      },
-      "grade": "정회원",
-      "order": 14,
-      "power": 82.2,
-      "score": 333,
-      "active": true,
-      "skills": {
-        "엘릭서": {
-          "집중 호흡": true,
-          "영웅의 기운": true,
-          "사냥꾼의 기운": true
         },
         "공용주문석": {}
       }
@@ -4789,11 +4693,6 @@
           "자유로운 여행자": true,
           "바위를 삼키는 괴물": true
         },
-        "14": {
-          "바다의 괴물": true,
-          "자유로운 여행자": true,
-          "바위를 삼키는 괴물": true
-        },
         "15": {
           "바다의 괴물": true,
           "자유로운 여행자": true,
@@ -4948,9 +4847,6 @@
           "지진발굽": true
         },
         "13": {
-          "지진발굽": true
-        },
-        "14": {
           "지진발굽": true
         },
         "15": {
@@ -13198,6 +13094,34 @@
           6,
           45,
           62
+        ],
+        "드루가무": [
+          16,
+          12,
+          7,
+          25,
+          1,
+          19,
+          4,
+          20,
+          38,
+          8,
+          11,
+          45,
+          61,
+          27,
+          37,
+          57,
+          55,
+          43,
+          28,
+          62,
+          40,
+          32,
+          6,
+          54,
+          13,
+          26
         ]
       },
       "2099-12-31": {
