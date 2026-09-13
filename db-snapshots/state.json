@@ -1,9 +1,9 @@
 {
   "meta": {
     "clanName": "불면증",
-    "revision": 469,
+    "revision": 470,
     "rosterSource": "활동 클랜 50명 (게임 내 닉네임)",
-    "adminRevision": 254,
+    "adminRevision": 255,
     "generatedFrom": "Google Sheets CSV export",
     "generatedNote": "node scripts/build-seed.mjs",
     "schemaVersion": 1
@@ -1248,106 +1248,6 @@
         "주문석": {
           "다중 궤적": true,
           "도약 베기": true
-        },
-        "공용주문석": {}
-      }
-    },
-    {
-      "id": 17,
-      "cls": "사냥꾼",
-      "name": "다무리",
-      "note": "",
-      "equip": {
-        "견갑": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 9
-        },
-        "망토": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "반지": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "벨트": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "상의": {
-          "star": 4,
-          "tier": 5.5,
-          "enhance": 9
-        },
-        "신발": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "장갑": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "투구": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "팔찌": {
-          "star": 4,
-          "tier": 2,
-          "enhance": 8
-        },
-        "하의": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 8
-        },
-        "보조1": {
-          "star": 4,
-          "tier": 5.5,
-          "enhance": 8
-        },
-        "보조2": {
-          "star": 4,
-          "tier": 4.5,
-          "enhance": 9
-        },
-        "귀걸이": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "목걸이": {
-          "star": 4,
-          "tier": 3,
-          "enhance": 8
-        },
-        "주무기": {
-          "star": 4,
-          "tier": 5.5,
-          "enhance": 9
-        }
-      },
-      "grade": "정회원",
-      "order": 17,
-      "power": 99.4,
-      "score": 160,
-      "active": true,
-      "skills": {
-        "엘릭서": {
-          "잿빛 화살": true,
-          "집중 호흡": true,
-          "영웅의 기운": true,
-          "사냥꾼의 기운": true
-        },
-        "주문석": {
-          "전투해방": true
         },
         "공용주문석": {}
       }
@@ -4703,11 +4603,6 @@
           "자유로운 여행자": true,
           "바위를 삼키는 괴물": true
         },
-        "17": {
-          "바다의 괴물": true,
-          "자유로운 여행자": true,
-          "바위를 삼키는 괴물": true
-        },
         "19": {
           "바다의 괴물": true,
           "자유로운 여행자": true,
@@ -4854,9 +4749,6 @@
           "황혼의방랑자": true
         },
         "16": {
-          "지진발굽": true
-        },
-        "17": {
           "지진발굽": true
         },
         "19": {
