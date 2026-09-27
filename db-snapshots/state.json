@@ -1,9 +1,9 @@
 {
   "meta": {
     "clanName": "불면증",
-    "revision": 573,
+    "revision": 574,
     "rosterSource": "활동 클랜 50명 (게임 내 닉네임)",
-    "adminRevision": 358,
+    "adminRevision": 359,
     "generatedFrom": "Google Sheets CSV export",
     "generatedNote": "node scripts/build-seed.mjs",
     "schemaVersion": 1
@@ -11944,6 +11944,37 @@
           63,
           61,
           60
+        ]
+      },
+      "2026-09-27": {
+        "심연의 요새전": [
+          80,
+          58,
+          76,
+          71,
+          70,
+          43,
+          8,
+          72,
+          57,
+          45,
+          66,
+          61,
+          69,
+          65,
+          60,
+          54,
+          38,
+          49,
+          63,
+          67,
+          39,
+          74,
+          48,
+          37,
+          81,
+          62,
+          33
         ]
       },
       "2099-12-31": {
