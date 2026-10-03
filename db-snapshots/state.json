@@ -1,9 +1,9 @@
 {
   "meta": {
     "clanName": "불면증",
-    "revision": 616,
+    "revision": 618,
     "rosterSource": "활동 클랜 50명 (게임 내 닉네임)",
-    "adminRevision": 401,
+    "adminRevision": 403,
     "generatedFrom": "Google Sheets CSV export",
     "generatedNote": "node scripts/build-seed.mjs",
     "schemaVersion": 1
@@ -1946,19 +1946,6 @@
       "skills": {}
     },
     {
-      "id": 75,
-      "cls": "마법사",
-      "name": "힘쌘",
-      "note": "",
-      "equip": {},
-      "grade": "정회원",
-      "order": 75,
-      "power": 72,
-      "score": 0,
-      "active": true,
-      "skills": {}
-    },
-    {
       "id": 76,
       "cls": "전투사제",
       "name": "호비쓰",
@@ -2071,6 +2058,19 @@
       "grade": "신입",
       "order": 84,
       "power": 85.6,
+      "score": 0,
+      "active": true,
+      "skills": {}
+    },
+    {
+      "id": 85,
+      "cls": "암살자",
+      "name": "DasiDa",
+      "note": "",
+      "equip": {},
+      "grade": "정회원",
+      "order": 85,
+      "power": 70,
       "score": 0,
       "active": true,
       "skills": {}
