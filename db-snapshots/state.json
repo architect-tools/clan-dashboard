@@ -1,9 +1,9 @@
 {
   "meta": {
     "clanName": "불면증",
-    "revision": 618,
+    "revision": 628,
     "rosterSource": "활동 클랜 50명 (게임 내 닉네임)",
-    "adminRevision": 403,
+    "adminRevision": 413,
     "generatedFrom": "Google Sheets CSV export",
     "generatedNote": "node scripts/build-seed.mjs",
     "schemaVersion": 1
@@ -138,7 +138,7 @@
       "grade": "정회원",
       "order": 7,
       "power": 130,
-      "score": 144,
+      "score": 34,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -249,7 +249,7 @@
       "grade": "정회원",
       "order": 8,
       "power": 132,
-      "score": 144,
+      "score": 37,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -372,7 +372,7 @@
       "grade": "정회원",
       "order": 23,
       "power": 94,
-      "score": 79,
+      "score": 17,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -580,7 +580,7 @@
       "grade": "정회원",
       "order": 33,
       "power": 86,
-      "score": 57,
+      "score": 13,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -678,7 +678,7 @@
       "grade": "정회원",
       "order": 34,
       "power": 83,
-      "score": 59,
+      "score": 13,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -773,7 +773,7 @@
       "grade": "정회원",
       "order": 37,
       "power": 89,
-      "score": 164,
+      "score": 38,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -880,7 +880,7 @@
       "grade": "정회원",
       "order": 39,
       "power": 86,
-      "score": 144,
+      "score": 37,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -979,7 +979,7 @@
       "grade": "정회원",
       "order": 41,
       "power": 77,
-      "score": 42,
+      "score": 9,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -1079,7 +1079,7 @@
       "grade": "정회원",
       "order": 42,
       "power": 78,
-      "score": 7,
+      "score": 2,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -1182,7 +1182,7 @@
       "grade": "정회원",
       "order": 43,
       "power": 86,
-      "score": 159,
+      "score": 39,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -1277,7 +1277,7 @@
       "grade": "정회원",
       "order": 45,
       "power": 80,
-      "score": 159,
+      "score": 39,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -1383,7 +1383,7 @@
       "grade": "정회원",
       "order": 47,
       "power": 75,
-      "score": 119,
+      "score": 32,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -1486,7 +1486,7 @@
       "grade": "정회원",
       "order": 48,
       "power": 72,
-      "score": 22,
+      "score": 5,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -1584,7 +1584,7 @@
       "grade": "정회원",
       "order": 49,
       "power": 67,
-      "score": 74,
+      "score": 20,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -1680,7 +1680,7 @@
       "grade": "정회원",
       "order": 50,
       "power": 57.3,
-      "score": 139,
+      "score": 34,
       "active": true,
       "skills": {
         "엘릭서": {
@@ -1707,7 +1707,7 @@
       "grade": "정회원",
       "order": 54,
       "power": 89,
-      "score": 159,
+      "score": 36,
       "active": true,
       "skills": {}
     },
@@ -1720,7 +1720,7 @@
       "grade": "정회원",
       "order": 57,
       "power": 67,
-      "score": 149,
+      "score": 37,
       "active": true,
       "skills": {}
     },
@@ -1733,7 +1733,7 @@
       "grade": "정회원",
       "order": 58,
       "power": 66,
-      "score": 99,
+      "score": 28,
       "active": true,
       "skills": {}
     },
@@ -1746,7 +1746,7 @@
       "grade": "정회원",
       "order": 59,
       "power": 70,
-      "score": 69,
+      "score": 15,
       "active": true,
       "skills": {}
     },
@@ -1759,7 +1759,7 @@
       "grade": "정회원",
       "order": 60,
       "power": 73,
-      "score": 94,
+      "score": 25,
       "active": true,
       "skills": {}
     },
@@ -1772,7 +1772,7 @@
       "grade": "정회원",
       "order": 61,
       "power": 73,
-      "score": 99,
+      "score": 21,
       "active": true,
       "skills": {}
     },
@@ -1785,7 +1785,7 @@
       "grade": "정회원",
       "order": 62,
       "power": 84,
-      "score": 67,
+      "score": 13,
       "active": true,
       "skills": {}
     },
@@ -12300,6 +12300,195 @@
           43
         ]
       },
+      "2026-10-02": {
+        "할파시암": [
+          67,
+          54,
+          70,
+          49,
+          68,
+          74,
+          66,
+          57,
+          71,
+          61,
+          72,
+          48,
+          73,
+          60,
+          45
+        ],
+        "클랜 원정대": [
+          70,
+          58,
+          67,
+          23,
+          61,
+          54,
+          71,
+          82,
+          69,
+          66,
+          48,
+          72,
+          68,
+          59,
+          57,
+          74,
+          34,
+          49,
+          45,
+          60,
+          73,
+          81
+        ],
+        "앙그바르 투기장": [
+          72,
+          59,
+          58,
+          67,
+          23,
+          61,
+          54,
+          71,
+          82,
+          69,
+          66,
+          48,
+          68,
+          57,
+          49,
+          45,
+          60,
+          73,
+          74,
+          81,
+          34
+        ]
+      },
+      "2026-10-03": {
+        "4그룹": [
+          58,
+          45,
+          54,
+          78,
+          46,
+          68,
+          61,
+          60,
+          72,
+          69,
+          70,
+          57,
+          74,
+          48,
+          49,
+          71,
+          8,
+          62,
+          63,
+          43,
+          37,
+          76
+        ],
+        "5그룹": [
+          58,
+          57,
+          46,
+          60,
+          71,
+          72,
+          69,
+          74,
+          48,
+          61,
+          49,
+          68,
+          54,
+          45,
+          78,
+          70,
+          47,
+          8,
+          62,
+          63,
+          43,
+          76,
+          37
+        ],
+        "6그룹": [
+          58,
+          49,
+          45,
+          46,
+          61,
+          54,
+          78,
+          60,
+          71,
+          69,
+          70,
+          57,
+          74,
+          68,
+          48,
+          47,
+          8,
+          62,
+          63,
+          43,
+          37,
+          76
+        ],
+        "드루가무": [
+          45,
+          61,
+          48,
+          58,
+          70,
+          68,
+          54,
+          72,
+          57,
+          46,
+          71,
+          69,
+          78,
+          49,
+          74,
+          60,
+          47,
+          8,
+          62,
+          76,
+          43,
+          63
+        ],
+        "베히모스": [
+          58,
+          57,
+          48,
+          54,
+          78,
+          69,
+          61,
+          60,
+          72,
+          74,
+          46,
+          71,
+          70,
+          68,
+          49,
+          45,
+          37,
+          62,
+          76,
+          63,
+          8,
+          43
+        ]
+      },
       "2099-12-31": {
         "__LIVE_QA_20260708005154__": [
           1049
@@ -12313,21 +12502,21 @@
     {
       "name": "4그룹",
       "active": true,
-      "points": 10,
+      "points": 2,
       "weekly": 7,
       "category": "필드 보스"
     },
     {
       "name": "5그룹",
       "active": true,
-      "points": 15,
+      "points": 3,
       "weekly": 5,
       "category": "필드 보스"
     },
     {
       "name": "6그룹",
       "active": true,
-      "points": 10,
+      "points": 5,
       "weekly": 4,
       "category": "필드 보스"
     },
@@ -12341,105 +12530,105 @@
     {
       "name": "아가 +샤흐",
       "active": true,
-      "points": 3,
+      "points": 0,
       "weekly": 7,
       "category": "월드 보스"
     },
     {
       "name": "베히모스",
       "active": true,
-      "points": 10,
+      "points": 2,
       "weekly": 4,
       "category": "월드 보스"
     },
     {
       "name": "다리엔테",
       "active": true,
-      "points": 20,
+      "points": 5,
       "weekly": 1,
       "category": "월드 보스"
     },
     {
       "name": "기슈칼",
       "active": true,
-      "points": 5,
+      "points": 2,
       "weekly": 2,
       "category": "거인의 탑"
     },
     {
       "name": "1층 골렘",
-      "active": false,
-      "points": 0,
+      "active": true,
+      "points": 1,
       "weekly": 2,
       "category": "거인의 탑"
     },
     {
       "name": "할파시암",
       "active": true,
-      "points": 10,
+      "points": 2,
       "weekly": 2,
       "category": "거인의 탑"
     },
     {
       "name": "2층 골렘",
-      "active": false,
-      "points": 0,
+      "active": true,
+      "points": 1,
       "weekly": 2,
       "category": "거인의 탑"
     },
     {
       "name": "드루가무",
       "active": true,
-      "points": 15,
+      "points": 2,
       "weekly": 2,
       "category": "거인의 탑"
     },
     {
       "name": "3층 골렘",
-      "active": false,
-      "points": 0,
+      "active": true,
+      "points": 1,
       "weekly": 2,
       "category": "거인의 탑"
     },
     {
       "name": "심연 3종",
       "active": true,
-      "points": 20,
+      "points": 6,
       "weekly": 3,
       "category": "심연의 전장"
     },
     {
       "name": "심연 중앙",
       "active": true,
-      "points": 50,
+      "points": 10,
       "weekly": 1,
       "category": "심연의 전장"
     },
     {
       "name": "심연의 파수꾼",
       "active": true,
-      "points": 75,
+      "points": 15,
       "weekly": 1,
       "category": "심연의 전장"
     },
     {
       "name": "심연의 요새전",
       "active": true,
-      "points": 75,
+      "points": 15,
       "weekly": 1,
       "category": "심연의 전장"
     },
     {
       "name": "앙그바르 투기장",
       "active": true,
-      "points": 7,
+      "points": 2,
       "weekly": 1,
       "category": "클랜 활동"
     },
     {
       "name": "클랜 원정대",
       "active": true,
-      "points": 7,
+      "points": 2,
       "weekly": 1,
       "category": "클랜 활동"
     },
@@ -12452,15 +12641,15 @@
     },
     {
       "name": "3그룹",
-      "active": true,
-      "points": 5,
+      "active": false,
+      "points": 0,
       "weekly": 5,
       "category": "필드 보스"
     },
     {
       "name": "아르카논",
       "active": true,
-      "points": 20,
+      "points": 5,
       "weekly": 2,
       "category": "거인의 탑"
     }
